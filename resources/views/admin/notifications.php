@@ -393,7 +393,7 @@ function markAsRead(id) {
     postNotificationAction('/admin/notifications/mark-read', { id: id })
         .then(data => {
             if (!data.success) {
-                alert(data.message || 'Failed to mark notification as read.');
+                ShenaApp.showNotification(data.message || 'Failed to mark notification as read.', 'error');
                 return;
             }
 
@@ -406,14 +406,14 @@ function markAsRead(id) {
                 }
             }
         })
-        .catch(() => alert('Failed to mark notification as read.'));
+        .catch(() => ShenaApp.showNotification('Failed to mark notification as read.', 'error'));
 }
 
 function markAllAsRead() {
     postNotificationAction('/admin/notifications/mark-all-read')
         .then(data => {
             if (!data.success) {
-                alert(data.message || 'Failed to mark notifications as read.');
+                ShenaApp.showNotification(data.message || 'Failed to mark notifications as read.', 'error');
                 return;
             }
 
@@ -425,7 +425,7 @@ function markAllAsRead() {
                 }
             });
         })
-        .catch(() => alert('Failed to mark notifications as read.'));
+        .catch(() => ShenaApp.showNotification('Failed to mark notifications as read.', 'error'));
 }
 
 document.querySelectorAll('.notification-action').forEach(link => {

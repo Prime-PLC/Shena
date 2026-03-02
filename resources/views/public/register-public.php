@@ -349,7 +349,7 @@
                 </div>
                 
                 <div class="qr-code">
-                    <img src="/qr/paybill?paybill=4163987&account=4163987" alt="QR Code">
+                    <img id="qr-paybill-img" data-paybill="4163987" data-account="4163987" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" alt="QR Code">
                     <div class="qr-note">Scan QR to Pay</div>
                 </div>
                 
@@ -614,3 +614,25 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <?php include VIEWS_PATH . '/layouts/footer.php'; ?>
+
+<script>
+// Fetch server-generated QR data URI and set image src
+(function(){
+    try {
+        var img = document.getElementById('qr-paybill-img');
+        if (!img) return;
+        var paybill = img.getAttribute('data-paybill');
+        var account = img.getAttribute('data-account');
+        var url = '/qr/paybill?paybill=' + encodeURIComponent(paybill) + '&account=' + encodeURIComponent(account);
+
+        fetch(url)
+            .then(function(res){ return res.json(); })
+            .then(function(json){
+                if (json && json.data_uri) {
+                    img.src = json.data_uri;
+                }
+            })
+            .catch(function(err){ console.error('QR fetch error', err); });
+    } catch (e) { console.error(e); }
+})();
+</script>

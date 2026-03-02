@@ -68,7 +68,7 @@ class SmsService
             
             $response = curl_exec($ch);
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
+            // curl_close() removed — resources are freed automatically in PHP 8+
             
             if ($httpCode == 200) {
                 $result = json_decode($response, true);

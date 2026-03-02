@@ -644,7 +644,7 @@ document.getElementById('memberRegistrationForm').addEventListener('submit', fun
     
     if (password !== confirmPassword) {
         e.preventDefault();
-        alert('Passwords do not match! Please ensure both password fields are identical.');
+        ShenaApp.showNotification('Passwords do not match! Please ensure both password fields are identical.', 'warning');
         document.getElementById('confirm_password').focus();
         return false;
     }

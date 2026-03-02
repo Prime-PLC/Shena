@@ -1343,7 +1343,7 @@ document.querySelectorAll('.tab').forEach(tab => {
             }
             
             // Show alert
-            alert('Please fill in all required fields correctly.');
+            ShenaApp.showNotification('Please fill in all required fields correctly.', 'warning');
             return false;
         }
         
@@ -1353,7 +1353,7 @@ document.querySelectorAll('.tab').forEach(tab => {
         if (cashAltCheckbox && cashAltCheckbox.checked) {
             if (!cashAltReason.value || cashAltReason.value.length < 50) {
                 e.preventDefault();
-                alert('Please provide a detailed reason for cash alternative request (minimum 50 characters).');
+                ShenaApp.showNotification('Please provide a detailed reason for cash alternative request (minimum 50 characters).', 'warning');
                 cashAltReason.focus();
                 return false;
             }

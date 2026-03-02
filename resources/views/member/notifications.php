@@ -540,7 +540,7 @@ function markAsRead(id) {
     postNotificationAction('/member/notifications/mark-read', { id: id })
         .then(data => {
             if (!data.success) {
-                alert(data.message || 'Failed to mark notification as read.');
+                ShenaApp.showNotification(data.message || 'Failed to mark notification as read.', 'error');
                 return;
             }
 
@@ -553,7 +553,7 @@ function markAsRead(id) {
                 }
             }
         })
-        .catch(() => alert('Failed to mark notification as read.'));
+        .catch(() => ShenaApp.showNotification('Failed to mark notification as read.', 'error'));
 }
 
 // Mark All as Read
@@ -561,7 +561,7 @@ function markAllAsRead() {
     const proceed = () => postNotificationAction('/member/notifications/mark-all-read')
         .then(data => {
             if (!data.success) {
-                alert(data.message || 'Failed to mark notifications as read.');
+                ShenaApp.showNotification(data.message || 'Failed to mark notifications as read.', 'error');
                 return;
             }
 
@@ -573,7 +573,7 @@ function markAllAsRead() {
                 }
             });
         })
-        .catch(() => alert('Failed to mark notifications as read.'));
+        .catch(() => ShenaApp.showNotification('Failed to mark notifications as read.', 'error'));
 
     if (window.ShenaApp && typeof ShenaApp.confirmAction === 'function') {
         ShenaApp.confirmAction(
@@ -610,7 +610,7 @@ function deleteNotification(id) {
     const proceed = () => postNotificationAction('/member/notifications/delete', { id: id })
         .then(data => {
             if (!data.success) {
-                alert(data.message || 'Failed to delete notification.');
+                ShenaApp.showNotification(data.message || 'Failed to delete notification.', 'error');
                 return;
             }
 
@@ -620,7 +620,7 @@ function deleteNotification(id) {
                 setTimeout(() => item.remove(), 300);
             }
         })
-        .catch(() => alert('Failed to delete notification.'));
+        .catch(() => ShenaApp.showNotification('Failed to delete notification.', 'error'));
 
     if (window.ShenaApp && typeof ShenaApp.confirmAction === 'function') {
         ShenaApp.confirmAction(
@@ -641,7 +641,7 @@ function clearAllNotifications() {
     const proceed = () => postNotificationAction('/member/notifications/clear-all')
         .then(data => {
             if (!data.success) {
-                alert(data.message || 'Failed to clear notifications.');
+                ShenaApp.showNotification(data.message || 'Failed to clear notifications.', 'error');
                 return;
             }
 
@@ -661,7 +661,7 @@ function clearAllNotifications() {
                 `;
             }, 300);
         })
-        .catch(() => alert('Failed to clear notifications.'));
+        .catch(() => ShenaApp.showNotification('Failed to clear notifications.', 'error'));
 
     if (window.ShenaApp && typeof ShenaApp.confirmAction === 'function') {
         ShenaApp.confirmAction(

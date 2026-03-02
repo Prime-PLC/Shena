@@ -1,0 +1,14 @@
+{
+    "name": "phpmailer/phpmailer",
+    "description": "PHPMailer is a full-featured email creation and transfer class for PHP",
+    "type": "library",
+    "license": "LGPL-2.1-only",
+    "autoload": {
+        "psr-4": {
+            "PHPMailer\\PHPMailer\\": "src/"
+        }
+    },
+    "require": {
+        "php": ">=5.5.0"
+    }
+}

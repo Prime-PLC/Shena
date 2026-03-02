@@ -728,11 +728,11 @@ if (!empty($payment_history)) {
                 </div>
             </div>
             <div class="member-actions">
-                <button class="btn-initiate-claim" type="button" onclick="alert('Claim processing is only handled by admins.'); return false;">
+                <button class="btn-initiate-claim" type="button" onclick="ShenaApp.showNotification('Claim processing is only handled by admins.', 'info'); return false;">
                     <i class="fas fa-file-medical"></i>
                     Initiate Claim
                 </button>
-                <button class="btn-assist-payment" type="button" onclick="alert('Payment assistance is only handled by admins.'); return false;">
+                <button class="btn-assist-payment" type="button" onclick="ShenaApp.showNotification('Payment assistance is only handled by admins.', 'info'); return false;">
                     <i class="fas fa-hand-holding-usd"></i>
                     Assist Payment
                 </button>

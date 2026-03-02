@@ -1,7 +1,21 @@
 <?php
 /**
- * Email Service - Handles email sending via SMTP
+ * Email Service - Handles email sending via PHPMailer / SMTP
  */
+
+// Load Composer autoloader for PHPMailer namespaced classes
+if (file_exists(__DIR__ . '/../../vendor/autoload.php')) {
+    require_once __DIR__ . '/../../vendor/autoload.php';
+}
+
+// Explicit requires so static analysis tools can resolve PHPMailer classes
+require_once __DIR__ . '/../../vendor/phpmailer/phpmailer/src/Exception.php';
+require_once __DIR__ . '/../../vendor/phpmailer/phpmailer/src/PHPMailer.php';
+require_once __DIR__ . '/../../vendor/phpmailer/phpmailer/src/SMTP.php';
+
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\SMTP;
+use PHPMailer\PHPMailer\Exception as PHPMailerException;
 
 require_once __DIR__ . '/../core/Database.php';
 
@@ -30,39 +44,53 @@ class EmailService
                 $this->logEmailAttempt($to, $subject, $body, 'skipped', 'empty_recipient');
                 return false;
             }
-            // Configure SMTP settings using ini_set
-            ini_set('SMTP', $this->config['host']);
-            ini_set('smtp_port', $this->config['port']);
-            
-            // If SMTP authentication is required, use a different approach
-            // For now, we'll try to use mail() with configured settings
-            
-            $headers = [
-                'From: ' . $this->config['from_name'] . ' <' . $this->config['from_email'] . '>',
-                'Reply-To: ' . $this->config['from_email'],
-                'X-Mailer: PHP/' . phpversion()
+
+            $mail = new PHPMailer(true);
+
+            // Server settings
+            $mail->isSMTP();
+            $mail->Host       = $this->config['host'];
+            $mail->SMTPAuth   = true;
+            $mail->Username   = $this->config['username'];
+            $mail->Password   = $this->config['password'];
+            $mail->SMTPSecure = (intval($this->config['port']) === 465)
+                ? PHPMailer::ENCRYPTION_SMTPS
+                : PHPMailer::ENCRYPTION_STARTTLS;
+            $mail->Port       = intval($this->config['port']);
+            $mail->SMTPOptions = [
+                'ssl' => [
+                    'verify_peer'       => false,
+                    'verify_peer_name'  => false,
+                    'allow_self_signed' => true,
+                ],
             ];
-            
+
+            // Sender & recipient
+            $mail->setFrom($this->config['from_email'], $this->config['from_name']);
+            $mail->addReplyTo($this->config['from_email'], $this->config['from_name']);
+            $mail->addAddress($to);
+
+            // Content
+            $mail->isHTML($isHtml);
+            $mail->Subject = $subject;
+            $mail->CharSet = PHPMailer::CHARSET_UTF8;
+
             if ($isHtml) {
-                $headers[] = 'MIME-Version: 1.0';
-                $headers[] = 'Content-type: text/html; charset=UTF-8';
+                $mail->Body    = $body;
+                $mail->AltBody = strip_tags($body);
+            } else {
+                $mail->Body = $body;
             }
-            
-            $headerString = implode("\r\n", $headers);
-            
-            $result = @mail($to, $subject, $body, $headerString);
-            
-            if (!$result) {
-                error_log("Email failed to: {$to}, subject: {$subject}");
-                // Log to database for fallback/tracking
-                $this->logEmailAttempt($to, $subject, $body, 'failed');
-                return false;
-            }
-            
-            // Log successful send
+
+            $mail->send();
+
             $this->logEmailAttempt($to, $subject, $body, 'sent');
             return true;
-            
+
+        } catch (PHPMailerException $e) {
+            error_log('Email sending failed (PHPMailer): ' . $e->getMessage());
+            $this->logEmailAttempt($to, $subject, $body, 'failed', $e->getMessage());
+            return false;
         } catch (Exception $e) {
             error_log('Email sending failed: ' . $e->getMessage());
             $this->logEmailAttempt($to, $subject, $body, 'failed', $e->getMessage());

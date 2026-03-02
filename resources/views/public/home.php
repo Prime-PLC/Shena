@@ -9,7 +9,7 @@
                     Dignified Send-off,<br>Lasting Support.
                 </h1>
                 <p class="lead mb-5" style="color: rgba(255, 255, 255, 0.95); font-size: 1.1rem; max-width: 700px; margin: 0 auto; text-shadow: 1px 1px 2px rgba(0,0,0,0.3);">
-                    A dedicated welfare association serving the Kisumu community with professional funeral cover and compassionate support.
+                    A dedicated welfare association serving communities across Kenya with professional funeral cover and compassionate support.
                 </p>
                 <div class="d-flex gap-3 justify-content-center flex-wrap">
                     <a href="/register" class="btn btn-lg" style="background-color: #7F3D9E; color: white; padding: 14px 40px; border-radius: 30px; font-weight: 600; border: none; box-shadow: 0 4px 12px rgba(127, 61, 158, 0.4);">
@@ -46,7 +46,7 @@
                     </div>
                     <h4 style="color: #2D3748; font-weight: 600; font-size: 1.1rem; margin-bottom: 12px;">Mortuary</h4>
                     <p style="color: #718096; font-size: 0.9rem; line-height: 1.6;">
-                        Professional preservation and care at Kisumu's leading facilities.
+                        Professional preservation and care at Kenya's leading facilities.
                     </p>
                 </div>
             </div>
@@ -120,7 +120,7 @@
                     <span style="color: #7F3D9E; font-size: 2.5rem; font-weight: 700;">The Royal Choice</span>
                 </h2>
                 <p class="mb-4" style="color: #4A5568; line-height: 1.8; font-size: 1rem;">
-                    SHENA Companion stands as a pillar of strength for the Kisumu community. We combine traditional values with modern professionalism to ensure peace of mind for our members.
+                    SHENA Companion stands as a pillar of strength for communities across Kenya. We combine traditional values with modern professionalism to ensure peace of mind for our members.
                 </p>
 
                 <div class="row g-4 mb-4">
@@ -146,7 +146,7 @@
                             <div>
                                 <h5 style="font-size: 1.05rem; font-weight: 600; color: #2D3748; margin-bottom: 8px;">Community Spirit</h5>
                                 <p style="color: #718096; font-size: 0.9rem; line-height: 1.5; margin: 0;">
-                                    Built by and for the residents of Kisumu City.
+                                    Built by and for communities across Kenya.
                                 </p>
                             </div>
                         </div>
@@ -180,6 +180,8 @@
         </div>
     </div>
 </section>
+
+<?php include VIEWS_PATH . '/partials/impact-gallery.php'; ?>
 
 <!-- Call to Action Section -->
 <section style="padding: 60px 20px; background: white;">

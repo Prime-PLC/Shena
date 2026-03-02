@@ -161,20 +161,26 @@ class PaymentController extends BaseController
             $account = $_GET['account'] ?? '';
             if (empty($paybill) || empty($account)) {
                 http_response_code(400);
-                echo 'Missing paybill or account';
+                echo json_encode(['error' => 'Missing paybill or account']);
                 return;
             }
 
             require_once __DIR__ . '/../services/QrService.php';
-            $url = QrService::paybillQrUrl($paybill, $account, 240);
+            $dataUri = QrService::paybillQrDataUri($paybill, $account, 240);
 
-            // Redirect to the QR image URL (external provider)
-            header('Location: ' . $url);
-            exit;
+            if (empty($dataUri)) {
+                http_response_code(500);
+                echo json_encode(['error' => 'Failed to generate QR']);
+                return;
+            }
+
+            header('Content-Type: application/json');
+            echo json_encode(['data_uri' => $dataUri]);
+            return;
         } catch (Exception $e) {
             error_log('QR generation error: ' . $e->getMessage());
             http_response_code(500);
-            echo 'QR generation failed';
+            echo json_encode(['error' => 'QR generation failed']);
         }
     }
     

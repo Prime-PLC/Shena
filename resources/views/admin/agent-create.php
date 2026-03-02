@@ -528,7 +528,7 @@ document.getElementById('agentForm').addEventListener('submit', function(e) {
     
     if (password !== confirmation) {
         e.preventDefault();
-        alert('Passwords do not match. Please check and try again.');
+        ShenaApp.showNotification('Passwords do not match. Please check and try again.', 'warning');
         document.getElementById('password_confirmation').focus();
         return false;
     }

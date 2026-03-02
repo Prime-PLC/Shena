@@ -191,7 +191,7 @@ class Member extends BaseModel
      * @param string $dateOfBirth Date of birth (YYYY-MM-DD)
      * @return int Age in years
      */
-    public function calculateAge($dateOfBirth)
+    public function calculateAge(string $dateOfBirth): int
     {
         if (empty($dateOfBirth) || $dateOfBirth === '0000-00-00') {
             return 0;

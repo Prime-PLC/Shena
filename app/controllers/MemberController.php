@@ -818,7 +818,9 @@ class MemberController extends BaseController
             $pkgKey = $member['package'] ?? null;
             if (!empty($beneficiaryData['date_of_birth'])) {
                 try {
-                    $benAge = $this->memberModel->calculateAge($beneficiaryData['date_of_birth']);
+                    /** @var string $benDob */
+                    $benDob = $beneficiaryData['date_of_birth'];
+                    $benAge = $this->memberModel->calculateAge($benDob);
                     if ($pkgKey && isset($membership_packages[$pkgKey]) && isset($membership_packages[$pkgKey]['age_max'])) {
                         $pkg = $membership_packages[$pkgKey];
                         if ($benAge > (int)$pkg['age_max']) {
@@ -1122,14 +1124,20 @@ class MemberController extends BaseController
                     continue;
                 }
                 
-                error_log('File uploaded successfully: ' . $uploadResult['file_path']);
+                /** @var string $uploadFileName */
+                $uploadFileName = $uploadResult['file_name'];
+                /** @var string $uploadFilePath */
+                $uploadFilePath = $uploadResult['file_path'];
+                /** @var string $uploadMimeType */
+                $uploadMimeType = $uploadResult['mime_type'];
+                error_log('File uploaded successfully: ' . $uploadFilePath);
                 $claimDocumentModel->addDocument([
                     'claim_id' => $claimId,
                     'document_type' => $inputName,
-                    'file_name' => $uploadResult['file_name'],
-                    'file_path' => $uploadResult['file_path'],
+                    'file_name' => $uploadFileName,
+                    'file_path' => $uploadFilePath,
                     'file_size' => $uploadResult['file_size'],
-                    'mime_type' => $uploadResult['mime_type'],
+                    'mime_type' => $uploadMimeType,
                     'uploaded_by' => $_SESSION['user_id'] ?? null
                 ]);
                 error_log('Document record saved: claim_id=' . $claimId . ', type=' . $inputName);
@@ -1151,9 +1159,11 @@ class MemberController extends BaseController
             require_once 'app/services/InAppNotificationService.php';
             $inAppNotificationService = new InAppNotificationService();
             try {
+                /** @var string $deceasedName */
+                $deceasedName = $claimData['deceased_name'];
                 $inAppNotificationService->notifyAdmins([
                     'subject' => 'New claim submitted',
-                    'message' => "Member {$member['member_number']} submitted Claim #{$claimId} for {$claimData['deceased_name']}.",
+                    'message' => "Member {$member['member_number']} submitted Claim #{$claimId} for {$deceasedName}.",
                     'action_url' => "/admin/claims/view/{$claimId}",
                     'action_text' => 'Review Claim'
                 ], $_SESSION['user_id'] ?? null);

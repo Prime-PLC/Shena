@@ -1425,7 +1425,7 @@ document.getElementById('stkPushForm')?.addEventListener('submit', async functio
     
     // Validate phone number
     if (!phoneNumber || phoneNumber.length < 9) {
-        alert('Please enter a valid phone number');
+        ShenaApp.showNotification('Please enter a valid phone number', 'warning');
         return;
     }
     
@@ -1610,12 +1610,12 @@ document.getElementById('verifyTransactionForm')?.addEventListener('submit', asy
 
     // Validate inputs
     if (!transactionCode || transactionCode.length < 8) {
-        alert('Please enter a valid M-Pesa transaction code');
+        ShenaApp.showNotification('Please enter a valid M-Pesa transaction code', 'warning');
         return;
     }
 
     if (!phoneNumber || phoneNumber.length < 9) {
-        alert('Please enter a valid phone number');
+        ShenaApp.showNotification('Please enter a valid phone number', 'warning');
         return;
     }
 
@@ -1673,7 +1673,7 @@ document.getElementById('verifyTransactionForm')?.addEventListener('submit', asy
 document.getElementById('exportPdfBtn')?.addEventListener('click', function() {
     const table = document.querySelector('.payments-table-wrapper');
     if (!table) {
-        alert('Payments table not found.');
+        ShenaApp.showNotification('Payments table not found.', 'error');
         return;
     }
     const opt = {

@@ -378,17 +378,29 @@ if (uploadModalEl) {
     uploadModalEl.addEventListener('click', function(e) { if (e.target === this) closeUploadModal(); });
 }
 function confirmDelete(id, title) {
+    const proceed = () => {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/admin/agents/resources/delete/' + id;
+        const tokenInput = document.createElement('input');
+        tokenInput.type = 'hidden';
+        tokenInput.name = 'csrf_token';
+        tokenInput.value = CSRF_TOKEN || '';
+        form.appendChild(tokenInput);
+        document.body.appendChild(form);
+        form.submit();
+    };
+    if (window.ShenaApp && typeof ShenaApp.confirmAction === 'function') {
+        ShenaApp.confirmAction(
+            'Are you sure you want to delete "' + title + '"?\n\nThis action cannot be undone.',
+            proceed,
+            null,
+            { type: 'danger', title: 'Delete Resource', confirmText: 'Delete' }
+        );
+        return;
+    }
     if (!confirm('Are you sure you want to delete "' + title + '"?\n\nThis action cannot be undone.')) return;
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = '/admin/agents/resources/delete/' + id;
-    const tokenInput = document.createElement('input');
-    tokenInput.type = 'hidden';
-    tokenInput.name = 'csrf_token';
-    tokenInput.value = CSRF_TOKEN || '';
-    form.appendChild(tokenInput);
-    document.body.appendChild(form);
-    form.submit();
+    proceed();
 }
 function filterResources() { const searchValue = (document.getElementById('search-resources')?.value || '').toLowerCase(); const rows = document.querySelectorAll('.resources-table tbody tr'); rows.forEach(row => { const name = row.querySelector('.resource-name')?.textContent.toLowerCase() || ''; row.style.display = name.includes(searchValue) ? '' : 'none'; }); }
 </script>

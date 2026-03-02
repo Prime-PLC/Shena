@@ -187,7 +187,7 @@ document.getElementById('stkPushForm')?.addEventListener('submit', async functio
     
     // Validate phone number
     if (!phoneNumber || phoneNumber.length < 9) {
-        alert('Please enter a valid phone number');
+        ShenaApp.showNotification('Please enter a valid phone number', 'warning');
         return;
     }
     

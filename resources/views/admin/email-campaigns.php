@@ -639,15 +639,15 @@ function sendCampaign(id) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                alert('Campaign sent successfully!');
+                ShenaApp.showNotification('Campaign sent successfully!', 'success');
                 location.reload();
             } else {
-                alert('Failed to send campaign: ' + (data.message || 'Unknown error'));
+                ShenaApp.showNotification('Failed to send campaign: ' + (data.message || 'Unknown error'), 'error');
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('Network error occurred');
+            ShenaApp.showNotification('Network error occurred', 'error');
         });
     };
 
@@ -678,15 +678,15 @@ function cancelCampaign(id) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                alert('Campaign cancelled successfully!');
+                ShenaApp.showNotification('Campaign cancelled successfully!', 'success');
                 location.reload();
             } else {
-                alert('Failed to cancel campaign: ' + (data.message || 'Unknown error'));
+                ShenaApp.showNotification('Failed to cancel campaign: ' + (data.message || 'Unknown error'), 'error');
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('Network error occurred');
+            ShenaApp.showNotification('Network error occurred', 'error');
         });
     };
 
@@ -717,15 +717,15 @@ function retryFailed(id) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                alert('Retry initiated successfully!');
+                ShenaApp.showNotification('Retry initiated successfully!', 'success');
                 location.reload();
             } else {
-                alert('Failed to retry: ' + (data.message || 'Unknown error'));
+                ShenaApp.showNotification('Failed to retry: ' + (data.message || 'Unknown error'), 'error');
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('Network error occurred');
+            ShenaApp.showNotification('Network error occurred', 'error');
         });
     };
 
@@ -757,16 +757,16 @@ document.getElementById('createCampaignForm')?.addEventListener('submit', functi
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert('Campaign created successfully!');
+            ShenaApp.showNotification('Campaign created successfully!', 'success');
             closeModal('createCampaignModal');
             location.reload();
         } else {
-            alert('Failed to create campaign: ' + (data.message || 'Unknown error'));
+            ShenaApp.showNotification('Failed to create campaign: ' + (data.message || 'Unknown error'), 'error');
         }
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('Network error occurred');
+        ShenaApp.showNotification('Network error occurred', 'error');
     });
 });
 </script>

@@ -1103,7 +1103,7 @@ document.getElementById('upgradeFormSubmit')?.addEventListener('submit', async f
     e.preventDefault();
 
     if (!document.getElementById('agree_terms').checked) {
-        alert('Please agree to the terms before proceeding');
+        ShenaApp.showNotification('Please agree to the terms before proceeding', 'warning');
         return;
     }
 
@@ -1135,16 +1135,16 @@ document.getElementById('upgradeFormSubmit')?.addEventListener('submit', async f
             setTimeout(() => {
                 clearInterval(checkInterval);
                 document.getElementById('processingModal').classList.remove('show');
-                alert('Payment timeout. Please check your payment status.');
+                ShenaApp.showNotification('Payment timeout. Please check your payment status.', 'warning');
                 location.reload();
             }, 120000);
         } else {
-            alert(data.message || data.error || 'Failed to initiate upgrade');
+            ShenaApp.showNotification(data.message || data.error || 'Failed to initiate upgrade', 'error');
             upgradeBtn.disabled = false;
             upgradeBtn.innerHTML = '<i class="fas fa-arrow-up"></i> <span id="upgradeBtnLabel">Upgrade to ' + (upgradeConfig.labels[toPackage] || toPackage) + '</span>';
         }
     } catch (error) {
-        alert('Failed to process upgrade request');
+        ShenaApp.showNotification('Failed to process upgrade request', 'error');
         upgradeBtn.disabled = false;
         upgradeBtn.innerHTML = '<i class="fas fa-arrow-up"></i> <span id="upgradeBtnLabel">Upgrade to ' + (upgradeConfig.labels[toPackage] || toPackage) + '</span>';
     }
@@ -1159,12 +1159,12 @@ async function checkUpgradeStatus(upgradeRequestId, interval) {
             if (data.status === 'completed') {
                 clearInterval(interval);
                 document.getElementById('processingModal').classList.remove('show');
-                alert('Upgrade completed successfully! Redirecting...');
+                ShenaApp.showNotification('Upgrade completed successfully! Redirecting...', 'success');
                 setTimeout(() => { window.location.href = '/member/dashboard'; }, 2000);
             } else if (data.status === 'failed') {
                 clearInterval(interval);
                 document.getElementById('processingModal').classList.remove('show');
-                alert('Payment failed. Please try again.');
+                ShenaApp.showNotification('Payment failed. Please try again.', 'error');
                 location.reload();
             }
         }
@@ -1183,13 +1183,13 @@ function cancelUpgrade(upgradeRequestId) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                alert('Upgrade request cancelled');
+                ShenaApp.showNotification('Upgrade request cancelled', 'info');
                 location.reload();
             } else {
-                alert(data.error || 'Failed to cancel upgrade');
+                ShenaApp.showNotification(data.error || 'Failed to cancel upgrade', 'error');
             }
         })
-        .catch(() => alert('Failed to cancel upgrade'));
+        .catch(() => ShenaApp.showNotification('Failed to cancel upgrade', 'error'));
     };
 
     if (window.ShenaApp && typeof ShenaApp.confirmAction === 'function') {

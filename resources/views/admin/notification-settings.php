@@ -184,14 +184,14 @@ document.getElementById('emailFallbackToggle').addEventListener('change', functi
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert('✓ Email fallback ' + (enabled === '1' ? 'enabled' : 'disabled'));
+            ShenaApp.showNotification('✓ Email fallback ' + (enabled === '1' ? 'enabled' : 'disabled'), 'success');
         } else {
-            alert('Error: ' + data.message);
+            ShenaApp.showNotification('Error: ' + data.message, 'error');
             this.checked = !this.checked;
         }
     })
     .catch(error => {
-        alert('Failed to update setting');
+        ShenaApp.showNotification('Failed to update setting', 'error');
         this.checked = !this.checked;
     });
 });

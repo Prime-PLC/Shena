@@ -84,6 +84,7 @@ define('UPLOAD_PATH', (defined('ROOT_PATH') ? ROOT_PATH : __DIR__ . '/..') . '/s
 // Payment Settings
 define('REGISTRATION_FEE', 10); // Ksh. 10 (Testing)
 define('REACTIVATION_FEE', 100); // Ksh. 100
+define('MORTUARY_DAYS_COVERED', 14); // Maximum days of mortuary covered
 
 // Contact Information
 define('ADMIN_EMAIL', getenv('ADMIN_EMAIL') ?: 'info@shenacompanion.org');

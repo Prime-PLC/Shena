@@ -595,7 +595,7 @@ document.getElementById('mpesaConfigForm')?.addEventListener('submit', function(
     
     if (!callbackUrl.startsWith('https://')) {
         e.preventDefault();
-        alert('Callback URL must use HTTPS for security');
+        ShenaApp.showNotification('Callback URL must use HTTPS for security', 'warning');
         return false;
     }
 });

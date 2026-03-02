@@ -771,7 +771,7 @@ function filterByStatus(status) {
 
 // View communication details (placeholder)
 function viewCommunication(id) {
-    alert('View communication details for ID: ' + id);
+    ShenaApp.showNotification('Communication ID: ' + id, 'info');
 }
 
 // Form submission handlers
@@ -787,16 +787,16 @@ document.getElementById('emailForm')?.addEventListener('submit', function(e) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert('Email sent successfully!');
+            ShenaApp.showNotification('Email sent successfully!', 'success');
             closeModal('emailModal');
             location.reload();
         } else {
-            alert('Failed to send email: ' + (data.message || 'Unknown error'));
+            ShenaApp.showNotification('Failed to send email: ' + (data.message || 'Unknown error'), 'error');
         }
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('Network error occurred');
+        ShenaApp.showNotification('Network error occurred', 'error');
     });
 });
 
@@ -812,16 +812,16 @@ document.getElementById('smsForm')?.addEventListener('submit', function(e) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert('SMS sent successfully!');
+            ShenaApp.showNotification('SMS sent successfully!', 'success');
             closeModal('smsModal');
             location.reload();
         } else {
-            alert('Failed to send SMS: ' + (data.message || 'Unknown error'));
+            ShenaApp.showNotification('Failed to send SMS: ' + (data.message || 'Unknown error'), 'error');
         }
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('Network error occurred');
+        ShenaApp.showNotification('Network error occurred', 'error');
     });
 });
 </script>

@@ -806,15 +806,15 @@ function sendCampaign(id) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                alert('Campaign sending initiated!');
+                ShenaApp.showNotification('Campaign sending initiated!', 'success');
                 location.reload();
             } else {
-                alert('Failed to send campaign: ' + (data.message || 'Unknown error'));
+                ShenaApp.showNotification('Failed to send campaign: ' + (data.message || 'Unknown error'), 'error');
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('Network error occurred');
+            ShenaApp.showNotification('Network error occurred', 'error');
         });
     };
 
@@ -845,15 +845,15 @@ function cancelCampaign(id) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                alert('Campaign cancelled successfully!');
+                ShenaApp.showNotification('Campaign cancelled successfully!', 'success');
                 location.reload();
             } else {
-                alert('Failed to cancel campaign: ' + (data.message || 'Unknown error'));
+                ShenaApp.showNotification('Failed to cancel campaign: ' + (data.message || 'Unknown error'), 'error');
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('Network error occurred');
+            ShenaApp.showNotification('Network error occurred', 'error');
         });
     };
 
@@ -884,15 +884,15 @@ function pauseCampaign(id) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                alert('Campaign paused!');
+                ShenaApp.showNotification('Campaign paused!', 'success');
                 location.reload();
             } else {
-                alert('Failed to pause: ' + (data.message || 'Unknown error'));
+                ShenaApp.showNotification('Failed to pause: ' + (data.message || 'Unknown error'), 'error');
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('Network error occurred');
+            ShenaApp.showNotification('Network error occurred', 'error');
         });
     };
 
@@ -923,15 +923,15 @@ function resumeCampaign(id) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                alert('Campaign resumed!');
+                ShenaApp.showNotification('Campaign resumed!', 'success');
                 location.reload();
             } else {
-                alert('Failed to resume: ' + (data.message || 'Unknown error'));
+                ShenaApp.showNotification('Failed to resume: ' + (data.message || 'Unknown error'), 'error');
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('Network error occurred');
+            ShenaApp.showNotification('Network error occurred', 'error');
         });
     };
 
@@ -963,16 +963,16 @@ document.getElementById('createCampaignForm')?.addEventListener('submit', functi
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert('Campaign created successfully!');
+            ShenaApp.showNotification('Campaign created successfully!', 'success');
             closeModal('createCampaignModal');
             location.reload();
         } else {
-            alert('Failed to create campaign: ' + (data.message || 'Unknown error'));
+            ShenaApp.showNotification('Failed to create campaign: ' + (data.message || 'Unknown error'), 'error');
         }
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('Network error occurred');
+        ShenaApp.showNotification('Network error occurred', 'error');
     });
 });
 
@@ -988,16 +988,16 @@ document.getElementById('quickSMSForm')?.addEventListener('submit', function(e) 
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert('SMS sent successfully!');
+            ShenaApp.showNotification('SMS sent successfully!', 'success');
             closeModal('quickSMSModal');
             location.reload();
         } else {
-            alert('Failed to send SMS: ' + (data.message || 'Unknown error'));
+            ShenaApp.showNotification('Failed to send SMS: ' + (data.message || 'Unknown error'), 'error');
         }
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('Network error occurred');
+        ShenaApp.showNotification('Network error occurred', 'error');
     });
 });
 </script>

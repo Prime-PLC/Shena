@@ -394,6 +394,9 @@ function validateClaimEligibility($member, $claim)
  * @param float $dailyRate Daily mortuary rate
  * @return float Amount to be paid (capped at 14 days)
  */
+if (!defined('MORTUARY_DAYS_COVERED')) {
+    define('MORTUARY_DAYS_COVERED', 14);
+}
 function calculateMortuaryBillPayment($daysOfPreservation, $dailyRate)
 {
     $daysToCharge = min($daysOfPreservation, MORTUARY_DAYS_COVERED);
