@@ -14,12 +14,31 @@ class AdminController extends BaseController
     public function __construct()
     {
         parent::__construct();
-        $this->memberModel = new Member();
-        $this->paymentModel = new Payment();
-        $this->claimModel = new Claim();
         $this->userModel = new User();
-        $this->agentModel = new Agent();
-        $this->payoutRequestModel = new PayoutRequest();
+        $this->memberModel = null;
+        $this->paymentModel = null;
+        $this->claimModel = null;
+        $this->agentModel = null;
+        $this->payoutRequestModel = null;
+    }
+
+    private function initAdminModels()
+    {
+        if ($this->memberModel === null) {
+            $this->memberModel = new Member();
+        }
+        if ($this->paymentModel === null) {
+            $this->paymentModel = new Payment();
+        }
+        if ($this->claimModel === null) {
+            $this->claimModel = new Claim();
+        }
+        if ($this->agentModel === null) {
+            $this->agentModel = new Agent();
+        }
+        if ($this->payoutRequestModel === null) {
+            $this->payoutRequestModel = new PayoutRequest();
+        }
     }
 
 
@@ -30,6 +49,8 @@ class AdminController extends BaseController
             header('Location: /admin-login');
             exit();
         }
+
+        $this->initAdminModels();
     }
 
     /**
@@ -68,32 +89,38 @@ class AdminController extends BaseController
                 exit();
             }
 
-            // Check admin credentials in users table
-            $admin = $this->userModel->findByEmail($username);
-            
-            if (!$admin) {
-                // Also try to find by first_name as username for admin
-                $db = Database::getInstance();
-                $query = "SELECT * FROM users WHERE first_name = :first_name AND role IN ('super_admin', 'manager') LIMIT 1";
-                $admin = $db->fetch($query, ['first_name' => $username]);
-            }
-            
-            if ($admin && in_array($admin['role'], ['super_admin', 'manager']) && 
-                password_verify($password, $admin['password'])) {
-                
-                $_SESSION['user_id'] = $admin['id'];
-                $_SESSION['user_role'] = $admin['role'];
-                $_SESSION['user_name'] = $admin['first_name'] . ' ' . $admin['last_name'];
-                $_SESSION['user_email'] = $admin['email'];
-                
-                // Update last login
-                $db = Database::getInstance();
-                $db->execute("UPDATE users SET last_login = NOW() WHERE id = :id", ['id' => $admin['id']]);
-                
-                header('Location: /admin/dashboard');
-                exit();
-            } else {
+            try {
+                // Check admin credentials in users table
+                $admin = $this->userModel->findByEmail($username);
+
+                if (!$admin) {
+                    // Also try to find by first_name as username for admin
+                    $db = Database::getInstance();
+                    $query = "SELECT * FROM users WHERE first_name = :first_name AND role IN ('super_admin', 'manager') LIMIT 1";
+                    $admin = $db->fetch($query, ['first_name' => $username]);
+                }
+
+                if ($admin && in_array($admin['role'], ['super_admin', 'manager']) &&
+                    ($admin['status'] ?? 'pending') === 'active' &&
+                    password_verify($password, $admin['password'])) {
+
+                    $_SESSION['user_id'] = $admin['id'];
+                    $_SESSION['user_role'] = $admin['role'];
+                    $_SESSION['user_name'] = $admin['first_name'] . ' ' . $admin['last_name'];
+                    $_SESSION['user_email'] = $admin['email'];
+
+                    // Update last login
+                    $db = Database::getInstance();
+                    $db->execute("UPDATE users SET last_login = NOW() WHERE id = :id", ['id' => $admin['id']]);
+
+                    header('Location: /admin/dashboard');
+                    exit();
+                }
+
                 $_SESSION['error'] = 'Invalid admin credentials';
+            } catch (Exception $e) {
+                error_log('Admin login error: ' . $e->getMessage());
+                $_SESSION['error'] = 'Login failed due to a server/database issue. Please verify database setup and try again.';
             }
         }
         

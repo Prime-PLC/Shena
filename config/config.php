@@ -23,57 +23,77 @@ if (defined('ROOT_PATH') && file_exists(ROOT_PATH . '/.env')) {
     }
 }
 
-define('DEBUG_MODE', getenv('DEBUG_MODE') === 'true'); // CRITICAL: Set to false in production
-define('APP_NAME', getenv('APP_NAME') ?: 'Shena Companion Welfare Association');
-define('APP_URL', getenv('APP_URL') ?: 'http://localhost');
+if (!function_exists('envConfig')) {
+    function envConfig($key, $default = null)
+    {
+        $value = getenv($key);
+        if ($value !== false && $value !== '') {
+            return $value;
+        }
+
+        if (isset($_ENV[$key]) && $_ENV[$key] !== '') {
+            return $_ENV[$key];
+        }
+
+        if (isset($_SERVER[$key]) && $_SERVER[$key] !== '') {
+            return $_SERVER[$key];
+        }
+
+        return $default;
+    }
+}
+
+define('DEBUG_MODE', strtolower((string) envConfig('DEBUG_MODE', 'false')) === 'true'); // CRITICAL: Set to false in production
+define('APP_NAME', envConfig('APP_NAME', 'Shena Companion Welfare Association'));
+define('APP_URL', rtrim((string) envConfig('APP_URL', 'http://localhost'), '/'));
 
 // Database Configuration
-define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
-define('DB_NAME', getenv('DB_NAME') ?: 'shena_welfare_db');
-define('DB_USER', getenv('DB_USER') ?: 'root');
-define('DB_PASS', getenv('DB_PASS') ?: '4885');
+define('DB_HOST', envConfig('DB_HOST', 'localhost'));
+define('DB_NAME', envConfig('DB_NAME', 'shena_welfare_db'));
+define('DB_USER', envConfig('DB_USER', 'root'));
+define('DB_PASS', envConfig('DB_PASS', '4885'));
 define('DB_CHARSET', 'utf8mb4');
 define('DB_FILE', (defined('ROOT_PATH') ? ROOT_PATH : __DIR__ . '/..') . '/database/shena_welfare.db');
 
 // M-Pesa Configuration
-define('MPESA_ENVIRONMENT', getenv('MPESA_ENVIRONMENT') ?: 'sandbox'); // sandbox or production
-define('MPESA_CONSUMER_KEY', getenv('MPESA_CONSUMER_KEY') ?: '');
-define('MPESA_CONSUMER_SECRET', getenv('MPESA_CONSUMER_SECRET') ?: '');
+define('MPESA_ENVIRONMENT', envConfig('MPESA_ENVIRONMENT', 'sandbox')); // sandbox or production
+define('MPESA_CONSUMER_KEY', envConfig('MPESA_CONSUMER_KEY', ''));
+define('MPESA_CONSUMER_SECRET', envConfig('MPESA_CONSUMER_SECRET', ''));
 
 // Sandbox shortcode for testing (174379)
 define('MPESA_SANDBOX_SHORTCODE', '174379');
-define('MPESA_SANDBOX_PASSKEY', getenv('MPESA_SANDBOX_PASSKEY') ?: 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919');
+define('MPESA_SANDBOX_PASSKEY', envConfig('MPESA_SANDBOX_PASSKEY', 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919'));
 
 // Production shortcode (4163987)
 define('MPESA_PRODUCTION_SHORTCODE', '4163987');
-define('MPESA_PRODUCTION_PASSKEY', getenv('MPESA_PRODUCTION_PASSKEY') ?: '');
+define('MPESA_PRODUCTION_PASSKEY', envConfig('MPESA_PRODUCTION_PASSKEY', ''));
 
 // Active shortcode based on environment
 define('MPESA_BUSINESS_SHORTCODE', MPESA_ENVIRONMENT === 'production' ? MPESA_PRODUCTION_SHORTCODE : MPESA_SANDBOX_SHORTCODE);
 define('MPESA_PASSKEY', MPESA_ENVIRONMENT === 'production' ? MPESA_PRODUCTION_PASSKEY : MPESA_SANDBOX_PASSKEY);
 
 // Callback URLs
-define('MPESA_STK_CALLBACK_URL', getenv('MPESA_STK_CALLBACK_URL') ?: (APP_URL . '/public/mpesa-stk-callback.php'));
-define('MPESA_C2B_CALLBACK_URL', getenv('MPESA_C2B_CALLBACK_URL') ?: (APP_URL . '/public/mpesa-c2b-callback.php'));
+define('MPESA_STK_CALLBACK_URL', envConfig('MPESA_STK_CALLBACK_URL', APP_URL . '/public/mpesa-stk-callback.php'));
+define('MPESA_C2B_CALLBACK_URL', envConfig('MPESA_C2B_CALLBACK_URL', APP_URL . '/public/mpesa-c2b-callback.php'));
 define('MPESA_CALLBACK_URL', MPESA_STK_CALLBACK_URL); // Default to STK callback
 
 // Email Configuration (SMTP)
-define('MAIL_ENABLED', false);
+define('MAIL_ENABLED', filter_var((string) envConfig('MAIL_ENABLED', 'false'), FILTER_VALIDATE_BOOLEAN));
 define('MAIL_HOST', 'smtp.gmail.com');
 define('MAIL_PORT', 587);
-define('MAIL_USERNAME', getenv('MAIL_USERNAME') ?: '');
-define('MAIL_PASSWORD', getenv('MAIL_PASSWORD') ?: '');
+define('MAIL_USERNAME', envConfig('MAIL_USERNAME', ''));
+define('MAIL_PASSWORD', envConfig('MAIL_PASSWORD', ''));
 define('MAIL_FROM_EMAIL', 'noreply@shenacompanion.org');
 define('MAIL_FROM_NAME', APP_NAME);
 
 // HostPinnacle SMS Configuration
-define('HOSTPINNACLE_USER_ID', getenv('HOSTPINNACLE_USER_ID') ?: 'oscar');
-define('HOSTPINNACLE_API_KEY', getenv('HOSTPINNACLE_API_KEY') ?: '9cc40ecba14145bdcd11845c744f5f9a5c043ef0');
-define('HOSTPINNACLE_SENDER_ID', getenv('HOSTPINNACLE_SENDER_ID') ?: 'SHENA');
+define('HOSTPINNACLE_USER_ID', envConfig('HOSTPINNACLE_USER_ID', 'oscar'));
+define('HOSTPINNACLE_API_KEY', envConfig('HOSTPINNACLE_API_KEY', '9cc40ecba14145bdcd11845c744f5f9a5c043ef0'));
+define('HOSTPINNACLE_SENDER_ID', envConfig('HOSTPINNACLE_SENDER_ID', 'SHENA'));
 
 // Security Settings - CRITICAL: Change these in production
-define('ENCRYPTION_KEY', getenv('ENCRYPTION_KEY') ?: bin2hex(random_bytes(16)));
-define('JWT_SECRET', getenv('JWT_SECRET') ?: bin2hex(random_bytes(32)));
+define('ENCRYPTION_KEY', envConfig('ENCRYPTION_KEY', bin2hex(random_bytes(16))));
+define('JWT_SECRET', envConfig('JWT_SECRET', bin2hex(random_bytes(32))));
 define('SESSION_LIFETIME', 7200); // 2 hours
 
 // File Upload Settings
@@ -87,8 +107,8 @@ define('REACTIVATION_FEE', 100); // Ksh. 100
 define('MORTUARY_DAYS_COVERED', 14); // Maximum days of mortuary covered
 
 // Contact Information
-define('ADMIN_EMAIL', getenv('ADMIN_EMAIL') ?: 'info@shenacompanion.org');
-define('ADMIN_PHONE', getenv('ADMIN_PHONE') ?: '+254712345678');
+define('ADMIN_EMAIL', envConfig('ADMIN_EMAIL', 'info@shenacompanion.org'));
+define('ADMIN_PHONE', envConfig('ADMIN_PHONE', '+254712345678'));
 define('OFFICE_ADDRESS', 'Shena Companion Welfare Association Office, Nairobi, Kenya');
 
 // Membership Maturity & Grace Period Settings (in months)

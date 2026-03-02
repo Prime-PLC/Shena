@@ -1,8 +1,11 @@
 RewriteEngine On
 
+# Serve favicon from existing image asset
+RewriteRule ^favicon\.ico$ public/images/shena-logo.png [L]
+
 # Remove www from URL
 RewriteCond %{HTTP_HOST} ^www\.(.*)$ [NC]
-RewriteRule ^(.*)$ http://%1/$1 [R=301,L]
+RewriteRule ^(.*)$ https://%1/$1 [R=301,L]
 
 # Redirect all requests to index.php (front controller)
 RewriteCond %{REQUEST_FILENAME} !-f

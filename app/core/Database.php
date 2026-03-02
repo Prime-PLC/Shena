@@ -5,10 +5,18 @@
 class Database 
 {
     private static $instance = null;
-    private $connection;
+    private $connection = null;
     
     private function __construct()
     {
+    }
+
+    private function connect()
+    {
+        if ($this->connection instanceof PDO) {
+            return;
+        }
+
         try {
             $dsn = "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET;
             $this->connection = new PDO($dsn, DB_USER, DB_PASS, [
@@ -31,12 +39,14 @@ class Database
     
     public function getConnection()
     {
+        $this->connect();
         return $this->connection;
     }
     
     public function query($sql, $params = [])
     {
         try {
+            $this->connect();
             $stmt = $this->connection->prepare($sql);
             $stmt->execute($params);
             return $stmt;
