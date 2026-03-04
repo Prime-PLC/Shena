@@ -32,7 +32,7 @@
                     </h3>
                     <p style="color: #6B7280; line-height: 1.7; font-size: 0.95rem; margin: 0;">
                         P.O. Box 40148,<br>
-                        40100-Kisumu, Kenya
+                        40100-Kenya (HQ: Kisumu)
                     </p>
                 </div>
             </div>
@@ -82,7 +82,8 @@
                         Send a Message
                     </h2>
 
-                    <form action="/contact/submit" method="POST">
+                    <form action="/contact" method="POST">
+                        <input type="hidden" name="csrf_token" value="<?php echo e($csrf_token ?? ''); ?>">
                         <div class="row g-3 mb-3">
                             <div class="col-md-6">
                                 <label for="fullName" style="color: #1A1A1A; font-weight: 600; font-size: 0.9rem; margin-bottom: 8px;">Full Name</label>
@@ -185,7 +186,7 @@
                         </div>
                         <div style="text-align: left;">
                             <h5 style="margin: 0; font-weight: 700; color: #1A1A1A; font-size: 1.1rem;">SHENA Companion HQ</h5>
-                            <p style="margin: 0; color: #6B7280; font-size: 0.85rem;">P.O. Box 4018, Kisumu</p>
+                            <p style="margin: 0; color: #6B7280; font-size: 0.85rem;">P.O. Box 4018, Kenya (HQ: Kisumu)</p>
                         </div>
                     </div>
                 </div>
@@ -193,7 +194,7 @@
 
             <!-- Map Overlay Text -->
             <div style="position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); background: rgba(255,255,255,0.95); padding: 12px 24px; border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 999;">
-                <p style="margin: 0; color: #1A1A1A; font-size: 0.9rem; font-weight: 600;">Interactive Map View of Kisumu</p>
+                <p style="margin: 0; color: #1A1A1A; font-size: 0.9rem; font-weight: 600;">Interactive Map View of SHENA Companion HQ</p>
             </div>
         </div>
     </div>
@@ -231,7 +232,7 @@
     var marker = L.marker([-0.0917, 34.7680], {icon: customIcon}).addTo(map);
 
     // Add popup to marker
-    marker.bindPopup('<div style="text-align: center;"><strong style="color: #7F3D9E;">SHENA Companion HQ</strong><br>P.O. Box 4018<br>40100 - Kisumu, Kenya</div>');
+    marker.bindPopup('<div style="text-align: center;"><strong style="color: #7F3D9E;">SHENA Companion HQ</strong><br>P.O. Box 4018<br>Kenya (Kisumu)</div>');
 
     // Open popup by default
     marker.openPopup();
@@ -245,40 +246,6 @@
     map.on('mouseout', function() {
         map.scrollWheelZoom.disable();
     });
-</script>
-
-<!-- Floating Support Module -->
-<div id="floating-support" style="position: fixed; bottom: 20px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 10px;">
-    <div id="support-buttons" style="display: none; flex-direction: column; gap: 10px;">
-        <a href="tel:+254748585067" style="background: #7F3D9E; color: white; border-radius: 50%; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; text-decoration: none; box-shadow: 0 4px 8px rgba(0,0,0,0.2); transition: all 0.3s;">
-            <i class="fas fa-phone" style="font-size: 18px;"></i>
-        </a>
-        <a href="https://wa.me/254748585071" target="_blank" style="background: #25D366; color: white; border-radius: 50%; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; text-decoration: none; box-shadow: 0 4px 8px rgba(0,0,0,0.2); transition: all 0.3s;">
-            <i class="fab fa-whatsapp" style="font-size: 18px;"></i>
-        </a>
-    </div>
-    <button id="toggle-support" style="background: #7F3D9E; color: white; border: none; border-radius: 50%; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.2); transition: all 0.3s;">
-        <i class="fas fa-comments" style="font-size: 20px;"></i>
-    </button>
-</div>
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const toggleBtn = document.getElementById('toggle-support');
-    const supportButtons = document.getElementById('support-buttons');
-    let isOpen = false;
-
-    toggleBtn.addEventListener('click', function() {
-        isOpen = !isOpen;
-        if (isOpen) {
-            supportButtons.style.display = 'flex';
-            toggleBtn.innerHTML = '<i class="fas fa-times" style="font-size: 20px;"></i>';
-        } else {
-            supportButtons.style.display = 'none';
-            toggleBtn.innerHTML = '<i class="fas fa-comments" style="font-size: 20px;"></i>';
-        }
-    });
-});
 </script>
 
 <?php include VIEWS_PATH . '/layouts/footer.php'; ?>

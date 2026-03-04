@@ -10,14 +10,17 @@
                         <img src="/public/images/shena-logo.png" alt="SHENA" style="height: 50px; width: auto; filter: brightness(0) invert(1);">
                     </div>
                     <p style="color: rgba(255, 255, 255, 0.6); font-size: 0.85rem; line-height: 1.7; font-style: italic;">
-                        "We Are Royal" - Setting a new standard in funeral cover and welfare services within Kisumu City and its environs.
+                        "We Are Royal" - Setting a new standard in funeral cover and welfare support for families across Kenya.
                     </p>
                     <div class="d-flex gap-3 mt-4">
-                        <a href="#" style="width: 40px; height: 40px; background-color: rgba(255, 255, 255, 0.08); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; text-decoration: none; transition: all 0.3s;">
+                        <a href="https://www.facebook.com" target="_blank" rel="noopener" style="width: 40px; height: 40px; background-color: rgba(255, 255, 255, 0.08); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; text-decoration: none; transition: all 0.3s;">
                             <i class="fab fa-facebook-f" style="font-size: 16px;"></i>
                         </a>
-                        <a href="#" style="width: 40px; height: 40px; background-color: rgba(255, 255, 255, 0.08); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; text-decoration: none; transition: all 0.3s;">
-                            <i class="fas fa-share-alt" style="font-size: 16px;"></i>
+                        <a href="https://www.instagram.com" target="_blank" rel="noopener" style="width: 40px; height: 40px; background-color: rgba(255, 255, 255, 0.08); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; text-decoration: none; transition: all 0.3s;">
+                            <i class="fab fa-instagram" style="font-size: 16px;"></i>
+                        </a>
+                        <a href="https://wa.me/254748585067" target="_blank" rel="noopener" style="width: 40px; height: 40px; background-color: rgba(255, 255, 255, 0.08); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; text-decoration: none; transition: all 0.3s;">
+                            <i class="fab fa-whatsapp" style="font-size: 16px;"></i>
                         </a>
                     </div>
                 </div>
@@ -27,8 +30,8 @@
                     <h6 class="mb-4" style="font-weight: 600; letter-spacing: 1.5px; font-size: 0.75rem; color: #C9A659;">NAVIGATION</h6>
                     <ul class="list-unstyled" style="line-height: 2.2;">
                         <li><a href="/about" style="color: rgba(255, 255, 255, 0.65); text-decoration: none; font-size: 0.9rem; transition: color 0.3s;">About Our Mission</a></li>
-                        <li><a href="/membership" style="color: rgba(255, 255, 255, 0.65); text-decoration: none; font-size: 0.9rem; transition: color 0.3s;">Welfare Packages</a></li>
-                        <li><a href="/claims" style="color: rgba(255, 255, 255, 0.65); text-decoration: none; font-size: 0.9rem; transition: color 0.3s;">Claims Process</a></li>
+                        <li><a href="/membership" style="color: rgba(255, 255, 255, 0.65); text-decoration: none; font-size: 0.9rem; transition: color 0.3s;">Membership Packages</a></li>
+                        <li><a href="/gallery" style="color: rgba(255, 255, 255, 0.65); text-decoration: none; font-size: 0.9rem; transition: color 0.3s;">Gallery</a></li>
                         <li><a href="/login" style="color: rgba(255, 255, 255, 0.65); text-decoration: none; font-size: 0.9rem; transition: color 0.3s;">Portal Login</a></li>
                     </ul>
                 </div>
@@ -40,7 +43,7 @@
                         <li class="mb-3 d-flex align-items-start gap-3">
                             <i class="fas fa-map-marker-alt" style="color: #C9A659; font-size: 16px; margin-top: 3px;"></i>
                             <span style="color: rgba(255, 255, 255, 0.65); font-size: 0.9rem; line-height: 1.6;">
-                                Main Office, Kisumu City,<br>
+                                Main Office (HQ), Kenya<br>
                                 P.O. Box 4018, Kisumu, Kenya
                             </span>
                         </li>
@@ -79,13 +82,20 @@
 
             <!-- Copyright Bar -->
             <hr style="border-color: rgba(255, 255, 255, 0.1); margin: 50px 0 25px;">
-            <div class="text-center">
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-center" style="gap: 12px;">
                 <p class="mb-0" style="color: rgba(255, 255, 255, 0.4); font-size: 0.8rem; letter-spacing: 0.5px;">
                     © <?php echo date('Y'); ?> SHENA COMPANION WELFARE ASSOCIATION. ROYAL CARE GUARANTEED
                 </p>
+                <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                    <a href="/privacy-policy" style="color: rgba(255, 255, 255, 0.6); text-decoration: none; font-size: 0.8rem;">Privacy Policy</a>
+                    <a href="/terms-and-conditions" style="color: rgba(255, 255, 255, 0.6); text-decoration: none; font-size: 0.8rem;">Terms &amp; Conditions</a>
+                    <a href="/policy-booklet" style="color: rgba(255, 255, 255, 0.6); text-decoration: none; font-size: 0.8rem;">Policy Booklet</a>
+                </div>
             </div>
         </div>
     </footer>
+
+    <?php include VIEWS_PATH . '/partials/public-help-widget.php'; ?>
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>

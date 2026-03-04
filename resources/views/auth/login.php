@@ -395,7 +395,7 @@
             </div>
             
             <div class="footer-text">
-                ESTABLISHED FOR THE KISUMU COMMUNITY
+                ESTABLISHED FOR COMMUNITIES ACROSS KENYA
             </div>
         </div>
         

@@ -1,7 +1,7 @@
 <?php include VIEWS_PATH . '/layouts/header.php'; ?>
 
 <!-- Services Hero Section -->
-<section style="position: relative; min-height: 500px; display: flex; align-items: center; background: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('https://images.unsplash.com/photo-1464639351491-a172c2aa2911?w=1600&q=80') center/cover no-repeat;">
+<section style="position: relative; min-height: 500px; display: flex; align-items: center; background: linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.45)), url('/public/images/funeral-service1.jpeg') center/cover no-repeat;">
     <div class="container">
         <div class="row justify-content-center">
             <div class="col-lg-10 text-center text-white">
@@ -19,7 +19,7 @@
     </div>
 </section>
 
-<!-- Core Welfare Services Section -->
+<!-- Core Services Section -->
 <section style="padding: 80px 0; background: #F7F7F9;">
     <div class="container">
         <!-- Section Header -->
@@ -28,7 +28,7 @@
                 DETAILED OFFERINGS
             </p>
             <h2 class="mb-5" style="font-family: 'Playfair Display', serif; font-size: 3rem; font-weight: 700; color: #1A1A1A;">
-                Core Welfare Services
+                Core Services
             </h2>
         </div>
 
@@ -123,6 +123,21 @@
                     </p>
                 </div>
             </div>
+
+            <!-- Cash Benefit -->
+            <div class="col-lg-4 col-md-6">
+                <div style="background: white; border-radius: 20px; padding: 40px 30px; height: 100%; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
+                    <div style="width: 70px; height: 70px; background: #F3E8FF; border-radius: 16px; display: flex; align-items: center; justify-content: center; margin-bottom: 24px;">
+                        <i class="fas fa-money-bill-wave" style="color: #7F3D9E; font-size: 2rem;"></i>
+                    </div>
+                    <h3 class="mb-3" style="font-family: 'Playfair Display', serif; font-size: 1.5rem; font-weight: 700; color: #1A1A1A;">
+                        Cash Benefit
+                    </h3>
+                    <p style="color: #6B7280; line-height: 1.7; font-size: 0.95rem; margin: 0;">
+                        Eligible members may access structured cash support options according to active package terms and claim policy.
+                    </p>
+                </div>
+            </div>
         </div>
 
         <!-- Service Terms & Conditions -->
@@ -159,7 +174,7 @@
                         Ready to secure your family's peace of mind?
                     </h2>
                     <p class="mb-5" style="font-size: 1.2rem; line-height: 1.6; max-width: 700px; margin: 0 auto 40px; opacity: 0.95; color: white;">
-                        Join SHENA Companion today and ensure a dignified farewell for your loved ones with our comprehensive welfare services.
+                        Join SHENA Companion today and ensure a dignified farewell for your loved ones with our comprehensive services.
                     </p>
                     <a href="/register" class="btn btn-lg" style="background-color: #C9A659; color: #1A1A1A; padding: 16px 50px; border-radius: 10px; font-weight: 700; font-size: 1.1rem; border: none; box-shadow: 0 8px 20px rgba(201, 166, 89, 0.3); text-decoration: none; text-transform: uppercase; letter-spacing: 1px;">
                         REGISTER NOW

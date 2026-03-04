@@ -1,7 +1,7 @@
 <?php include VIEWS_PATH . '/layouts/header.php'; ?>
 
 <!-- Hero Section -->
-<section class="hero-section" style="background: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('https://images.unsplash.com/photo-1495616811223-4d98c6e9c869?w=1600&q=80') center/cover no-repeat; min-height: 600px; display: flex; align-items: center;">
+<section class="hero-section" style="background: linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.45)), url('/public/images/background-image1.jpeg') center/cover no-repeat; min-height: 600px; display: flex; align-items: center;">
     <div class="container">
         <div class="row justify-content-center text-center">
             <div class="col-lg-10">
@@ -161,8 +161,8 @@
             <!-- Right Column: Image with Badge -->
             <div class="col-lg-6">
                 <div class="position-relative">
-                    <img src="https://images.unsplash.com/photo-1495616811223-4d98c6e9c869?w=900&q=80" 
-                         alt="Sunset over water" 
+                    <img src="/public/images/community.jpeg" 
+                        alt="SHENA community" 
                          class="img-fluid" 
                          style="width: 100%; height: auto; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.15);">
                     <div class="position-absolute" style="bottom: 30px; left: 50%; transform: translateX(-50%);">
@@ -205,15 +205,13 @@
                                 Get Started Now
                             </a>
                             <a href="/contact" class="btn btn-lg" style="background-color: transparent; color: white; padding: 14px 40px; border: 2px solid white; border-radius: 30px; font-weight: 600; text-decoration: none;">
-                                Talk to an Agent
+                                Talk to Us
                             </a>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
-</section>
     </div>
 </section>
 

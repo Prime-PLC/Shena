@@ -13,6 +13,7 @@
     <link href="/public/css/modals.css" rel="stylesheet">
     <!-- SHENA Design System CSS -->
     <link href="/css/shena-main.css" rel="stylesheet">
+    <link rel="icon" type="image/png" href="/public/images/shena-logo.png">
 </head>
 <body>
     <!-- Navigation -->
@@ -33,10 +34,13 @@
                         <a class="nav-link <?php echo ($page ?? '') === 'about' ? 'active' : ''; ?>" href="/about" style="color: <?php echo ($page ?? '') === 'about' ? '#7F3D9E' : '#000000'; ?>; font-weight: 500; padding: 0.5rem 1rem;">About Us</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?php echo ($page ?? '') === 'services' ? 'active' : ''; ?>" href="/services" style="color: <?php echo ($page ?? '') === 'services' ? '#7F3D9E' : '#000000'; ?>; font-weight: 500; padding: 0.5rem 1rem;">Welfare Services</a>
+                        <a class="nav-link <?php echo ($page ?? '') === 'services' ? 'active' : ''; ?>" href="/services" style="color: <?php echo ($page ?? '') === 'services' ? '#7F3D9E' : '#000000'; ?>; font-weight: 500; padding: 0.5rem 1rem;">Services</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?php echo ($page ?? '') === 'packages' ? 'active' : ''; ?>" href="/membership" style="color: <?php echo ($page ?? '') === 'packages' ? '#7F3D9E' : '#000000'; ?>; font-weight: 500; padding: 0.5rem 1rem;">Packages</a>
+                        <a class="nav-link <?php echo ($page ?? '') === 'membership' ? 'active' : ''; ?>" href="/membership" style="color: <?php echo ($page ?? '') === 'membership' ? '#7F3D9E' : '#000000'; ?>; font-weight: 500; padding: 0.5rem 1rem;">Packages</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link <?php echo ($page ?? '') === 'gallery' ? 'active' : ''; ?>" href="/gallery" style="color: <?php echo ($page ?? '') === 'gallery' ? '#7F3D9E' : '#000000'; ?>; font-weight: 500; padding: 0.5rem 1rem;">Gallery</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link <?php echo ($page ?? '') === 'contact' ? 'active' : ''; ?>" href="/contact" style="color: <?php echo ($page ?? '') === 'contact' ? '#7F3D9E' : '#000000'; ?>; font-weight: 500; padding: 0.5rem 1rem;">Contact</a>
