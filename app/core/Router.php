@@ -19,6 +19,10 @@ class Router
         $this->addRoute('GET', '/membership', 'HomeController@membership');
         $this->addRoute('GET', '/services', 'HomeController@services');
         $this->addRoute('GET', '/contact', 'HomeController@contact');
+        $this->addRoute('GET', '/gallery', 'HomeController@gallery');
+        $this->addRoute('GET', '/privacy-policy', 'HomeController@privacyPolicy');
+        $this->addRoute('GET', '/terms-and-conditions', 'HomeController@termsAndConditions');
+        $this->addRoute('GET', '/policy-booklet', 'HomeController@policyBooklet');
         $this->addRoute('POST', '/contact', 'HomeController@submitContact');
         
         // Authentication Routes
