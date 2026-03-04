@@ -798,11 +798,12 @@ class AgentDashboardController extends BaseController
             'full_name' => $this->sanitizeInput($_POST['full_name'] ?? ''),
             'relationship' => $this->sanitizeInput($_POST['relationship'] ?? ''),
             'id_number' => $this->sanitizeInput($_POST['id_number'] ?? ''),
+            'date_of_birth' => $this->sanitizeInput($_POST['date_of_birth'] ?? ''),
             'phone_number' => $this->sanitizeInput($_POST['phone_number'] ?? ''),
             'percentage' => (float)($_POST['percentage'] ?? 0)
         ];
 
-        if ($dependentData['full_name'] === '' || $dependentData['relationship'] === '' || $dependentData['id_number'] === '') {
+        if ($dependentData['full_name'] === '' || $dependentData['relationship'] === '' || $dependentData['id_number'] === '' || $dependentData['date_of_birth'] === '') {
             $_SESSION['error'] = 'Please fill in all required dependent fields.';
             $this->redirect('/agent/member-details/' . (int)$memberId);
             return;
@@ -821,28 +822,39 @@ class AgentDashboardController extends BaseController
             return;
         }
 
-            // Validate dependent age against package rules when possible
-            global $membership_packages;
-            $pkgKey = $member['package'] ?? null;
-            if (!empty($_POST['date_of_birth'])) {
-                try {
-                    $benAge = $this->memberModel->calculateAge($_POST['date_of_birth']);
-                    if ($pkgKey && isset($membership_packages[$pkgKey]) && isset($membership_packages[$pkgKey]['age_max'])) {
-                        $pkg = $membership_packages[$pkgKey];
-                        if ($benAge > (int)$pkg['age_max']) {
-                            $_SESSION['error'] = 'Dependent age exceeds limits for this member\'s package.';
-                            $this->redirect('/agent/member-details/' . (int)$memberId);
-                            return;
-                        }
-                    }
-                } catch (Exception $e) {
-                    error_log('Dependent age calc error: ' . $e->getMessage());
-                }
+        try {
+            $dependentAge = $this->memberModel->calculateAge($dependentData['date_of_birth']);
+            if ($dependentAge <= 0 || $dependentAge > 120) {
+                $_SESSION['error'] = 'Please enter a valid dependent date of birth.';
+                $this->redirect('/agent/member-details/' . (int)$memberId);
+                return;
             }
+        } catch (Exception $e) {
+            error_log('Dependent age calc error: ' . $e->getMessage());
+            $_SESSION['error'] = 'Please enter a valid dependent date of birth.';
+            $this->redirect('/agent/member-details/' . (int)$memberId);
+            return;
+        }
 
         try {
+            $oldMonthly = (int)($member['monthly_contribution'] ?? 0);
             $this->beneficiaryModel->addBeneficiary($dependentData);
-            $_SESSION['success'] = 'Dependent added successfully.';
+
+            $dependents = $this->beneficiaryModel->getActiveBeneficiaries($memberId);
+            $memberForCalc = [
+                'date_of_birth' => $member['date_of_birth'] ?? null,
+                'package_key' => $member['package_key'] ?? null,
+                'package' => $member['package'] ?? null
+            ];
+            $newMonthly = $this->memberModel->calculateMonthlyContribution($memberForCalc, $dependents ?: []);
+            $this->memberModel->update($memberId, ['monthly_contribution' => $newMonthly]);
+
+            if ($newMonthly > $oldMonthly) {
+                $increase = $newMonthly - $oldMonthly;
+                $_SESSION['success'] = 'Dependent added successfully. Monthly contribution increased by KES ' . number_format($increase) . ' (new total: KES ' . number_format($newMonthly) . ').';
+            } else {
+                $_SESSION['success'] = 'Dependent added successfully.';
+            }
         } catch (Exception $e) {
             $_SESSION['error'] = 'Failed to add dependent: ' . $e->getMessage();
         }

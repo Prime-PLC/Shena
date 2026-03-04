@@ -214,57 +214,235 @@ class Member extends BaseModel
     {
         global $membership_packages;
 
-        // If explicit package key is set and exists in config, use it
-        $pkgKey = $member['package'] ?? null;
-        if ($pkgKey && isset($membership_packages[$pkgKey])) {
-            return (int)$membership_packages[$pkgKey]['monthly_contribution'];
+        $basePackage = $this->resolveBasePackageForContribution($member, $membership_packages);
+        $baseAmount = (int)($basePackage['monthly_contribution'] ?? 100);
+
+        if (empty($dependents)) {
+            return $baseAmount;
         }
 
-        // Determine member age
+        $limits = $this->extractDependentCoverageLimits($basePackage);
+        $overageAmount = $this->calculateDependentsOverageAmount($dependents, $limits, $membership_packages);
+
+        return $baseAmount + $overageAmount;
+    }
+
+    /**
+     * Resolve member base package for contribution calculations.
+     *
+     * @param array $member
+     * @param array $membershipPackages
+     * @return array
+     */
+    private function resolveBasePackageForContribution(array $member, array $membershipPackages): array
+    {
+        $packageKey = $member['package_key'] ?? null;
+        if (!empty($packageKey) && isset($membershipPackages[$packageKey])) {
+            return $membershipPackages[$packageKey];
+        }
+
+        $packageOrKey = $member['package'] ?? null;
+        if (!empty($packageOrKey) && isset($membershipPackages[$packageOrKey])) {
+            return $membershipPackages[$packageOrKey];
+        }
+
         $age = $this->calculateAge($member['date_of_birth'] ?? ($member['dob'] ?? ''));
+        $requestedCategory = $member['package'] ?? null;
 
-        // Detect children (age < 18)
-        $hasChild = false;
-        foreach ($dependents as $d) {
-            $dAge = $this->calculateAge($d['date_of_birth'] ?? ($d['dob'] ?? ''));
-            if ($dAge > 0 && $dAge < 18) {
-                $hasChild = true;
-                break;
-            }
+        $matched = $this->findPackageByCategoryAndAge($membershipPackages, $requestedCategory, $age);
+        if ($matched !== null) {
+            return $matched;
         }
 
-        // Prefer family packages when children are present
-        if ($hasChild) {
-            foreach ($membership_packages as $key => $pkg) {
-                $category = $pkg['category'] ?? '';
-                if (in_array($category, ['family', 'extended_family', 'maximum_family'])) {
-                    if (isset($pkg['age_min'], $pkg['age_max']) && $age >= $pkg['age_min'] && $age <= $pkg['age_max']) {
-                        return (int)$pkg['monthly_contribution'];
-                    }
-                }
-            }
+        $fallback = $this->findPackageByCategoryAndAge($membershipPackages, 'individual', $age);
+        if ($fallback !== null) {
+            return $fallback;
         }
 
-        // Find an individual package that matches age
+        if (isset($membershipPackages['individual_below_70'])) {
+            return $membershipPackages['individual_below_70'];
+        }
+
+        return ['monthly_contribution' => 100, 'coverage_type' => 'principal_only'];
+    }
+
+    /**
+     * Find the cheapest package matching category and age.
+     *
+     * @param array $membershipPackages
+     * @param string|null $category
+     * @param int $age
+     * @return array|null
+     */
+    private function findPackageByCategoryAndAge(array $membershipPackages, $category, int $age)
+    {
+        if (empty($category)) {
+            return null;
+        }
+
+        $normalizedCategory = strtolower((string)$category);
+        $categoryAliasMap = [
+            'family' => ['family', 'extended_family', 'maximum_family'],
+            'couple' => ['couple'],
+            'executive' => ['executive'],
+            'individual' => ['individual']
+        ];
+
+        $categoryTargets = $categoryAliasMap[$normalizedCategory] ?? [$normalizedCategory];
         $best = null;
-        foreach ($membership_packages as $key => $pkg) {
-            $category = $pkg['category'] ?? '';
-            if ($category === 'individual') {
-                if (isset($pkg['age_min'], $pkg['age_max']) && $age >= $pkg['age_min'] && $age <= $pkg['age_max']) {
-                    if ($best === null || $pkg['monthly_contribution'] < $best['monthly_contribution']) {
-                        $best = $pkg;
-                    }
+
+        foreach ($membershipPackages as $package) {
+            $packageCategory = strtolower((string)($package['category'] ?? ''));
+            if (!in_array($packageCategory, $categoryTargets, true)) {
+                continue;
+            }
+
+            if (isset($package['age_min'], $package['age_max']) && $age > 0) {
+                if ($age < (int)$package['age_min'] || $age > (int)$package['age_max']) {
+                    continue;
+                }
+            }
+
+            if ($best === null || (int)$package['monthly_contribution'] < (int)$best['monthly_contribution']) {
+                $best = $package;
+            }
+        }
+
+        return $best;
+    }
+
+    /**
+     * Extract dependent coverage limits from the selected package.
+     *
+     * @param array $package
+     * @return array
+     */
+    private function extractDependentCoverageLimits(array $package): array
+    {
+        $coverageType = (string)($package['coverage_type'] ?? 'principal_only');
+
+        $limits = [
+            'spouse' => 0,
+            'children' => 0,
+            'parents' => 0,
+            'inlaws' => 0,
+            'other' => 0
+        ];
+
+        if ($coverageType !== 'principal_only') {
+            $limits['spouse'] = 1;
+            $limits['children'] = (int)($package['max_children'] ?? 0);
+            $limits['parents'] = (int)($package['max_parents'] ?? 0);
+            $limits['inlaws'] = (int)($package['max_inlaws'] ?? 0);
+        }
+
+        return $limits;
+    }
+
+    /**
+     * Calculate extra monthly amount for dependents beyond plan coverage limits.
+     *
+     * @param array $dependents
+     * @param array $limits
+     * @param array $membershipPackages
+     * @return int
+     */
+    private function calculateDependentsOverageAmount(array $dependents, array $limits, array $membershipPackages): int
+    {
+        $counts = [
+            'spouse' => 0,
+            'children' => 0,
+            'parents' => 0,
+            'inlaws' => 0,
+            'other' => 0
+        ];
+
+        $overageAmount = 0;
+
+        foreach ($dependents as $dependent) {
+            $bucket = $this->normalizeRelationshipBucket($dependent['relationship'] ?? '');
+            $counts[$bucket]++;
+
+            $coveredSlots = (int)($limits[$bucket] ?? 0);
+            if ($counts[$bucket] <= $coveredSlots) {
+                continue;
+            }
+
+            $age = $this->calculateAge($dependent['date_of_birth'] ?? ($dependent['dob'] ?? ''));
+            $overageAmount += $this->getAgeBracketRate($age, $membershipPackages);
+        }
+
+        return $overageAmount;
+    }
+
+    /**
+     * Normalize free-text relationship into a pricing bucket.
+     *
+     * @param string $relationship
+     * @return string
+     */
+    private function normalizeRelationshipBucket($relationship): string
+    {
+        $value = strtolower(trim((string)$relationship));
+        $value = str_replace(['-', '_'], ' ', $value);
+
+        if ($value === '') {
+            return 'other';
+        }
+
+        if (strpos($value, 'spouse') !== false || strpos($value, 'wife') !== false || strpos($value, 'husband') !== false) {
+            return 'spouse';
+        }
+
+        if (strpos($value, 'child') !== false || strpos($value, 'son') !== false || strpos($value, 'daughter') !== false) {
+            return 'children';
+        }
+
+        if (strpos($value, 'in law') !== false || strpos($value, 'inlaw') !== false || strpos($value, 'father in law') !== false || strpos($value, 'mother in law') !== false) {
+            return 'inlaws';
+        }
+
+        if (strpos($value, 'parent') !== false || $value === 'father' || $value === 'mother') {
+            return 'parents';
+        }
+
+        return 'other';
+    }
+
+    /**
+     * Get age-bracket monthly rate for an extra dependent.
+     * Uses individual package rates as pricing bands.
+     *
+     * @param int $age
+     * @param array $membershipPackages
+     * @return int
+     */
+    private function getAgeBracketRate(int $age, array $membershipPackages): int
+    {
+        $best = null;
+
+        foreach ($membershipPackages as $package) {
+            $isIndividual = ($package['category'] ?? '') === 'individual';
+            if (!$isIndividual) {
+                continue;
+            }
+
+            $min = (int)($package['age_min'] ?? 0);
+            $max = (int)($package['age_max'] ?? 200);
+
+            if ($age > 0 && $age >= $min && $age <= $max) {
+                if ($best === null || (int)$package['monthly_contribution'] < (int)$best['monthly_contribution']) {
+                    $best = $package;
                 }
             }
         }
 
-        if ($best) {
+        if ($best !== null) {
             return (int)$best['monthly_contribution'];
         }
 
-        // Fallback: return a sensible default
-        if (isset($membership_packages['individual_below_70'])) {
-            return (int)$membership_packages['individual_below_70']['monthly_contribution'];
+        if (isset($membershipPackages['individual_below_70'])) {
+            return (int)$membershipPackages['individual_below_70']['monthly_contribution'];
         }
 
         return 100;
