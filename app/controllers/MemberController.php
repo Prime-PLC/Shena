@@ -789,7 +789,7 @@ class MemberController extends BaseController
                 'full_name' => $this->sanitizeInput($_POST['full_name'] ?? ''),
                 'relationship' => $this->sanitizeInput($_POST['relationship'] ?? ''),
                 'id_number' => $this->sanitizeInput($_POST['id_number'] ?? ''),
-                'date_of_birth' => $this->sanitizeInput($_POST['date_of_birth'] ?? null),
+                'date_of_birth' => $this->sanitizeInput($_POST['date_of_birth'] ?? ''),
                 'phone_number' => formatKenyanPhone($this->sanitizeInput($_POST['phone_number'] ?? '')),
                 'percentage' => (float)($_POST['percentage'] ?? 100)
             ];
@@ -798,9 +798,9 @@ class MemberController extends BaseController
             
             // Validate required fields
             if (empty($beneficiaryData['full_name']) || empty($beneficiaryData['relationship']) || 
-                empty($beneficiaryData['id_number'])) {
+                empty($beneficiaryData['id_number']) || empty($beneficiaryData['date_of_birth'])) {
                 error_log('Validation failed: missing required fields');
-                $_SESSION['error'] = 'Please fill in all required fields.';
+                $_SESSION['error'] = 'Please fill in all required fields including date of birth.';
                 $this->redirect('/beneficiaries');
                 return;
             }
@@ -813,25 +813,18 @@ class MemberController extends BaseController
                 return;
             }
 
-            // Validate beneficiary age against member's package rules when possible
-            global $membership_packages;
-            $pkgKey = $member['package'] ?? null;
-            if (!empty($beneficiaryData['date_of_birth'])) {
-                try {
-                    /** @var string $benDob */
-                    $benDob = $beneficiaryData['date_of_birth'];
-                    $benAge = $this->memberModel->calculateAge($benDob);
-                    if ($pkgKey && isset($membership_packages[$pkgKey]) && isset($membership_packages[$pkgKey]['age_max'])) {
-                        $pkg = $membership_packages[$pkgKey];
-                        if ($benAge > (int)$pkg['age_max']) {
-                            $_SESSION['error'] = 'Beneficiary age exceeds limits for your package.';
-                            $this->redirect('/beneficiaries');
-                            return;
-                        }
-                    }
-                } catch (Exception $e) {
-                    error_log('Beneficiary age calc error: ' . $e->getMessage());
+            try {
+                $benAge = $this->memberModel->calculateAge($beneficiaryData['date_of_birth']);
+                if ($benAge <= 0 || $benAge > 120) {
+                    $_SESSION['error'] = 'Please enter a valid beneficiary date of birth.';
+                    $this->redirect('/beneficiaries');
+                    return;
                 }
+            } catch (Exception $e) {
+                error_log('Beneficiary age calc error: ' . $e->getMessage());
+                $_SESSION['error'] = 'Please enter a valid beneficiary date of birth.';
+                $this->redirect('/beneficiaries');
+                return;
             }
             
             // Check total percentage
@@ -850,17 +843,28 @@ class MemberController extends BaseController
 
             // Recalculate member's monthly contribution now that a beneficiary (dependent) was added
             try {
+                $oldMonthly = (int)($member['monthly_contribution'] ?? 0);
                 $beneficiaries = $this->beneficiaryModel->getActiveBeneficiaries($member['id']);
                 $dependents = $beneficiaries ?: [];
-                $memberForCalc = ['date_of_birth' => $member['date_of_birth'] ?? null];
+                $memberForCalc = [
+                    'date_of_birth' => $member['date_of_birth'] ?? null,
+                    'package_key' => $member['package_key'] ?? null,
+                    'package' => $member['package'] ?? null
+                ];
                 $newMonthly = $this->memberModel->calculateMonthlyContribution($memberForCalc, $dependents);
                 $this->memberModel->update($member['id'], ['monthly_contribution' => $newMonthly]);
                 error_log('Member monthly contribution updated to: ' . $newMonthly);
+
+                if ($newMonthly > $oldMonthly) {
+                    $increase = $newMonthly - $oldMonthly;
+                    $_SESSION['success'] = 'Beneficiary added successfully. Monthly contribution increased by KES ' . number_format($increase) . ' (new total: KES ' . number_format($newMonthly) . ').';
+                } else {
+                    $_SESSION['success'] = 'Beneficiary added successfully.';
+                }
             } catch (Exception $e) {
                 error_log('Failed to recalc monthly contribution after adding beneficiary: ' . $e->getMessage());
+                $_SESSION['success'] = 'Beneficiary added successfully.';
             }
-
-            $_SESSION['success'] = 'Beneficiary added successfully.';
             
         } catch (Exception $e) {
             error_log('Add beneficiary error: ' . $e->getMessage());

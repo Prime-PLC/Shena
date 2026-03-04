@@ -867,9 +867,8 @@ class AuthController extends BaseController
         try {
             $this->validateCsrf();
             
-            // Validate required fields
-            $required = ['package_id', 'first_name', 'last_name', 'national_id', 'date_of_birth', 
-                        'email', 'phone', 'address', 'county', 'payment_method'];
+            // Validate required fields (simple one-step registration)
+            $required = ['first_name', 'last_name', 'national_id', 'date_of_birth', 'email', 'phone'];
             
             foreach ($required as $field) {
                 if (empty($_POST[$field])) {
@@ -889,10 +888,13 @@ class AuthController extends BaseController
             $county = $this->sanitizeInput($_POST['county']);
             $subCounty = $this->sanitizeInput($_POST['sub_county'] ?? '');
             $postalCode = $this->sanitizeInput($_POST['postal_code'] ?? '');
-            $paymentMethod = $this->sanitizeInput($_POST['payment_method']);
+            $paymentMethod = $this->sanitizeInput($_POST['payment_method'] ?? 'mpesa');
             
             // Normalize payment method - STK push is a type of M-Pesa payment
             if ($paymentMethod === 'stk_push') {
+                $paymentMethod = 'mpesa';
+            }
+            if (empty($paymentMethod)) {
                 $paymentMethod = 'mpesa';
             }
             
@@ -918,13 +920,18 @@ class AuthController extends BaseController
                 throw new Exception('You must be at least 18 years old to register');
             }
             
-            // Get package details
+            // Get package details (auto-select individual package by age if not explicitly chosen)
             global $membership_packages;
             $package = null;
-            
-            // Package ID is the array key
-            if (isset($membership_packages[$packageId])) {
+
+            if (!empty($packageId) && isset($membership_packages[$packageId])) {
                 $package = $membership_packages[$packageId];
+            } else {
+                $autoPackageKey = $this->findAutoPackageByAge($age, $membership_packages);
+                if ($autoPackageKey && isset($membership_packages[$autoPackageKey])) {
+                    $packageId = $autoPackageKey;
+                    $package = $membership_packages[$autoPackageKey];
+                }
             }
             
             if (!$package) {
@@ -964,6 +971,17 @@ class AuthController extends BaseController
                     'success' => false,
                     'message' => 'Email address already registered',
                     'field' => 'email',
+                    'old_values' => $_POST
+                ]);
+                return;
+            }
+
+            $existingPhone = $this->userModel->findByPhone($phone);
+            if ($existingPhone) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Phone number already registered',
+                    'field' => 'phone',
                     'old_values' => $_POST
                 ]);
                 return;
@@ -1010,15 +1028,8 @@ class AuthController extends BaseController
                 // Determine gender from national ID or default
                 $gender = 'male'; // Default, or implement logic to determine from national ID
                 
-                // Extract package type from package_id (e.g., 'couple_below_70' -> 'couple')
-                $packageType = 'individual'; // Default
-                if (strpos($packageId, 'couple') !== false) {
-                    $packageType = 'couple';
-                } elseif (strpos($packageId, 'family') !== false) {
-                    $packageType = 'family';
-                } elseif (strpos($packageId, 'executive') !== false) {
-                    $packageType = 'executive';
-                }
+                // Map configured package to allowed members.package enum value
+                $packageType = $this->mapPackageType($packageId, $package);
                 
                 $memberData = [
                     'user_id' => $userId,
@@ -1028,6 +1039,7 @@ class AuthController extends BaseController
                     'gender' => $gender,
                     'address' => $address,
                     'package' => $packageType,
+                    'package_key' => $packageId,
                     'monthly_contribution' => $package['monthly_contribution'],
                     'status' => 'inactive', // Awaiting registration fee payment
                     'maturity_ends' => $maturityEnds,
@@ -1152,6 +1164,60 @@ class AuthController extends BaseController
         }
         
         return $prefix . $year . str_pad($sequence, 4, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Auto-select a package by age, preferring individual plans.
+     *
+     * @param int $age
+     * @param array $membershipPackages
+     * @return string|null
+     */
+    private function findAutoPackageByAge($age, array $membershipPackages)
+    {
+        foreach ($membershipPackages as $key => $package) {
+            $isIndividual = ($package['category'] ?? '') === 'individual';
+            $hasAgeRange = isset($package['age_min'], $package['age_max']);
+
+            if ($isIndividual && $hasAgeRange && $age >= $package['age_min'] && $age <= $package['age_max']) {
+                return $key;
+            }
+        }
+
+        foreach ($membershipPackages as $key => $package) {
+            $hasAgeRange = isset($package['age_min'], $package['age_max']);
+            if ($hasAgeRange && $age >= $package['age_min'] && $age <= $package['age_max']) {
+                return $key;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Map package id/config to the allowed members.package enum values.
+     *
+     * @param string $packageId
+     * @param array $package
+     * @return string
+     */
+    private function mapPackageType($packageId, array $package)
+    {
+        $category = strtolower((string)($package['category'] ?? ''));
+
+        if ($category === 'executive' || strpos($packageId, 'executive') !== false) {
+            return 'executive';
+        }
+
+        if (strpos($packageId, 'couple') !== false) {
+            return 'couple';
+        }
+
+        if (strpos($category, 'family') !== false || strpos($packageId, 'family') !== false) {
+            return 'family';
+        }
+
+        return 'individual';
     }
 }
 
