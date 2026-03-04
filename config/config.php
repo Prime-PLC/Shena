@@ -25,13 +25,35 @@ if (defined('ROOT_PATH') && file_exists(ROOT_PATH . '/.env')) {
 
 define('DEBUG_MODE', getenv('DEBUG_MODE') === 'true'); // CRITICAL: Set to false in production
 define('APP_NAME', getenv('APP_NAME') ?: 'Shena Companion Welfare Association');
-define('APP_URL', getenv('APP_URL') ?: 'http://localhost');
+
+$httpHost = $_SERVER['HTTP_HOST'] ?? '';
+$isLocalHost = preg_match('/^(localhost|127\.0\.0\.1)(:\d+)?$/i', $httpHost) === 1;
+$isLocalCliServer = PHP_SAPI === 'cli-server';
+$isLocalEnvironment = $isLocalHost || $isLocalCliServer;
+
+$appUrl = getenv('APP_URL') ?: 'http://localhost';
+if ($isLocalEnvironment) {
+    $appUrl = getenv('LOCAL_APP_URL') ?: 'http://localhost:8000';
+}
+define('APP_URL', $appUrl);
 
 // Database Configuration
-define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
-define('DB_NAME', getenv('DB_NAME') ?: 'shena_welfare_db');
-define('DB_USER', getenv('DB_USER') ?: 'root');
-define('DB_PASS', getenv('DB_PASS') ?: '4885');
+$dbHost = getenv('DB_HOST') ?: 'localhost';
+$dbName = getenv('DB_NAME') ?: 'shena_welfare_db';
+$dbUser = getenv('DB_USER') ?: 'root';
+$dbPass = getenv('DB_PASS') ?: '4885';
+
+if ($isLocalEnvironment) {
+    $dbHost = getenv('LOCAL_DB_HOST') ?: '127.0.0.1';
+    $dbName = getenv('LOCAL_DB_NAME') ?: 'shena_welfare_db';
+    $dbUser = getenv('LOCAL_DB_USER') ?: 'root';
+    $dbPass = getenv('LOCAL_DB_PASS') ?: '4885';
+}
+
+define('DB_HOST', $dbHost);
+define('DB_NAME', $dbName);
+define('DB_USER', $dbUser);
+define('DB_PASS', $dbPass);
 define('DB_CHARSET', 'utf8mb4');
 define('DB_FILE', (defined('ROOT_PATH') ? ROOT_PATH : __DIR__ . '/..') . '/database/shena_welfare.db');
 
@@ -70,6 +92,7 @@ define('MAIL_FROM_NAME', APP_NAME);
 define('HOSTPINNACLE_USER_ID', getenv('HOSTPINNACLE_USER_ID') ?: 'oscar');
 define('HOSTPINNACLE_API_KEY', getenv('HOSTPINNACLE_API_KEY') ?: '9cc40ecba14145bdcd11845c744f5f9a5c043ef0');
 define('HOSTPINNACLE_SENDER_ID', getenv('HOSTPINNACLE_SENDER_ID') ?: 'SHENA');
+define('HOSTPINNACLE_SMS_API_URL', getenv('HOSTPINNACLE_SMS_API_URL') ?: 'https://smsportal.hostpinnacle.co.ke/SMSApi/send');
 
 // Security Settings - CRITICAL: Change these in production
 define('ENCRYPTION_KEY', getenv('ENCRYPTION_KEY') ?: bin2hex(random_bytes(16)));
@@ -82,7 +105,7 @@ define('ALLOWED_FILE_TYPES', ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx']);
 define('UPLOAD_PATH', (defined('ROOT_PATH') ? ROOT_PATH : __DIR__ . '/..') . '/storage/uploads');
 
 // Payment Settings
-define('REGISTRATION_FEE', 10); // Ksh. 10 (Testing)
+define('REGISTRATION_FEE', 200); // Ksh. 10 (Testing)
 define('REACTIVATION_FEE', 100); // Ksh. 100
 define('MORTUARY_DAYS_COVERED', 14); // Maximum days of mortuary covered
 

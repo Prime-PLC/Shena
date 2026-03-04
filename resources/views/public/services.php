@@ -19,7 +19,7 @@
     </div>
 </section>
 
-<!-- Core Services Section -->
+<!-- Services Section -->
 <section style="padding: 80px 0; background: #F7F7F9;">
     <div class="container">
         <!-- Section Header -->
@@ -27,9 +27,12 @@
             <p style="color: #7F3D9E; font-size: 0.85rem; font-weight: 600; letter-spacing: 1.5px; margin-bottom: 12px;">
                 DETAILED OFFERINGS
             </p>
-            <h2 class="mb-5" style="font-family: 'Playfair Display', serif; font-size: 3rem; font-weight: 700; color: #1A1A1A;">
-                Core Services
+            <h2 class="mb-2" style="font-family: 'Playfair Display', serif; font-size: 3rem; font-weight: 700; color: #1A1A1A;">
+                Last Respect Services
             </h2>
+            <p style="color: #6B7280; font-size: 1rem; max-width: 780px; margin: 0;">
+                These are the in-kind funeral support services we organize directly for the family during bereavement.
+            </p>
         </div>
 
         <!-- Services Grid -->
@@ -53,7 +56,7 @@
             <div class="col-lg-4 col-md-6">
                 <div style="background: white; border-radius: 20px; padding: 40px 30px; height: 100%; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
                     <div style="width: 70px; height: 70px; background: #F3E8FF; border-radius: 16px; display: flex; align-items: center; justify-content: center; margin-bottom: 24px;">
-                        <i class="fas fa-check-circle" style="color: #7F3D9E; font-size: 2rem;"></i>
+                        <i class="fas fa-user-tie" style="color: #7F3D9E; font-size: 2rem;"></i>
                     </div>
                     <h3 class="mb-3" style="font-family: 'Playfair Display', serif; font-size: 1.5rem; font-weight: 700; color: #1A1A1A;">
                         Body Dressing
@@ -124,18 +127,50 @@
                 </div>
             </div>
 
-            <!-- Cash Benefit -->
-            <div class="col-lg-4 col-md-6">
-                <div style="background: white; border-radius: 20px; padding: 40px 30px; height: 100%; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
-                    <div style="width: 70px; height: 70px; background: #F3E8FF; border-radius: 16px; display: flex; align-items: center; justify-content: center; margin-bottom: 24px;">
-                        <i class="fas fa-money-bill-wave" style="color: #7F3D9E; font-size: 2rem;"></i>
+        </div>
+
+        <div style="background: white; border-radius: 24px; border: 1px solid #E5E7EB; box-shadow: 0 8px 24px rgba(0,0,0,0.08); margin-bottom: 34px; overflow: hidden;">
+            <div style="background: linear-gradient(135deg, #2D1A4A 0%, #1A0F2E 100%); padding: 24px 28px; color: white;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="width: 52px; height: 52px; border-radius: 14px; background: rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center;">
+                        <i class="fas fa-money-bill-wave" style="font-size: 1.5rem;"></i>
                     </div>
-                    <h3 class="mb-3" style="font-family: 'Playfair Display', serif; font-size: 1.5rem; font-weight: 700; color: #1A1A1A;">
-                        Cash Benefit
-                    </h3>
-                    <p style="color: #6B7280; line-height: 1.7; font-size: 0.95rem; margin: 0;">
-                        Eligible members may access structured cash support options according to active package terms and claim policy.
-                    </p>
+                    <div>
+                        <p style="margin: 0 0 4px 0; opacity: 0.85; font-size: 0.8rem; letter-spacing: 1px; font-weight: 700;">SEPARATE SERVICE</p>
+                        <h3 style="font-family: 'Playfair Display', serif; margin: 0; font-size: 2rem;">Cash Benefit</h3>
+                    </div>
+                </div>
+            </div>
+
+            <div style="padding: 28px;">
+                <p style="color: #4B5563; line-height: 1.75; margin-bottom: 14px;">
+                    Cash Benefit is different from Last Respect Services. Instead of SHENA arranging all funeral items directly, an approved cash amount is released to the family to support urgent funeral costs.
+                </p>
+                <p style="color: #4B5563; line-height: 1.75; margin-bottom: 14px;">
+                    In plain terms: once a valid claim is filed and required documents are verified, payout is processed and shared with the member/family.
+                </p>
+
+                <div class="row g-3 mt-1">
+                    <div class="col-md-6">
+                        <div style="background: #F8FAFC; border: 1px solid #E5E7EB; border-radius: 12px; padding: 16px; height: 100%;">
+                            <h5 style="font-size: 1rem; font-weight: 700; color: #1A1A1A; margin-bottom: 10px;">Typical onboarding details</h5>
+                            <ul style="margin: 0; padding-left: 18px; color: #4B5563; line-height: 1.7; font-size: 0.92rem;">
+                                <li>Member ID number</li>
+                                <li>KRA PIN</li>
+                                <li>ID details for covered family members</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div style="background: #F8FAFC; border: 1px solid #E5E7EB; border-radius: 12px; padding: 16px; height: 100%;">
+                            <h5 style="font-size: 1rem; font-weight: 700; color: #1A1A1A; margin-bottom: 10px;">Typical claim requirements</h5>
+                            <ul style="margin: 0; padding-left: 18px; color: #4B5563; line-height: 1.7; font-size: 0.92rem;">
+                                <li>Relevant death documents and IDs</li>
+                                <li>Claim form submission</li>
+                                <li>Verification before payout processing</li>
+                            </ul>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

@@ -423,6 +423,12 @@
                 <?php
                 endif;
 
+                if (!empty($_SESSION['info'])) :
+                ?>
+                    <div class="alert alert-info" role="alert"><?php echo htmlspecialchars($_SESSION['info']); unset($_SESSION['info']); ?></div>
+                <?php
+                endif;
+
                 // Display errors passed directly to the view
                 if (!empty($errors)) :
                     if (is_array($errors)) :
@@ -508,6 +514,27 @@
                     
                     <button type="submit" class="login-btn">Login to Dashboard</button>
                 </form>
+
+                <div class="text-center my-3 text-muted" style="font-size:0.9rem;">or</div>
+
+                <form id="otpLoginForm" novalidate>
+                    <input type="hidden" name="csrf_token" value="<?php echo $csrf_token ?? ''; ?>">
+
+                    <div class="form-group">
+                        <label class="form-label">Phone Number</label>
+                        <input type="tel" name="phone" id="otpPhone" class="form-control" placeholder="0712345678" required>
+                    </div>
+
+                    <div class="form-group">
+                        <button type="button" id="sendOtpBtn" class="register-btn" style="margin-bottom:10px;">Send OTP Code</button>
+                        <label class="form-label">OTP Code</label>
+                        <input type="text" name="otp_code" id="otpCode" class="form-control" maxlength="6" inputmode="numeric" placeholder="Enter 6-digit OTP">
+                    </div>
+
+                    <button type="button" id="verifyOtpBtn" class="login-btn">Login with OTP</button>
+                </form>
+
+                <div id="otpResult" class="mt-3"></div>
                 
                 <div class="register-section">
                     <p class="register-text">New to SHENA Companion? Join our welfare association today.</p>
@@ -567,6 +594,79 @@
                 toggleIcon.classList.add('fa-eye');
             }
         }
+
+        (function () {
+            const otpForm = document.getElementById('otpLoginForm');
+            const sendOtpBtn = document.getElementById('sendOtpBtn');
+            const verifyOtpBtn = document.getElementById('verifyOtpBtn');
+            const otpResult = document.getElementById('otpResult');
+            const csrfToken = otpForm ? otpForm.querySelector('input[name="csrf_token"]').value : '';
+
+            if (!otpForm || !sendOtpBtn || !verifyOtpBtn || !otpResult) {
+                return;
+            }
+
+            function showOtpMessage(message, type) {
+                otpResult.innerHTML = '<div class="alert alert-' + type + '">' + message + '</div>';
+            }
+
+            sendOtpBtn.addEventListener('click', function () {
+                const formData = new FormData();
+                formData.append('csrf_token', csrfToken);
+                formData.append('phone', document.getElementById('otpPhone').value || '');
+
+                sendOtpBtn.disabled = true;
+                sendOtpBtn.textContent = 'Sending...';
+
+                fetch('/login/otp/send', {
+                    method: 'POST',
+                    body: formData
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            showOtpMessage(data.message || 'OTP sent.', 'success');
+                        } else {
+                            showOtpMessage(data.message || 'Failed to send OTP.', 'danger');
+                        }
+                    })
+                    .catch(() => showOtpMessage('Failed to send OTP.', 'danger'))
+                    .finally(() => {
+                        sendOtpBtn.disabled = false;
+                        sendOtpBtn.textContent = 'Send OTP Code';
+                    });
+            });
+
+            verifyOtpBtn.addEventListener('click', function () {
+                const formData = new FormData();
+                formData.append('csrf_token', csrfToken);
+                formData.append('otp_code', document.getElementById('otpCode').value || '');
+
+                verifyOtpBtn.disabled = true;
+                verifyOtpBtn.textContent = 'Verifying...';
+
+                fetch('/login/otp/verify', {
+                    method: 'POST',
+                    body: formData
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            showOtpMessage(data.message || 'Login successful.', 'success');
+                            if (data.redirect) {
+                                window.location.href = data.redirect;
+                            }
+                        } else {
+                            showOtpMessage(data.message || 'OTP verification failed.', 'danger');
+                        }
+                    })
+                    .catch(() => showOtpMessage('OTP verification failed.', 'danger'))
+                    .finally(() => {
+                        verifyOtpBtn.disabled = false;
+                        verifyOtpBtn.textContent = 'Login with OTP';
+                    });
+            });
+        })();
     </script>
     
     <!-- Bootstrap JS -->

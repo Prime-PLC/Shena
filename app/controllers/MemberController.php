@@ -92,6 +92,26 @@ class MemberController extends BaseController
         $maturityMonthsCompleted = 0;
         $maturityMonthsTotal = 0;
 
+        $missingProfileFields = [];
+        $memberIdNumber = (string) ($member['id_number'] ?? '');
+        if ($memberIdNumber === '' || strpos($memberIdNumber, 'TMP') === 0) {
+            $missingProfileFields[] = 'national_id';
+        }
+        if (empty($member['date_of_birth'])) {
+            $missingProfileFields[] = 'date_of_birth';
+        }
+        if (empty($member['address'])) {
+            $missingProfileFields[] = 'address';
+        }
+        if (empty($member['next_of_kin'])) {
+            $missingProfileFields[] = 'next_of_kin';
+        }
+        if (empty($member['next_of_kin_phone'])) {
+            $missingProfileFields[] = 'next_of_kin_phone';
+        }
+
+        $showProfileCompletionPopup = (!empty($_SESSION['is_first_login']) || !empty($missingProfileFields));
+
         if (!empty($member['maturity_ends']) && !empty($member['created_at'])) {
             $created = new DateTime($member['created_at']);
             $maturityEnds = new DateTime($member['maturity_ends']);
@@ -124,7 +144,10 @@ class MemberController extends BaseController
             'current_month_status' => $currentMonthStatus,
             'maturity_progress' => $maturityProgress,
             'maturity_months_completed' => $maturityMonthsCompleted,
-            'maturity_months_total' => $maturityMonthsTotal
+            'maturity_months_total' => $maturityMonthsTotal,
+            'show_profile_completion_popup' => $showProfileCompletionPopup,
+            'missing_profile_fields' => $missingProfileFields,
+            'csrf_token' => $this->generateCsrfToken()
         ];
 
         $this->view('member.dashboard', $data);
@@ -292,6 +315,70 @@ class MemberController extends BaseController
         }
 
         $this->redirect('/profile');
+    }
+
+    /**
+     * Complete member profile from first-login dashboard popup.
+     */
+    public function completeProfileFromPopup()
+    {
+        try {
+            $this->validateCsrf();
+
+            $member = $this->memberModel->findByUserId($_SESSION['user_id']);
+            if (!$member) {
+                $_SESSION['error'] = 'Member profile not found.';
+                $this->redirect('/dashboard');
+                return;
+            }
+
+            $nationalId = $this->sanitizeInput($_POST['national_id'] ?? '');
+            $dateOfBirth = $_POST['date_of_birth'] ?? '';
+            $address = $this->sanitizeInput($_POST['address'] ?? '');
+            $nextOfKin = $this->sanitizeInput($_POST['next_of_kin'] ?? '');
+            $nextOfKinRelationship = $this->sanitizeInput($_POST['next_of_kin_relationship'] ?? '');
+            $nextOfKinPhone = $this->sanitizeInput($_POST['next_of_kin_phone'] ?? '');
+
+            if (empty($nationalId) || empty($dateOfBirth) || empty($address) || empty($nextOfKin) || empty($nextOfKinPhone)) {
+                $_SESSION['error'] = 'Please complete all required profile fields.';
+                $this->redirect('/dashboard');
+                return;
+            }
+
+            if (!$this->validatePhone($nextOfKinPhone)) {
+                $_SESSION['error'] = 'Please provide a valid next of kin phone number.';
+                $this->redirect('/dashboard');
+                return;
+            }
+
+            $stmt = $this->db->getConnection()->prepare('SELECT id FROM members WHERE id_number = :id_number AND id <> :id LIMIT 1');
+            $stmt->execute([
+                ':id_number' => $nationalId,
+                ':id' => $member['id']
+            ]);
+            if ($stmt->fetch()) {
+                $_SESSION['error'] = 'The national ID number is already in use.';
+                $this->redirect('/dashboard');
+                return;
+            }
+
+            $this->memberModel->update($member['id'], [
+                'id_number' => $nationalId,
+                'date_of_birth' => $dateOfBirth,
+                'address' => $address,
+                'next_of_kin' => $nextOfKin,
+                'next_of_kin_relationship' => $nextOfKinRelationship,
+                'next_of_kin_phone' => formatKenyanPhone($nextOfKinPhone)
+            ]);
+
+            unset($_SESSION['is_first_login']);
+            $_SESSION['success'] = 'Profile updated successfully. Welcome to your dashboard.';
+        } catch (Exception $e) {
+            error_log('Complete profile popup update error: ' . $e->getMessage());
+            $_SESSION['error'] = 'Failed to update profile details. Please try again.';
+        }
+
+        $this->redirect('/dashboard');
     }
     
     public function payments()

@@ -205,7 +205,7 @@ If you want, I can open a PR with the DB migration + model skeleton and update t
     - Stored under `storage/uploads/impact/` and referenced via a new partial: `resources/views/public/partials/impact-gallery.php`.
   - Files to update:
     - `resources/views/public/home.php` or equivalent homepage view.
-    - `resources/views/layouts/footer.php` (remove Kisumu references if present).
+    - `resources/views/layouts/footer.php` (remove   references if present).
     - Add `resources/views/public/partials/impact-gallery.php` to render images and captions.
 
 **Packages: Align with the flier and add descriptions**

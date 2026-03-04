@@ -28,8 +28,15 @@ class Router
         // Authentication Routes
         $this->addRoute('GET', '/login', 'AuthController@showLogin');
         $this->addRoute('POST', '/login', 'AuthController@login');
+        $this->addRoute('POST', '/login/otp/send', 'AuthController@sendLoginOtp');
+        $this->addRoute('POST', '/login/otp/verify', 'AuthController@verifyLoginOtp');
         $this->addRoute('GET', '/register', 'AuthController@showPublicRegistration');
         $this->addRoute('POST', '/register', 'AuthController@processPublicRegistration');
+        $this->addRoute('GET', '/register/verify-otp', 'AuthController@showSignupOtpVerification');
+        $this->addRoute('POST', '/register/verify-otp', 'AuthController@verifySignupOtp');
+        $this->addRoute('POST', '/register/resend-otp', 'AuthController@resendSignupOtp');
+        $this->addRoute('GET', '/register/create-password', 'AuthController@showCreatePassword');
+        $this->addRoute('POST', '/register/create-password', 'AuthController@storeCreatedPassword');
         $this->addRoute('GET', '/logout', 'AuthController@logout');
         
         // Registration Complete & Payment Routes
@@ -53,6 +60,7 @@ class Router
         $this->addRoute('GET', '/dashboard', 'MemberController@dashboard');
         $this->addRoute('GET', '/profile', 'MemberController@profile');
         $this->addRoute('POST', '/profile', 'MemberController@updateProfile');
+        $this->addRoute('POST', '/member/profile/complete', 'MemberController@completeProfileFromPopup');
 
         // Agent Routes (Protected)
         $this->addRoute('GET', '/agent/dashboard', 'AgentDashboardController@dashboard');

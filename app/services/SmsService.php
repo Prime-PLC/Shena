@@ -5,6 +5,7 @@
 class SmsService 
 {
     private $config;
+    private $apiUrl;
     
     public function __construct()
     {
@@ -13,6 +14,7 @@ class SmsService
             'api_key' => HOSTPINNACLE_API_KEY,
             'sender_id' => HOSTPINNACLE_SENDER_ID
         ];
+        $this->apiUrl = defined('HOSTPINNACLE_SMS_API_URL') ? HOSTPINNACLE_SMS_API_URL : 'https://smsportal.hostpinnacle.co.ke/SMSApi/send';
     }
     
     public function sendSms($to, $message)
@@ -39,7 +41,7 @@ class SmsService
             }
             
             // HostPinnacle API endpoint
-            $url = "https://sms.hostpinnacle.co.ke/api/services/sendsms";
+            $url = $this->apiUrl;
             
             // HostPinnacle API parameters
             $data = [
@@ -78,7 +80,8 @@ class SmsService
                     return ['success' => true, 'data' => $result];
                 } else {
                     error_log('SMS sending failed: ' . $response);
-                    return ['success' => false, 'error' => 'SMS failed: ' . ($result['message'] ?? 'Unknown error')];
+                    $reason = $result['reason'] ?? $result['message'] ?? 'Unknown error';
+                    return ['success' => false, 'error' => 'SMS failed: ' . $reason, 'data' => $result];
                 }
             } else {
                 error_log('SMS sending failed: HTTP Code ' . $httpCode . ', Response: ' . $response);

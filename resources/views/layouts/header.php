@@ -12,7 +12,7 @@
     <!-- Custom Modals -->
     <link href="/public/css/modals.css" rel="stylesheet">
     <!-- SHENA Design System CSS -->
-    <link href="/css/shena-main.css" rel="stylesheet">
+    <link href="/public/css/shena-main.css" rel="stylesheet">
     <link rel="icon" type="image/png" href="/public/images/shena-logo.png">
 </head>
 <body>

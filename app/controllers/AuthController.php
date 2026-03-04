@@ -4,6 +4,7 @@
  */
 require_once __DIR__ . '/../models/User.php';
 require_once __DIR__ . '/../models/Member.php';
+require_once __DIR__ . '/../services/SmsService.php';
 
 class AuthController extends BaseController 
 {
@@ -120,37 +121,129 @@ class AuthController extends BaseController
             
             // Reset rate limit on successful login
             unset($_SESSION[$rateLimitKey]);
-            
-            // Regenerate session ID to prevent session fixation
-            session_regenerate_id(true);
-            
-            // Set session variables
-            $_SESSION['user_id'] = $user['id'];
-            $_SESSION['user_email'] = $user['email'];
-            $_SESSION['user_role'] = $user['role'];
-            $_SESSION['user_name'] = $user['first_name'] . ' ' . $user['last_name'];
-            $_SESSION['login_time'] = time();
-            
-            // Update last login
-            try {
-                $this->userModel->update($user['id'], ['last_login' => date('Y-m-d H:i:s')]);
-            } catch (Exception $e) {
-                error_log('Failed to update last login: ' . $e->getMessage());
-            }
-            
-            // Redirect based on role
-            if (in_array($user['role'], ['super_admin', 'manager'])) {
-                $this->redirect('/admin');
-            } elseif ($user['role'] === 'agent') {
-                $this->redirect('/agent/dashboard');
-            } else {
-                $this->redirect('/dashboard');
-            }
+            $this->establishUserSession($user);
+            $this->redirect($this->resolveUserRedirect($user['role'] ?? 'member'));
             
         } catch (Exception $e) {
             error_log('Login error: ' . $e->getMessage());
             $_SESSION['error'] = 'An error occurred during login. Please try again.';
             $this->redirect('/login');
+        }
+    }
+
+    /**
+     * Send login OTP to a registered phone number.
+     */
+    public function sendLoginOtp()
+    {
+        header('Content-Type: application/json');
+
+        try {
+            $this->validateCsrf();
+
+            $phoneInput = $this->sanitizeInput($_POST['phone'] ?? '');
+            if (empty($phoneInput) || !$this->validatePhone($phoneInput)) {
+                $this->json(['success' => false, 'message' => 'Enter a valid phone number.'], 422);
+                return;
+            }
+
+            $phone = formatKenyanPhone($phoneInput);
+            $user = $this->userModel->findByPhone($phone);
+
+            if (!$user) {
+                $this->json(['success' => false, 'message' => 'No account found for that phone number.'], 404);
+                return;
+            }
+
+            if (($user['status'] ?? '') !== 'active' && ($user['role'] ?? '') !== 'member') {
+                $this->json(['success' => false, 'message' => 'Your account is not active. Please contact support.'], 403);
+                return;
+            }
+
+            $otpCode = $this->generateOtpCode();
+            $otpMessage = 'Your SHENA login verification code is ' . $otpCode . '. It expires in 5 minutes.';
+
+            $smsService = new SmsService();
+            $smsResult = $smsService->sendSms($phone, $otpMessage);
+
+            $responseMessage = 'OTP sent successfully. Enter the code to continue.';
+            if (empty($smsResult['success'])) {
+                if ($this->isLocalOrDebugEnvironment()) {
+                    $responseMessage = 'SMS delivery is unavailable in this environment. Use test OTP: ' . $otpCode;
+                } else {
+                    $this->json(['success' => false, 'message' => 'Unable to send OTP at the moment. Please try password login.'], 500);
+                    return;
+                }
+            }
+
+            $_SESSION['login_otp'] = [
+                'user_id' => (int) $user['id'],
+                'code_hash' => password_hash($otpCode, PASSWORD_DEFAULT),
+                'phone' => $phone,
+                'expires_at' => time() + 300,
+                'attempts' => 0
+            ];
+
+            $this->json(['success' => true, 'message' => $responseMessage]);
+        } catch (Exception $e) {
+            error_log('Send login OTP error: ' . $e->getMessage());
+            $this->json(['success' => false, 'message' => 'Failed to send OTP. Please try again.'], 500);
+        }
+    }
+
+    /**
+     * Verify OTP and sign in user.
+     */
+    public function verifyLoginOtp()
+    {
+        header('Content-Type: application/json');
+
+        try {
+            $this->validateCsrf();
+
+            $otpSession = $_SESSION['login_otp'] ?? null;
+            if (empty($otpSession)) {
+                $this->json(['success' => false, 'message' => 'OTP session expired. Request a new code.'], 400);
+                return;
+            }
+
+            if (time() > (int) ($otpSession['expires_at'] ?? 0)) {
+                unset($_SESSION['login_otp']);
+                $this->json(['success' => false, 'message' => 'OTP expired. Request a new code.'], 400);
+                return;
+            }
+
+            if ((int) ($otpSession['attempts'] ?? 0) >= 5) {
+                unset($_SESSION['login_otp']);
+                $this->json(['success' => false, 'message' => 'Too many attempts. Request a new OTP.'], 429);
+                return;
+            }
+
+            $otpCode = preg_replace('/\D+/', '', (string) ($_POST['otp_code'] ?? ''));
+            if (strlen($otpCode) !== 6 || !password_verify($otpCode, $otpSession['code_hash'])) {
+                $_SESSION['login_otp']['attempts'] = ((int) ($otpSession['attempts'] ?? 0)) + 1;
+                $this->json(['success' => false, 'message' => 'Invalid OTP code.'], 422);
+                return;
+            }
+
+            $user = $this->userModel->getUserById((int) $otpSession['user_id']);
+            if (!$user) {
+                unset($_SESSION['login_otp']);
+                $this->json(['success' => false, 'message' => 'User account not found.'], 404);
+                return;
+            }
+
+            unset($_SESSION['login_otp']);
+            $this->establishUserSession($user);
+
+            $this->json([
+                'success' => true,
+                'message' => 'Login successful.',
+                'redirect' => $this->resolveUserRedirect($user['role'] ?? 'member')
+            ]);
+        } catch (Exception $e) {
+            error_log('Verify login OTP error: ' . $e->getMessage());
+            $this->json(['success' => false, 'message' => 'OTP verification failed.'], 500);
         }
     }
     
@@ -837,7 +930,7 @@ class AuthController extends BaseController
             $this->validateCsrf();
             
             // Validate required fields (simple one-step registration)
-            $required = ['first_name', 'last_name', 'national_id', 'date_of_birth', 'email', 'phone'];
+            $required = ['first_name', 'last_name', 'email', 'phone'];
             
             foreach ($required as $field) {
                 if (empty($_POST[$field])) {
@@ -849,8 +942,8 @@ class AuthController extends BaseController
             $packageId = $this->sanitizeInput($_POST['package_id'] ?? '');
             $firstName = $this->sanitizeInput($_POST['first_name']);
             $lastName = $this->sanitizeInput($_POST['last_name']);
-            $nationalId = $this->sanitizeInput($_POST['national_id']);
-            $dateOfBirth = $_POST['date_of_birth'];
+            $nationalId = $this->sanitizeInput($_POST['national_id'] ?? '');
+            $dateOfBirth = $_POST['date_of_birth'] ?? null;
             $email = $this->sanitizeInput($_POST['email']);
             $phone = $this->sanitizeInput($_POST['phone']);
             $address = $this->sanitizeInput($_POST['address']);
@@ -883,10 +976,13 @@ class AuthController extends BaseController
                 $phone = '254' . substr($phone, 1);
             }
             
-            // Validate age
-            $age = floor((time() - strtotime($dateOfBirth)) / 31557600); // Seconds in a year
-            if ($age < 18) {
-                throw new Exception('You must be at least 18 years old to register');
+            // Validate age only when date of birth is provided
+            $age = null;
+            if (!empty($dateOfBirth)) {
+                $age = floor((time() - strtotime($dateOfBirth)) / 31557600); // Seconds in a year
+                if ($age < 18) {
+                    throw new Exception('You must be at least 18 years old to register');
+                }
             }
             
             // Get package details (auto-select individual package by age if not explicitly chosen)
@@ -896,7 +992,17 @@ class AuthController extends BaseController
             if (!empty($packageId) && isset($membership_packages[$packageId])) {
                 $package = $membership_packages[$packageId];
             } else {
-                $autoPackageKey = $this->findAutoPackageByAge($age, $membership_packages);
+                $autoPackageKey = null;
+                if ($age !== null) {
+                    $autoPackageKey = $this->findAutoPackageByAge($age, $membership_packages);
+                }
+                if (!$autoPackageKey && isset($membership_packages['individual_below_70'])) {
+                    $autoPackageKey = 'individual_below_70';
+                }
+                if (!$autoPackageKey && !empty($membership_packages)) {
+                    $keys = array_keys($membership_packages);
+                    $autoPackageKey = $keys[0] ?? null;
+                }
                 if ($autoPackageKey && isset($membership_packages[$autoPackageKey])) {
                     $packageId = $autoPackageKey;
                     $package = $membership_packages[$autoPackageKey];
@@ -913,7 +1019,7 @@ class AuthController extends BaseController
             }
             
             // Validate age against package limits
-            if (isset($package['age_max']) && $age > $package['age_max']) {
+            if ($age !== null && isset($package['age_max']) && $age > $package['age_max']) {
                 echo json_encode([
                     'success' => false,
                     'message' => "This package is for members aged {$package['age_min']}-{$package['age_max']} years. You are {$age} years old. Please select an appropriate package for your age group.",
@@ -923,7 +1029,7 @@ class AuthController extends BaseController
                 return;
             }
             
-            if (isset($package['age_min']) && $age < $package['age_min']) {
+            if ($age !== null && isset($package['age_min']) && $age < $package['age_min']) {
                 echo json_encode([
                     'success' => false,
                     'message' => "This package is for members aged {$package['age_min']}-{$package['age_max']} years. You are {$age} years old. Please select an appropriate package for your age group.",
@@ -956,15 +1062,17 @@ class AuthController extends BaseController
                 return;
             }
             
-            $existingMember = $this->memberModel->findByNationalId($nationalId);
-            if ($existingMember) {
-                echo json_encode([
-                    'success' => false,
-                    'message' => 'National ID already registered',
-                    'field' => 'national_id',
-                    'old_values' => $_POST
-                ]);
-                return;
+            if (!empty($nationalId)) {
+                $existingMember = $this->memberModel->findByNationalId($nationalId);
+                if ($existingMember) {
+                    echo json_encode([
+                        'success' => false,
+                        'message' => 'National ID already registered',
+                        'field' => 'national_id',
+                        'old_values' => $_POST
+                    ]);
+                    return;
+                }
             }
             
             $this->db->getConnection()->beginTransaction();
@@ -973,7 +1081,7 @@ class AuthController extends BaseController
                 // Generate canonical member number
                 $memberNumber = $this->generateMemberNumber();
                 
-                // Create user account (password will be sent via email)
+                // Create user account (temporary password until OTP verification/password setup)
                 $tempPassword = bin2hex(random_bytes(8));
                 $hashedPassword = password_hash($tempPassword, PASSWORD_DEFAULT);
                 
@@ -994,8 +1102,10 @@ class AuthController extends BaseController
                 $maturityMonths = $package['maturity_months'] ?? 4;
                 $maturityEnds = date('Y-m-d', strtotime("+{$maturityMonths} months"));
                 
-                // Determine gender from national ID or default
-                $gender = 'male'; // Default, or implement logic to determine from national ID
+                // Profile details can be completed after first login
+                $gender = 'male';
+                $safeDateOfBirth = !empty($dateOfBirth) ? $dateOfBirth : null;
+                $memberNationalId = !empty($nationalId) ? $nationalId : $this->generateTemporaryIdNumber();
                 
                 // Map configured package to allowed members.package enum value
                 $packageType = $this->memberModel->normalizePackageTier($packageId, $package);
@@ -1003,8 +1113,8 @@ class AuthController extends BaseController
                 $memberData = [
                     'user_id' => $userId,
                     'member_number' => $memberNumber,
-                    'id_number' => $nationalId,
-                    'date_of_birth' => $dateOfBirth,
+                    'id_number' => $memberNationalId,
+                    'date_of_birth' => $safeDateOfBirth,
                     'gender' => $gender,
                     'address' => $address,
                     'package' => $packageType,
@@ -1054,40 +1164,44 @@ class AuthController extends BaseController
                 }
                 
                 $paymentModel->create($paymentData);
+
+                $otpCode = $this->generateOtpCode();
+                $otpMessage = 'Your SHENA registration verification code is ' . $otpCode . '. It expires in 10 minutes.';
+
+                $smsService = new SmsService();
+                $smsResult = $smsService->sendSms($phone, $otpMessage);
+
+                $otpDeliveryMessage = 'Registration successful. Verify OTP sent to your phone, then create your password.';
+                if (empty($smsResult['success'])) {
+                    if ($this->isLocalOrDebugEnvironment()) {
+                        $otpDeliveryMessage = 'Registration successful. SMS delivery is unavailable in this environment. Use test OTP: ' . $otpCode . ', then create your password.';
+                    } else {
+                        throw new Exception('Unable to send verification code right now. Please try again shortly.');
+                    }
+                }
                 
                 $this->db->getConnection()->commit();
-                
-                // Send confirmation email
-                try {
-                    $emailService = new EmailService();
-                    $emailService->sendRegistrationConfirmation($email, [
-                        'name' => $firstName . ' ' . $lastName,
-                        'member_number' => $memberNumber,
-                        'package_name' => $package['name'],
-                        'monthly_contribution' => $package['monthly_contribution'],
-                        'maturity_date' => $maturityEnds,
-                        'maturity_months' => $maturityMonths,
-                        'payment_method' => $paymentMethod,
-                        'temp_password' => $tempPassword,
-                        'payment_deadline' => date('F j, Y', strtotime('+14 days'))
-                    ]);
-                    
-                    $smsService = new SmsService();
-                    $smsService->sendWelcomeSms($phone, [
-                        'member_number' => $memberNumber
-                    ]);
-                } catch (Exception $e) {
-                    error_log('Notification sending failed: ' . $e->getMessage());
-                }
+
+                $_SESSION['signup_otp'] = [
+                    'user_id' => (int) $userId,
+                    'member_number' => $memberNumber,
+                    'phone' => $phone,
+                    'code_hash' => password_hash($otpCode, PASSWORD_DEFAULT),
+                    'expires_at' => time() + 600,
+                    'attempts' => 0,
+                    'last_sent_at' => time()
+                ];
                 
                 // Clear any output buffers to prevent warnings from breaking JSON
                 if (ob_get_length()) ob_clean();
                 
                 echo json_encode([
                     'success' => true,
-                    'message' => 'Registration successful! Check your email for login credentials.',
+                    'message' => $otpDeliveryMessage,
                     'member_number' => $memberNumber,
-                    'payment_method' => $paymentMethod
+                    'payment_method' => $paymentMethod,
+                    'otp_required' => true,
+                    'redirect' => '/register/verify-otp'
                 ]);
                 exit;
                 
@@ -1112,6 +1226,204 @@ class AuthController extends BaseController
                 'old_values' => $oldValues
             ]);
             exit;
+        }
+    }
+
+    /**
+     * Show signup OTP verification form.
+     */
+    public function showSignupOtpVerification()
+    {
+        if (empty($_SESSION['signup_otp'])) {
+            $_SESSION['error'] = 'Registration OTP session expired. Please register again.';
+            $this->redirect('/register');
+            return;
+        }
+
+        $phone = (string) ($_SESSION['signup_otp']['phone'] ?? '');
+        $lastSentAt = (int) ($_SESSION['signup_otp']['last_sent_at'] ?? 0);
+        $cooldownSeconds = 60;
+        $resendRemainingSeconds = max(0, $cooldownSeconds - (time() - $lastSentAt));
+        $maskedPhone = strlen($phone) >= 4
+            ? str_repeat('*', max(0, strlen($phone) - 4)) . substr($phone, -4)
+            : $phone;
+
+        $this->view('auth.signup-otp-verify', [
+            'title' => 'Verify OTP - Shena Companion',
+            'csrf_token' => $this->generateCsrfToken(),
+            'masked_phone' => $maskedPhone,
+            'resend_remaining_seconds' => $resendRemainingSeconds
+        ]);
+    }
+
+    /**
+     * Verify signup OTP and continue to password creation.
+     */
+    public function verifySignupOtp()
+    {
+        try {
+            $this->validateCsrf();
+
+            $otpSession = $_SESSION['signup_otp'] ?? null;
+            if (empty($otpSession)) {
+                $_SESSION['error'] = 'OTP session expired. Please register again.';
+                $this->redirect('/register');
+                return;
+            }
+
+            if (time() > (int) ($otpSession['expires_at'] ?? 0)) {
+                unset($_SESSION['signup_otp']);
+                $_SESSION['error'] = 'OTP expired. Please register again to receive a new code.';
+                $this->redirect('/register');
+                return;
+            }
+
+            if ((int) ($otpSession['attempts'] ?? 0) >= 5) {
+                unset($_SESSION['signup_otp']);
+                $_SESSION['error'] = 'Too many OTP attempts. Please register again.';
+                $this->redirect('/register');
+                return;
+            }
+
+            $otpCode = preg_replace('/\D+/', '', (string) ($_POST['otp_code'] ?? ''));
+            if (strlen($otpCode) !== 6 || !password_verify($otpCode, (string) $otpSession['code_hash'])) {
+                $_SESSION['signup_otp']['attempts'] = ((int) ($otpSession['attempts'] ?? 0)) + 1;
+                $_SESSION['error'] = 'Invalid OTP code. Please try again.';
+                $this->redirect('/register/verify-otp');
+                return;
+            }
+
+            $userId = (int) $otpSession['user_id'];
+            $this->userModel->update($userId, ['email_verified_at' => date('Y-m-d H:i:s')]);
+
+            $_SESSION['signup_password_setup'] = ['user_id' => $userId];
+            unset($_SESSION['signup_otp']);
+
+            $_SESSION['success'] = 'Phone verification successful. Create your password to continue.';
+            $this->redirect('/register/create-password');
+        } catch (Exception $e) {
+            error_log('Verify signup OTP error: ' . $e->getMessage());
+            $_SESSION['error'] = 'OTP verification failed. Please try again.';
+            $this->redirect('/register/verify-otp');
+        }
+    }
+
+    /**
+     * Resend signup OTP code.
+     */
+    public function resendSignupOtp()
+    {
+        try {
+            $this->validateCsrf();
+
+            $otpSession = $_SESSION['signup_otp'] ?? null;
+            if (empty($otpSession)) {
+                $_SESSION['error'] = 'OTP session expired. Please register again.';
+                $this->redirect('/register');
+                return;
+            }
+
+            $lastSentAt = (int)($otpSession['last_sent_at'] ?? 0);
+            $cooldownSeconds = 60;
+            $remaining = $cooldownSeconds - (time() - $lastSentAt);
+            if ($remaining > 0) {
+                $_SESSION['error'] = 'Please wait ' . $remaining . ' seconds before requesting another code.';
+                $this->redirect('/register/verify-otp');
+                return;
+            }
+
+            $phone = (string)($otpSession['phone'] ?? '');
+            if (empty($phone)) {
+                $_SESSION['error'] = 'Phone number not found in OTP session. Please register again.';
+                $this->redirect('/register');
+                return;
+            }
+
+            $otpCode = $this->generateOtpCode();
+            $otpMessage = 'Your SHENA registration verification code is ' . $otpCode . '. It expires in 10 minutes.';
+
+            $smsService = new SmsService();
+            $smsResult = $smsService->sendSms($phone, $otpMessage);
+
+            $_SESSION['signup_otp']['code_hash'] = password_hash($otpCode, PASSWORD_DEFAULT);
+            $_SESSION['signup_otp']['expires_at'] = time() + 600;
+            $_SESSION['signup_otp']['attempts'] = 0;
+            $_SESSION['signup_otp']['last_sent_at'] = time();
+
+            if (empty($smsResult['success'])) {
+                if ($this->isLocalOrDebugEnvironment()) {
+                    $_SESSION['success'] = 'SMS delivery is unavailable in this environment. Your test OTP is: ' . $otpCode;
+                } else {
+                    $_SESSION['error'] = 'Unable to resend code right now. Please try again shortly.';
+                }
+            } else {
+                $_SESSION['success'] = 'Verification code sent successfully. Check your phone.';
+            }
+
+            $this->redirect('/register/verify-otp');
+        } catch (Exception $e) {
+            error_log('Resend signup OTP error: ' . $e->getMessage());
+            $_SESSION['error'] = 'Failed to resend verification code. Please try again.';
+            $this->redirect('/register/verify-otp');
+        }
+    }
+
+    /**
+     * Show create password form after signup OTP verification.
+     */
+    public function showCreatePassword()
+    {
+        if (empty($_SESSION['signup_password_setup']['user_id'])) {
+            $_SESSION['error'] = 'Password setup session expired. Please register again.';
+            $this->redirect('/register');
+            return;
+        }
+
+        $this->view('auth.create-password', [
+            'title' => 'Create Password - Shena Companion',
+            'csrf_token' => $this->generateCsrfToken()
+        ]);
+    }
+
+    /**
+     * Store new password and redirect to login.
+     */
+    public function storeCreatedPassword()
+    {
+        try {
+            $this->validateCsrf();
+
+            $userId = (int) ($_SESSION['signup_password_setup']['user_id'] ?? 0);
+            if ($userId <= 0) {
+                $_SESSION['error'] = 'Password setup session expired. Please register again.';
+                $this->redirect('/register');
+                return;
+            }
+
+            $password = (string) ($_POST['password'] ?? '');
+            $confirmPassword = (string) ($_POST['confirm_password'] ?? '');
+
+            if (strlen($password) < 8) {
+                $_SESSION['error'] = 'Password must be at least 8 characters long.';
+                $this->redirect('/register/create-password');
+                return;
+            }
+
+            if ($password !== $confirmPassword) {
+                $_SESSION['error'] = 'Passwords do not match.';
+                $this->redirect('/register/create-password');
+                return;
+            }
+
+            $this->userModel->updatePassword($userId, $password);
+            unset($_SESSION['signup_password_setup']);
+
+            $_SESSION['success'] = 'Password created successfully. Please login.';
+            $this->redirect('/login');
+        } catch (Exception $e) {
+            error_log('Create password error: ' . $e->getMessage());
+            $_SESSION['error'] = 'Failed to create password. Please try again.';
+            $this->redirect('/register/create-password');
         }
     }
     
@@ -1175,6 +1487,91 @@ class AuthController extends BaseController
         }
 
         return 'individual';
+    }
+
+    /**
+     * Generate temporary ID number placeholder for quick signup.
+     *
+     * @return string
+     */
+    private function generateTemporaryIdNumber()
+    {
+        $prefix = 'TMP';
+
+        do {
+            $candidate = $prefix . date('ymdHis') . str_pad((string) random_int(0, 999), 3, '0', STR_PAD_LEFT);
+            $exists = $this->memberModel->findByNationalId($candidate);
+        } while ($exists);
+
+        return $candidate;
+    }
+
+    /**
+     * Generate a numeric OTP code.
+     *
+     * @return string
+     */
+    private function generateOtpCode()
+    {
+        return str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Establish authenticated session for user.
+     *
+     * @param array $user
+     * @return void
+     */
+    private function establishUserSession(array $user)
+    {
+        $_SESSION['is_first_login'] = empty($user['last_login']);
+        session_regenerate_id(true);
+
+        $_SESSION['user_id'] = $user['id'];
+        $_SESSION['user_email'] = $user['email'];
+        $_SESSION['user_role'] = $user['role'];
+        $_SESSION['user_name'] = $user['first_name'] . ' ' . $user['last_name'];
+        $_SESSION['login_time'] = time();
+
+        try {
+            $this->userModel->update($user['id'], ['last_login' => date('Y-m-d H:i:s')]);
+        } catch (Exception $e) {
+            error_log('Failed to update last login: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Resolve dashboard redirect path by role.
+     *
+     * @param string $role
+     * @return string
+     */
+    private function resolveUserRedirect($role)
+    {
+        if (in_array($role, ['super_admin', 'manager'], true)) {
+            return '/admin';
+        }
+
+        if ($role === 'agent') {
+            return '/agent/dashboard';
+        }
+
+        return '/dashboard';
+    }
+
+    /**
+     * Determine if current runtime is local or debug.
+     *
+     * @return bool
+     */
+    private function isLocalOrDebugEnvironment()
+    {
+        if (defined('DEBUG_MODE') && DEBUG_MODE) {
+            return true;
+        }
+
+        $host = (string)($_SERVER['HTTP_HOST'] ?? '');
+        return preg_match('/^(localhost|127\.0\.0\.1)(:\\d+)?$/i', $host) === 1 || PHP_SAPI === 'cli-server';
     }
 }
 
