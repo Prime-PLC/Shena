@@ -95,7 +95,7 @@ class AuthController extends BaseController
                 return;
             }
 
-            // If this is a member, ensure the member record itself is active
+            // If this is a member, preserve status messaging but do not block login
             if (($user['role'] ?? '') === 'member') {
                 try {
                     $member = $this->memberModel->getMemberByUserId($user['id']);
@@ -105,40 +105,17 @@ class AuthController extends BaseController
 
                 if ($member && (($member['status'] ?? '') !== 'active')) {
                     $status = $member['status'] ?? 'inactive';
-                    $fee = ($status === 'inactive') ? (defined('REGISTRATION_FEE') ? REGISTRATION_FEE : 200) : (defined('REACTIVATION_FEE') ? REACTIVATION_FEE : 100);
-                    $reactivateUrl = '/payments?member_id=' . ($member['id'] ?? '') . '&intent=reactivate';
-                    $_SESSION['error'] = 'Your membership status is: ' . strtoupper($status) . ". Please pay KES " . $fee . " to activate/reactivate your membership.";
-                    // preserve email for convenience
-                    $_SESSION['email'] = $email;
-                    $this->redirect($reactivateUrl);
-                    return;
+                    $_SESSION['info'] = 'Your membership status is currently ' . strtoupper($status) . '. Please complete required payments to activate full benefits.';
                 }
             }
             
-            // Check if user is active
+            // Check if user is active (members are allowed to login even when pending/inactive)
             if ($user['status'] !== 'active') {
-                // If this is a member account, guide them to the payments page to register/reactivate
-                if (($user['role'] ?? '') === 'member') {
-                    try {
-                        $member = $this->memberModel->getMemberByUserId($user['id']);
-                    } catch (Exception $e) {
-                        $member = null;
-                    }
-
-                    if ($member && (($member['status'] ?? '') !== 'active')) {
-                        $status = $member['status'] ?? 'inactive';
-                        $fee = ($status === 'inactive') ? (defined('REGISTRATION_FEE') ? REGISTRATION_FEE : 200) : (defined('REACTIVATION_FEE') ? REACTIVATION_FEE : 100);
-                        $reactivateUrl = '/payments?member_id=' . ($member['id'] ?? '') . '&intent=reactivate';
-                        $_SESSION['error'] = 'Your membership status is: ' . strtoupper($status) . ". Please pay KES " . $fee . " to activate/reactivate your membership.";
-                        $_SESSION['email'] = $email;
-                        $this->redirect($reactivateUrl);
-                        return;
-                    }
+                if (($user['role'] ?? '') !== 'member') {
+                    $_SESSION['error'] = 'Your account is not active. Please contact support.';
+                    $this->redirect('/login');
+                    return;
                 }
-
-                $_SESSION['error'] = 'Your account is not active. Please contact support.';
-                $this->redirect('/login');
-                return;
             }
             
             // Reset rate limit on successful login
@@ -353,8 +330,8 @@ class AuthController extends BaseController
                 $userData['email'] = $userData['email'] ?: null;
                 $userId = $this->userModel->createUser($userData);
                 
-                // Generate member number
-                $memberNumber = 'SC' . date('Y') . str_pad($userId, 4, '0', STR_PAD_LEFT);
+                // Generate canonical member number
+                $memberNumber = MemberNumberHelper::generateCanonical();
                 
                 // Ensure we have a valid age for contribution/maturity calculations
                 if ($age === null && !empty($memberData['date_of_birth'])) {
@@ -396,7 +373,7 @@ class AuthController extends BaseController
                     return;
                 }
 
-                $packageCategory = $selectedPackage['category'] ?? 'individual';
+                $packageCategory = $this->memberModel->normalizePackageTier($packageKey, $selectedPackage);
 
                 // Compute monthly contribution centrally using Member model (considers age and dependents)
                 $memberForCalc = [
@@ -479,19 +456,11 @@ class AuthController extends BaseController
     
     public function logout()
     {
-        // Check if user is admin before destroying session
-        $isAdmin = isset($_SESSION['user_role']) && in_array($_SESSION['user_role'], ['super_admin', 'manager']);
-        
         session_destroy();
         session_start();
         $_SESSION['success'] = 'You have been logged out successfully.';
-        
-        // Redirect to appropriate login page
-        if ($isAdmin) {
-            $this->redirect('/admin-login');
-        } else {
-            $this->redirect('/login');
-        }
+
+        $this->redirect('/');
     }
     
     /**
@@ -1001,7 +970,7 @@ class AuthController extends BaseController
             $this->db->getConnection()->beginTransaction();
             
             try {
-                // Generate member number
+                // Generate canonical member number
                 $memberNumber = $this->generateMemberNumber();
                 
                 // Create user account (password will be sent via email)
@@ -1029,7 +998,7 @@ class AuthController extends BaseController
                 $gender = 'male'; // Default, or implement logic to determine from national ID
                 
                 // Map configured package to allowed members.package enum value
-                $packageType = $this->mapPackageType($packageId, $package);
+                $packageType = $this->memberModel->normalizePackageTier($packageId, $package);
                 
                 $memberData = [
                     'user_id' => $userId,
@@ -1151,19 +1120,7 @@ class AuthController extends BaseController
      */
     private function generateMemberNumber()
     {
-        $prefix = 'SCA';
-        $year = date('Y');
-        
-        // Get the last member number for this year
-        $lastMember = $this->memberModel->getLastMemberByYear($year);
-        
-        if ($lastMember && preg_match('/^SCA' . $year . '(\d{4})$/', $lastMember['member_number'], $matches)) {
-            $sequence = intval($matches[1]) + 1;
-        } else {
-            $sequence = 1;
-        }
-        
-        return $prefix . $year . str_pad($sequence, 4, '0', STR_PAD_LEFT);
+        return MemberNumberHelper::generateCanonical();
     }
 
     /**

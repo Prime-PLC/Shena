@@ -387,7 +387,11 @@ class AgentDashboardController extends BaseController
             $userId = (int)$this->db->getConnection()->lastInsertId();
 
             // Create member record
-            $memberNumber = 'SH-' . date('Ymd') . '-' . strtoupper(substr(md5($userId), 0, 6));
+            $memberNumber = MemberNumberHelper::generateCanonical();
+
+            global $membership_packages;
+            $packageKey = $_POST['package'] ?? '';
+            $normalizedPackage = $this->memberModel->normalizePackageTier($packageKey, $membership_packages[$packageKey] ?? []);
             
             $memberStmt = $this->db->getConnection()->prepare(
                 'INSERT INTO members (
@@ -406,7 +410,6 @@ class AgentDashboardController extends BaseController
                 error_log('Agent reg age calc error: ' . $e->getMessage());
             }
 
-            $packageKey = $_POST['package'] ?? '';
             $memberForCalc = ['date_of_birth' => $_POST['date_of_birth'] ?? null, 'package' => $packageKey];
             $monthlyContribution = $this->memberModel->calculateMonthlyContribution($memberForCalc, []);
 
@@ -420,7 +423,7 @@ class AgentDashboardController extends BaseController
                 ':address' => $this->sanitizeInput($_POST['address'] ?? ''),
                 ':next_of_kin' => $this->sanitizeInput($_POST['next_of_kin']),
                 ':next_of_kin_phone' => formatKenyanPhone($this->sanitizeInput($_POST['next_of_kin_phone'] ?? '')),
-                ':package' => $_POST['package'],
+                ':package' => $normalizedPackage,
                 ':monthly_contribution' => $monthlyContribution,
                 // New members registered by agents should start in 'inactive' status
                 // so admins can review/activate them. User account remains 'pending'.

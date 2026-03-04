@@ -989,6 +989,10 @@ main {
     <div class="page-header">
         <h1>Member Portal</h1>
         <p>Contribution History Dashboard</p>
+        <div style="margin-top: 14px; display: inline-flex; align-items: center; gap: 8px; background: #EEF2FF; color: #4338CA; border: 1px solid #C7D2FE; border-radius: 999px; padding: 8px 14px; font-weight: 700; font-size: 0.9rem;">
+            <i class="fas fa-wallet"></i>
+            Your Monthly Contribution: KES <?php echo number_format((float)($member['monthly_contribution'] ?? 0), 2); ?>
+        </div>
     </div>
 
     <div class="main-grid">

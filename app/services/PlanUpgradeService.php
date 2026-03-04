@@ -52,7 +52,8 @@ class PlanUpgradeService
             throw new Exception('Member not found');
         }
         
-        $fromPackage = $member['package'];
+        $fromPackage = $this->memberModel->normalizePackageTier($member['package'] ?? 'individual');
+        $toPackage = $this->memberModel->normalizePackageTier($toPackage);
         
         if ($fromPackage === $toPackage) {
             throw new Exception('Member is already on ' . $toPackage . ' package');

@@ -1338,9 +1338,12 @@ class MemberController extends BaseController
             $this->redirect('/member/dashboard');
             return;
         }
+
+        $normalizedCurrentPackage = $this->memberModel->normalizePackageTier($member['package'] ?? 'individual');
+        $member['package'] = $normalizedCurrentPackage;
         
         // Check if upgrade is possible
-        if ($member['package'] === 'executive') {
+        if ($normalizedCurrentPackage === 'executive') {
             $_SESSION['info'] = 'You are already on the highest package.';
             $this->redirect('/member/dashboard');
             return;
@@ -1353,7 +1356,7 @@ class MemberController extends BaseController
         $pendingUpgrades = $upgradeService->getMemberPendingUpgrades($member['id']);
         
         $packageOrder = ['individual', 'couple', 'family', 'executive'];
-        $currentPackage = strtolower($member['package'] ?? 'individual');
+        $currentPackage = strtolower($normalizedCurrentPackage);
         $currentIndex = array_search($currentPackage, $packageOrder, true);
         $defaultTargetPackage = $packageOrder[min(($currentIndex !== false ? $currentIndex + 1 : 1), count($packageOrder) - 1)];
 

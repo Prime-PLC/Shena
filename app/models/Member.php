@@ -91,6 +91,33 @@ class Member extends BaseModel
     {
         return $this->getMemberByUserId($userId);
     }
+
+    /**
+     * Normalize package identifiers to canonical tier values used by lifecycle flows.
+     *
+     * @param string|null $packageValue Raw stored package/package key
+     * @param array $packageDefinition Optional package config definition
+     * @return string
+     */
+    public function normalizePackageTier($packageValue, array $packageDefinition = [])
+    {
+        $raw = strtolower((string)$packageValue);
+        $category = strtolower((string)($packageDefinition['category'] ?? ''));
+
+        if ($raw === 'executive' || $category === 'executive' || strpos($raw, 'executive') !== false) {
+            return 'executive';
+        }
+
+        if ($raw === 'couple' || strpos($raw, 'couple') !== false) {
+            return 'couple';
+        }
+
+        if ($raw === 'family' || strpos($raw, 'family') !== false || in_array($category, ['family', 'extended_family', 'maximum_family'], true)) {
+            return 'family';
+        }
+
+        return 'individual';
+    }
     
     /**
      * Get member by member number
