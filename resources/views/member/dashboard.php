@@ -13,6 +13,8 @@ $maturityMonthsTotal = $maturity_months_total ?? 0;
 $beneficiaryList = $beneficiaries ?? [];
 $memberStatus = strtoupper($memberData['status'] ?? 'ACTIVE');
 $statusLabel = ($memberData['status'] ?? '') === 'active' ? 'ACTIVE MEMBER' : $memberStatus;
+$showProfileCompletionPopup = !empty($show_profile_completion_popup);
+$missingFields = $missing_profile_fields ?? [];
 ?>
 
 <style>
@@ -634,5 +636,71 @@ $statusLabel = ($memberData['status'] ?? '') === 'active' ? 'ACTIVE MEMBER' : $m
         </div>
     </div>
 </div>
+
+<?php if ($showProfileCompletionPopup): ?>
+<div class="modal fade" id="completeProfileModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content" style="border-radius: 16px; border: none; overflow: hidden;">
+            <div class="modal-header" style="background: linear-gradient(135deg, #7F3D9E 0%, #5E2B7A 100%); color: #fff;">
+                <h5 class="modal-title" style="font-weight: 700;">Complete Your Account Details</h5>
+            </div>
+            <div class="modal-body" style="padding: 24px;">
+                <p style="color:#4B5563; margin-bottom: 18px;">Welcome to SHENA. Please complete your profile before continuing.</p>
+                <form method="POST" action="/member/profile/complete">
+                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token ?? '', ENT_QUOTES); ?>">
+                    <?php $popupData = $profile_completion_form_data ?? []; ?>
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">National ID <span style="color:#DC2626">*</span></label>
+                            <input type="text" name="national_id" class="form-control" value="<?php echo htmlspecialchars($popupData['national_id'] ?? '', ENT_QUOTES); ?>" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Date of Birth <span style="color:#DC2626">*</span></label>
+                            <input type="date" name="date_of_birth" class="form-control" value="<?php echo htmlspecialchars($popupData['date_of_birth'] ?? '', ENT_QUOTES); ?>" required>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Address <span style="color:#DC2626">*</span></label>
+                            <input type="text" name="address" class="form-control" value="<?php echo htmlspecialchars($popupData['address'] ?? '', ENT_QUOTES); ?>" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Next of Kin Name <span style="color:#DC2626">*</span></label>
+                            <input type="text" name="next_of_kin" class="form-control" value="<?php echo htmlspecialchars($popupData['next_of_kin'] ?? '', ENT_QUOTES); ?>" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Relationship</label>
+                            <input type="text" name="next_of_kin_relationship" class="form-control" placeholder="e.g. Spouse" value="<?php echo htmlspecialchars($popupData['next_of_kin_relationship'] ?? '', ENT_QUOTES); ?>">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Next of Kin Phone <span style="color:#DC2626">*</span></label>
+                            <input type="tel" name="next_of_kin_phone" class="form-control" placeholder="0712345678" value="<?php echo htmlspecialchars($popupData['next_of_kin_phone'] ?? '', ENT_QUOTES); ?>" required>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 14px; color:#6B7280; font-size: 0.85rem;">
+                        Missing fields: <?php echo htmlspecialchars(implode(', ', $missingFields), ENT_QUOTES); ?>
+                    </div>
+
+                    <div class="mt-4 d-flex justify-content-end">
+                        <button type="submit" class="btn" style="background:#7F3D9E;color:#fff;padding:10px 22px;">Save and Continue</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php if ($showProfileCompletionPopup): ?>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var modalEl = document.getElementById('completeProfileModal');
+    if (modalEl && window.bootstrap) {
+        var modal = new bootstrap.Modal(modalEl);
+        modal.show();
+    }
+});
+</script>
+<?php endif; ?>
 
 <?php include __DIR__ . '/../layouts/member-footer.php'; ?>

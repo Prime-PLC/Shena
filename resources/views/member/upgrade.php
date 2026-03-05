@@ -12,6 +12,10 @@ $currentPackage = strtolower($memberData['package'] ?? 'individual');
 if (!in_array($currentPackage, $packageOrder, true)) {
     $currentPackage = 'individual';
 }
+
+$currentMonthLabel = date('F');
+$nextMonthStartLabel = date('F 1, Y', strtotime('first day of next month'));
+$initialCalculationMethod = (string)($calculation['calculation_method'] ?? 'prorated');
 ?>
 
 <style>
@@ -908,11 +912,11 @@ main {
                         <span class="cost-value" id="monthlyDifference">+KES <?php echo number_format(($calculation['new_monthly_fee'] ?? 750) - ($calculation['current_monthly_fee'] ?? 500), 2); ?></span>
                     </div>
                     <div class="cost-row">
-                        <span class="cost-label">Days Remaining in <?php echo date('F'); ?></span>
-                        <span class="cost-value"><?php echo $calculation['days_remaining'] ?? 15; ?> / <?php echo $calculation['total_days_in_month'] ?? 30; ?> days</span>
+                        <span class="cost-label" id="daysBasisLabel">Days Remaining in <?php echo $currentMonthLabel; ?></span>
+                        <span class="cost-value" id="daysBasisValue"><?php echo $calculation['days_remaining'] ?? 15; ?> / <?php echo $calculation['total_days_in_month'] ?? 30; ?> days</span>
                     </div>
                     <div class="cost-row total">
-                        <span class="cost-label">Pay Today (Prorated)</span>
+                        <span class="cost-label" id="payTodayLabel">Pay Today (<?php echo $initialCalculationMethod === 'direct' ? 'Direct Upgrade' : 'Prorated'; ?>)</span>
                         <span class="cost-value" id="proratedAmount">KES <?php echo number_format($calculation['prorated_amount'] ?? 0, 2); ?></span>
                     </div>
                 </div>
@@ -921,7 +925,7 @@ main {
                     <i class="fas fa-info-circle"></i>
                     <div class="info-alert-content">
                         <h6>How It Works</h6>
-                        <p>You only pay for the remaining days of <?php echo date('F'); ?>. Starting <?php echo date('F 1, Y', strtotime('first day of next month')); ?>, your monthly contribution will be <span id="nextMonthFee">KES <?php echo number_format($calculation['new_monthly_fee'] ?? 750, 2); ?></span>.</p>
+                        <p id="planNoticeText">Standard upgrades are prorated by remaining days in <?php echo $currentMonthLabel; ?>. Couple → Family/Executive upgrades are billed directly (no day proration). Starting <?php echo $nextMonthStartLabel; ?>, your monthly contribution will be <span id="nextMonthFee">KES <?php echo number_format($calculation['new_monthly_fee'] ?? 750, 2); ?></span>.</p>
                     </div>
                 </div>
 
@@ -961,15 +965,15 @@ main {
                 <div class="guide-item">
                     <span class="guide-step">2</span>
                     <div>
-                        <strong>Pay only the difference</strong>
-                        <p>You only pay the prorated difference for the remaining days in <?php echo date('F'); ?>.</p>
+                        <strong>Charges follow upgrade type</strong>
+                        <p>Standard upgrades use prorated billing, while Couple → Executive uses direct upgrade billing (no remaining-days proration).</p>
                     </div>
                 </div>
                 <div class="guide-item">
                     <span class="guide-step">3</span>
                     <div>
-                        <strong>Enjoy instant upgrade</strong>
-                        <p>Your benefits activate immediately once payment is confirmed.</p>
+                        <strong>Add dependents within plan coverage</strong>
+                        <p>If beneficiaries exceed your current plan limits, upgrade to a higher coverage plan before adding more dependents.</p>
                     </div>
                 </div>
             </div>
@@ -1033,11 +1037,39 @@ const upgradeConfig = {
         executive: 'Executive'
     },
     daysRemaining: <?php echo (int)($calculation['days_remaining'] ?? 15); ?>,
-    totalDays: <?php echo (int)($calculation['total_days_in_month'] ?? 30); ?>
+    totalDays: <?php echo (int)($calculation['total_days_in_month'] ?? 30); ?>,
+    currentMonth: '<?php echo $currentMonthLabel; ?>',
+    nextMonthStart: '<?php echo $nextMonthStartLabel; ?>'
 };
 
 function formatCurrency(amount) {
     return 'KES ' + Number(amount).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function resolveUpgradeCalculation(currentPackage, targetPackage, currentFee, newFee) {
+    const difference = Math.max(0, newFee - currentFee);
+    const isDirect = currentPackage === 'couple' && (targetPackage === 'family' || targetPackage === 'executive');
+
+    if (isDirect) {
+        return {
+            method: 'direct',
+            payableToday: difference,
+            payLabel: 'Pay Today (Direct Upgrade)',
+            daysLabel: 'Billing Basis',
+            daysValue: 'Direct upgrade (no day proration)',
+            notice: 'This upgrade is billed directly (no remaining-days proration). Starting ' + upgradeConfig.nextMonthStart + ', your monthly contribution will be ' + formatCurrency(newFee) + '.'
+        };
+    }
+
+    const prorated = difference * (upgradeConfig.daysRemaining / upgradeConfig.totalDays);
+    return {
+        method: 'prorated',
+        payableToday: prorated,
+        payLabel: 'Pay Today (Prorated)',
+        daysLabel: 'Days Remaining in ' + upgradeConfig.currentMonth,
+        daysValue: upgradeConfig.daysRemaining + ' / ' + upgradeConfig.totalDays + ' days',
+        notice: 'You only pay for the remaining days of ' + upgradeConfig.currentMonth + '. Starting ' + upgradeConfig.nextMonthStart + ', your monthly contribution will be ' + formatCurrency(newFee) + '.'
+    };
 }
 
 function selectPlan(planKey, shouldScroll = false) {
@@ -1069,25 +1101,36 @@ function selectPlan(planKey, shouldScroll = false) {
 
     const currentFee = upgradeConfig.fees[upgradeConfig.currentPackage] || 0;
     const newFee = upgradeConfig.fees[planKey] || 0;
-    const difference = newFee - currentFee;
-    const prorated = difference * (upgradeConfig.daysRemaining / upgradeConfig.totalDays);
+    const pricing = resolveUpgradeCalculation(upgradeConfig.currentPackage, planKey, currentFee, newFee);
+    const difference = Math.max(0, newFee - currentFee);
 
     document.getElementById('selectedPlanName').textContent = selectedPlanName;
     document.getElementById('selectedMonthlyFee').textContent = formatCurrency(newFee);
     document.getElementById('monthlyDifference').textContent = '+'.concat(formatCurrency(difference));
-    document.getElementById('proratedAmount').textContent = formatCurrency(prorated);
+    document.getElementById('proratedAmount').textContent = formatCurrency(pricing.payableToday);
     document.getElementById('agreementNewFee').textContent = formatCurrency(newFee);
-    document.getElementById('nextMonthFee').textContent = formatCurrency(newFee);
+    document.getElementById('payTodayLabel').textContent = pricing.payLabel;
+    document.getElementById('daysBasisLabel').textContent = pricing.daysLabel;
+    document.getElementById('daysBasisValue').textContent = pricing.daysValue;
     document.getElementById('to_package').value = planKey;
 
     if (notice) {
         notice.querySelector('h6').textContent = 'How It Works';
-        notice.querySelector('p').textContent = 'You only pay for the remaining days of <?php echo date('F'); ?>. Starting <?php echo date('F 1, Y', strtotime('first day of next month')); ?>, your monthly contribution will be ' + formatCurrency(newFee) + '.';
+        const planNoticeText = document.getElementById('planNoticeText');
+        if (planNoticeText) {
+            if (pricing.method === 'direct') {
+                planNoticeText.innerHTML = 'This upgrade is billed directly (no remaining-days proration). Starting ' + upgradeConfig.nextMonthStart + ', your monthly contribution will be <span id="nextMonthFee">' + formatCurrency(newFee) + '</span>.';
+            } else {
+                planNoticeText.innerHTML = 'This upgrade is prorated by remaining days in ' + upgradeConfig.currentMonth + '. Couple → Family/Executive upgrades are billed directly. Starting ' + upgradeConfig.nextMonthStart + ', your monthly contribution will be <span id="nextMonthFee">' + formatCurrency(newFee) + '</span>.';
+            }
+        } else {
+            notice.querySelector('p').textContent = pricing.notice;
+        }
     }
 
     if (upgradeBtn && upgradeBtnLabel) {
         upgradeBtn.disabled = false;
-        upgradeBtnLabel.textContent = 'Upgrade to ' + selectedPlanName + ' (' + formatCurrency(prorated) + ')';
+        upgradeBtnLabel.textContent = 'Upgrade to ' + selectedPlanName + ' (' + formatCurrency(pricing.payableToday) + ')';
     }
 
     if (shouldScroll) {

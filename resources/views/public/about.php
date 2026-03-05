@@ -1,7 +1,7 @@
 <?php include VIEWS_PATH . '/layouts/header.php'; ?>
 
 <!-- About Hero Section -->
-<section style="position: relative; min-height: 500px; display: flex; align-items: center; background: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url('https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=1600&q=80') center/cover no-repeat;">
+<section style="position: relative; min-height: 500px; display: flex; align-items: center; background: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url('/public/images/community-mobilization2.jpeg') center/cover no-repeat;">
     <div class="container">
         <div class="row justify-content-center">
             <div class="col-lg-10 text-center text-white">
@@ -9,7 +9,7 @@
                     Our Story & Purpose
                 </h1>
                 <p class="lead mb-5" style="font-size: 1.2rem; max-width: 800px; margin: 0 auto 40px; line-height: 1.6; text-shadow: 1px 1px 2px rgba(0,0,0,0.3);">
-                    Standing with families in Kisumu during their times of greatest need, providing dignity and a shoulder to lean on.
+                    Standing with families across Kenya during their times of greatest need, providing dignity and a shoulder to lean on.
                 </p>
                 <a href="#our-impact" class="btn btn-lg" style="background-color: #7F3D9E; color: white; padding: 14px 40px; border-radius: 30px; font-weight: 600; border: none; box-shadow: 0 4px 12px rgba(127, 61, 158, 0.4); text-decoration: none;">
                     Discover Our Impact
@@ -32,7 +32,7 @@
                     About SHENA<br>Companion
                 </h2>
                 <p class="mb-4" style="color: #4A5568; line-height: 1.8; font-size: 1rem;">
-                    Originating as a registered Welfare Association in Kisumu, SHENA Companion was born from a deep-rooted desire to support our community during life's most challenging transitions.
+                    SHENA Companion was born from a deep-rooted desire to support communities during life's most challenging transitions.
                 </p>
                 <p class="mb-4" style="color: #4A5568; line-height: 1.8; font-size: 1rem;">
                     We recognized that the financial and emotional burden of losing a loved one can often overwhelm families. Our association serves as a safety net, ensuring that no member of our community has to face the weight of grief and funeral arrangements alone.
@@ -45,7 +45,7 @@
             <!-- Right Column: Image with Quote -->
             <div class="col-lg-6">
                 <div style="background: linear-gradient(135deg, #A8D5BA 0%, #7FB89A 100%); border-radius: 20px; padding: 40px; position: relative; box-shadow: 0 20px 40px rgba(0,0,0,0.1);">
-                    <img src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=800&q=80" 
+                    <img src="/public/images/community-mobilization.jpeg" 
                          alt="SHENA Team" 
                          style="width: 100%; height: 300px; object-fit: cover; border-radius: 15px; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
                     <div style="background: white; border-radius: 12px; padding: 25px; box-shadow: 0 5px 20px rgba(0,0,0,0.1);">
@@ -85,7 +85,7 @@
                         Vision
                     </h3>
                     <p class="mb-5" style="color: rgba(255,255,255,0.95); line-height: 1.8; font-size: 1rem;">
-                        To significantly reduce funeral costs through collective action, creating a future where grief is not exacerbated by financial burden and every family in Kisumu can afford a dignified farewell.
+                        To significantly reduce funeral costs through collective action, creating a future where grief is not exacerbated by financial burden and every family can afford a dignified farewell.
                     </p>
                     <div style="display: flex; flex-direction: column; gap: 16px;">
                         <div style="display: flex; align-items: center; gap: 12px;">

@@ -137,7 +137,8 @@ class AdminController extends BaseController
         unset($_SESSION['user_role']);
         unset($_SESSION['user_name']);
         unset($_SESSION['user_email']);
-        header('Location: /admin-login');
+        $_SESSION['success'] = 'You have been logged out successfully.';
+        header('Location: /');
         exit();
     }
 
@@ -430,8 +431,17 @@ class AdminController extends BaseController
                 'status' => 'pending'
             ]);
 
-            // Generate member number
-            $memberNumber = 'ADM' . date('Y') . str_pad($userId, 4, '0', STR_PAD_LEFT);
+            // Generate member number using canonical formatter
+            $memberNumber = MemberNumberHelper::generateCanonical();
+
+            global $membership_packages;
+            if (empty($membership_packages[$packageKey])) {
+                $_SESSION['error'] = 'Invalid package selected.';
+                $this->db->getConnection()->rollBack();
+                $this->redirect('/admin/members/register');
+                return;
+            }
+            $normalizedPackage = $this->memberModel->normalizePackageTier($packageKey, $membership_packages[$packageKey]);
 
             // Calculate monthly contribution centrally
             $memberForCalc = ['date_of_birth' => $dateOfBirth, 'package' => $packageKey];
@@ -449,7 +459,7 @@ class AdminController extends BaseController
                 'date_of_birth' => $dateOfBirth,
                 'gender' => $gender,
                 'address' => $address,
-                'package' => $packageKey,
+                'package' => $normalizedPackage,
                 'monthly_contribution' => $monthlyContribution,
                 'maturity_ends' => $maturityEnds,
                 'status' => 'inactive',

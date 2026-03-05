@@ -1,17 +1,9 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portal Access - SHENA Companion</title>
-    
-    <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Font Awesome -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
-    
+<?php
+$page = '';
+$title = $title ?? 'Portal Access - SHENA Companion';
+include VIEWS_PATH . '/layouts/header.php';
+?>
+
     <style>
         * {
             margin: 0;
@@ -28,20 +20,20 @@
         
         .login-container {
             display: flex;
-            min-height: 100vh;
+            min-height: 0;
         }
         
         .left-panel {
             flex: 1;
-            background: linear-gradient(135deg, rgba(127, 61, 158, 0.95) 0%, rgba(94, 43, 122, 0.95) 100%),
-                        url('https://images.unsplash.com/photo-1511632765486-a01980e01a18?w=1200&q=80') center/cover;
-            padding: 60px;
+            background: linear-gradient(135deg, rgba(127, 61, 158, 0.92) 0%, rgba(94, 43, 122, 0.92) 100%),
+                        url('/public/images/background-image1.jpeg') center/cover no-repeat;
+            padding: 40px;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
             position: relative;
             overflow: visible;
-            min-height: 100vh;
+            min-height: 560px;
         }
         
         .left-panel::before {
@@ -148,21 +140,21 @@
             flex: 1;
             background: #F7F7F9;
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             justify-content: center;
-            padding: 40px;
-            min-height: 100vh;
+            padding: 24px;
+            min-height: 560px;
         }
         
         .login-card {
             background: white;
             border-radius: 24px;
-            padding: 50px 60px;
+            padding: 32px 36px;
             width: 100%;
-            max-width: 500px;
+            max-width: 560px;
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
-            max-height: calc(100vh - 80px);
-            overflow: auto;
+            max-height: none;
+            overflow: visible;
         }
         
         .portal-icon {
@@ -194,7 +186,40 @@
             text-align: center;
             color: #6B7280;
             font-size: 0.95rem;
-            margin-bottom: 40px;
+            margin-bottom: 20px;
+        }
+
+        .auth-methods {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 18px;
+        }
+
+        .auth-method-btn {
+            border: 1px solid #E5E7EB;
+            border-radius: 10px;
+            background: white;
+            color: #4B5563;
+            padding: 10px 12px;
+            font-weight: 700;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .auth-method-btn.active {
+            border-color: #7F3D9E;
+            background: #F3E8FF;
+            color: #7F3D9E;
+        }
+
+        .auth-panel {
+            display: none;
+        }
+
+        .auth-panel.active {
+            display: block;
         }
         
         .tabs {
@@ -222,7 +247,7 @@
         }
         
         .form-group {
-            margin-bottom: 24px;
+            margin-bottom: 16px;
         }
         
         .form-label {
@@ -290,8 +315,8 @@
         
         .register-section {
             text-align: center;
-            margin-top: 30px;
-            padding-top: 30px;
+            margin-top: 16px;
+            padding-top: 14px;
             border-top: 1px solid #E5E7EB;
         }
         
@@ -325,7 +350,7 @@
             display: flex;
             justify-content: center;
             gap: 30px;
-            margin-top: 40px;
+            margin-top: 18px;
         }
         
         .footer-link {
@@ -347,7 +372,7 @@
             text-align: center;
             color: #9CA3AF;
             font-size: 0.75rem;
-            margin-top: 24px;
+            margin-top: 12px;
         }
         
         .copyright a {
@@ -358,6 +383,10 @@
         @media (max-width: 768px) {
             .login-container {
                 flex-direction: column;
+            }
+
+            body {
+                overflow: auto;
             }
             
             .left-panel {
@@ -371,11 +400,16 @@
             
             .login-card {
                 padding: 40px 30px;
+                max-height: none;
+                overflow: visible;
+            }
+
+            .right-panel {
+                align-items: stretch;
+                min-height: auto;
             }
         }
     </style>
-</head>
-<body>
     <div class="login-container">
         <!-- Left Panel -->
         <div class="left-panel">
@@ -395,7 +429,7 @@
             </div>
             
             <div class="footer-text">
-                ESTABLISHED FOR THE KISUMU COMMUNITY
+                ESTABLISHED FOR COMMUNITIES ACROSS KENYA
             </div>
         </div>
         
@@ -420,6 +454,12 @@
                 if (!empty($_SESSION['success'])) :
                 ?>
                     <div class="alert alert-success" role="alert"><?php echo htmlspecialchars($_SESSION['success']); unset($_SESSION['success']); ?></div>
+                <?php
+                endif;
+
+                if (!empty($_SESSION['info'])) :
+                ?>
+                    <div class="alert alert-info" role="alert"><?php echo htmlspecialchars($_SESSION['info']); unset($_SESSION['info']); ?></div>
                 <?php
                 endif;
 
@@ -487,27 +527,55 @@
                     <div class="tab" onclick="window.location.href='/register'">Register</div>
                 </div>
                 
-                <form method="POST" action="/login" novalidate>
-                    <input type="hidden" name="csrf_token" value="<?php echo $csrf_token ?? ''; ?>">
-                    
-                    <div class="form-group">
-                        <label class="form-label">Member ID / Email</label>
-                           <input type="text" name="email" class="form-control" placeholder="Enter your ID or email" required
-                               value="<?php echo htmlspecialchars($email ?? $_POST['email'] ?? ($_SESSION['email'] ?? ''), ENT_QUOTES); ?>" aria-describedby="emailHelp">
-                           <?php if (!empty($_SESSION['email'])) { unset($_SESSION['email']); } ?>
-                    </div>
-                    
-                    <div class="form-group">
-                        <a href="#" class="forgot-password">Forget Password?</a>
-                        <label class="form-label">Password</label>
-                        <div class="password-wrapper">
-                            <input type="password" name="password" id="password" class="form-control" placeholder="Enter your password" required>
-                            <i class="fas fa-eye password-toggle" onclick="togglePassword()"></i>
+                <div class="auth-methods">
+                    <button type="button" class="auth-method-btn active" data-auth-method="password">Password Login</button>
+                    <button type="button" class="auth-method-btn" data-auth-method="otp">OTP Login</button>
+                </div>
+
+                <div class="auth-panel active" id="passwordAuthPanel">
+                    <form method="POST" action="/login" novalidate>
+                        <input type="hidden" name="csrf_token" value="<?php echo $csrf_token ?? ''; ?>">
+                        
+                        <div class="form-group">
+                            <label class="form-label">Member ID / Email</label>
+                            <input type="text" name="email" class="form-control" placeholder="Enter your ID or email" required
+                                value="<?php echo htmlspecialchars($email ?? $_POST['email'] ?? ($_SESSION['email'] ?? ''), ENT_QUOTES); ?>" aria-describedby="emailHelp">
+                            <?php if (!empty($_SESSION['email'])) { unset($_SESSION['email']); } ?>
                         </div>
-                    </div>
-                    
-                    <button type="submit" class="login-btn">Login to Dashboard</button>
-                </form>
+                        
+                        <div class="form-group">
+                            <a href="#" class="forgot-password">Forget Password?</a>
+                            <label class="form-label">Password</label>
+                            <div class="password-wrapper">
+                                <input type="password" name="password" id="password" class="form-control" placeholder="Enter your password" required>
+                                <i class="fas fa-eye password-toggle" onclick="togglePassword()"></i>
+                            </div>
+                        </div>
+                        
+                        <button type="submit" class="login-btn">Login to Dashboard</button>
+                    </form>
+                </div>
+
+                <div class="auth-panel" id="otpAuthPanel">
+                    <form id="otpLoginForm" novalidate>
+                        <input type="hidden" name="csrf_token" value="<?php echo $csrf_token ?? ''; ?>">
+
+                        <div class="form-group">
+                            <label class="form-label">Phone Number</label>
+                            <input type="tel" name="phone" id="otpPhone" class="form-control" placeholder="0712345678" required>
+                        </div>
+
+                        <div class="form-group">
+                            <button type="button" id="sendOtpBtn" class="register-btn" style="margin-bottom:10px;">Send OTP Code</button>
+                            <label class="form-label">OTP Code</label>
+                            <input type="text" name="otp_code" id="otpCode" class="form-control" maxlength="6" inputmode="numeric" placeholder="Enter 6-digit OTP">
+                        </div>
+
+                        <button type="button" id="verifyOtpBtn" class="login-btn">Login with OTP</button>
+                    </form>
+                </div>
+
+                <div id="otpResult" class="mt-3"></div>
                 
                 <div class="register-section">
                     <p class="register-text">New to SHENA Companion? Join our welfare association today.</p>
@@ -567,9 +635,101 @@
                 toggleIcon.classList.add('fa-eye');
             }
         }
+
+        (function () {
+            const methodButtons = document.querySelectorAll('[data-auth-method]');
+            const passwordPanel = document.getElementById('passwordAuthPanel');
+            const otpPanel = document.getElementById('otpAuthPanel');
+
+            methodButtons.forEach((button) => {
+                button.addEventListener('click', function () {
+                    const method = this.getAttribute('data-auth-method');
+                    methodButtons.forEach(btn => btn.classList.remove('active'));
+                    this.classList.add('active');
+
+                    if (method === 'otp') {
+                        passwordPanel?.classList.remove('active');
+                        otpPanel?.classList.add('active');
+                        document.getElementById('otpPhone')?.focus();
+                    } else {
+                        otpPanel?.classList.remove('active');
+                        passwordPanel?.classList.add('active');
+                        document.querySelector('input[name="email"]')?.focus();
+                    }
+                });
+            });
+
+            const otpForm = document.getElementById('otpLoginForm');
+            const sendOtpBtn = document.getElementById('sendOtpBtn');
+            const verifyOtpBtn = document.getElementById('verifyOtpBtn');
+            const otpResult = document.getElementById('otpResult');
+            const csrfToken = otpForm ? otpForm.querySelector('input[name="csrf_token"]').value : '';
+
+            if (!otpForm || !sendOtpBtn || !verifyOtpBtn || !otpResult) {
+                return;
+            }
+
+            function showOtpMessage(message, type) {
+                otpResult.innerHTML = '<div class="alert alert-' + type + '">' + message + '</div>';
+            }
+
+            sendOtpBtn.addEventListener('click', function () {
+                const formData = new FormData();
+                formData.append('csrf_token', csrfToken);
+                formData.append('phone', document.getElementById('otpPhone').value || '');
+
+                sendOtpBtn.disabled = true;
+                sendOtpBtn.textContent = 'Sending...';
+
+                fetch('/login/otp/send', {
+                    method: 'POST',
+                    body: formData
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            showOtpMessage(data.message || 'OTP sent.', 'success');
+                        } else {
+                            showOtpMessage(data.message || 'Failed to send OTP.', 'danger');
+                        }
+                    })
+                    .catch(() => showOtpMessage('Failed to send OTP.', 'danger'))
+                    .finally(() => {
+                        sendOtpBtn.disabled = false;
+                        sendOtpBtn.textContent = 'Send OTP Code';
+                    });
+            });
+
+            verifyOtpBtn.addEventListener('click', function () {
+                const formData = new FormData();
+                formData.append('csrf_token', csrfToken);
+                formData.append('otp_code', document.getElementById('otpCode').value || '');
+
+                verifyOtpBtn.disabled = true;
+                verifyOtpBtn.textContent = 'Verifying...';
+
+                fetch('/login/otp/verify', {
+                    method: 'POST',
+                    body: formData
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            showOtpMessage(data.message || 'Login successful.', 'success');
+                            if (data.redirect) {
+                                window.location.href = data.redirect;
+                            }
+                        } else {
+                            showOtpMessage(data.message || 'OTP verification failed.', 'danger');
+                        }
+                    })
+                    .catch(() => showOtpMessage('OTP verification failed.', 'danger'))
+                    .finally(() => {
+                        verifyOtpBtn.disabled = false;
+                        verifyOtpBtn.textContent = 'Login with OTP';
+                    });
+            });
+        })();
     </script>
-    
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+
+<?php include VIEWS_PATH . '/layouts/footer.php'; ?>

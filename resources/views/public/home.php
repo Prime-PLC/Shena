@@ -1,7 +1,7 @@
 <?php include VIEWS_PATH . '/layouts/header.php'; ?>
 
 <!-- Hero Section -->
-<section class="hero-section" style="background: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('https://images.unsplash.com/photo-1495616811223-4d98c6e9c869?w=1600&q=80') center/cover no-repeat; min-height: 600px; display: flex; align-items: center;">
+<section class="hero-section" style="background: linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.45)), url('/public/images/background-image1.jpeg') center/cover no-repeat; min-height: 600px; display: flex; align-items: center;">
     <div class="container">
         <div class="row justify-content-center text-center">
             <div class="col-lg-10">
@@ -37,12 +37,17 @@
             </p>
         </div>
 
+        <div class="text-center mb-4">
+            <h3 style="font-family: 'Playfair Display', serif; font-size: 1.8rem; color: #1A1A1A; margin-bottom: 8px;">Last Respect Services</h3>
+            <p style="color: #6B7280; font-size: 0.95rem; margin: 0;">Funeral support services provided in-kind by SHENA during bereavement.</p>
+        </div>
+
         <div class="row g-4 justify-content-center">
             <!-- Mortuary Service -->
             <div class="col-lg col-md-4 col-sm-6" style="max-width: 220px;">
                 <div class="text-center" style="padding: 20px;">
-                    <div class="mb-3">
-                        <i class="fas fa-briefcase-medical" style="color: #7F3D9E; font-size: 3.5rem;"></i>
+                    <div style="width: 70px; height: 70px; background: #F3E8FF; border-radius: 16px; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+                        <i class="fas fa-briefcase-medical" style="color: #7F3D9E; font-size: 2rem;"></i>
                     </div>
                     <h4 style="color: #2D3748; font-weight: 600; font-size: 1.1rem; margin-bottom: 12px;">Mortuary</h4>
                     <p style="color: #718096; font-size: 0.9rem; line-height: 1.6;">
@@ -54,8 +59,8 @@
             <!-- Dressing Service -->
             <div class="col-lg col-md-4 col-sm-6" style="max-width: 220px;">
                 <div class="text-center" style="padding: 20px;">
-                    <div class="mb-3">
-                        <i class="fas fa-user-tie" style="color: #7F3D9E; font-size: 3.5rem;"></i>
+                    <div style="width: 70px; height: 70px; background: #F3E8FF; border-radius: 16px; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+                        <i class="fas fa-user-tie" style="color: #7F3D9E; font-size: 2rem;"></i>
                     </div>
                     <h4 style="color: #2D3748; font-weight: 600; font-size: 1.1rem; margin-bottom: 12px;">Dressing</h4>
                     <p style="color: #718096; font-size: 0.9rem; line-height: 1.6;">
@@ -67,8 +72,8 @@
             <!-- Transport Service -->
             <div class="col-lg col-md-4 col-sm-6" style="max-width: 220px;">
                 <div class="text-center" style="padding: 20px;">
-                    <div class="mb-3">
-                        <i class="fas fa-truck" style="color: #7F3D9E; font-size: 3.5rem;"></i>
+                    <div style="width: 70px; height: 70px; background: #F3E8FF; border-radius: 16px; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+                        <i class="fas fa-truck" style="color: #7F3D9E; font-size: 2rem;"></i>
                     </div>
                     <h4 style="color: #2D3748; font-weight: 600; font-size: 1.1rem; margin-bottom: 12px;">Transport</h4>
                     <p style="color: #718096; font-size: 0.9rem; line-height: 1.6;">
@@ -80,8 +85,8 @@
             <!-- Coffins Service -->
             <div class="col-lg col-md-4 col-sm-6" style="max-width: 220px;">
                 <div class="text-center" style="padding: 20px;">
-                    <div class="mb-3">
-                        <i class="fas fa-box" style="color: #7F3D9E; font-size: 3.5rem;"></i>
+                    <div style="width: 70px; height: 70px; background: #F3E8FF; border-radius: 16px; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+                        <i class="fas fa-box" style="color: #7F3D9E; font-size: 2rem;"></i>
                     </div>
                     <h4 style="color: #2D3748; font-weight: 600; font-size: 1.1rem; margin-bottom: 12px;">Coffins</h4>
                     <p style="color: #718096; font-size: 0.9rem; line-height: 1.6;">
@@ -93,13 +98,29 @@
             <!-- Logistics Service -->
             <div class="col-lg col-md-4 col-sm-6" style="max-width: 220px;">
                 <div class="text-center" style="padding: 20px;">
-                    <div class="mb-3">
-                        <i class="fas fa-boxes" style="color: #7F3D9E; font-size: 3.5rem;"></i>
+                    <div style="width: 70px; height: 70px; background: #F3E8FF; border-radius: 16px; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+                        <i class="fas fa-boxes" style="color: #7F3D9E; font-size: 2rem;"></i>
                     </div>
                     <h4 style="color: #2D3748; font-weight: 600; font-size: 1.1rem; margin-bottom: 12px;">Logistics</h4>
                     <p style="color: #718096; font-size: 0.9rem; line-height: 1.6;">
                         Full event support including premium tents and chairs.
                     </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="row justify-content-center mt-4">
+            <div class="col-lg-10">
+                <div style="background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 18px; box-shadow: 0 6px 20px rgba(0,0,0,0.07); overflow: hidden;">
+                    <div style="background: linear-gradient(135deg, #2D1A4A 0%, #1A0F2E 100%); color: white; padding: 18px 22px; display: flex; align-items: center; gap: 12px;">
+                        <i class="fas fa-money-bill-wave" style="font-size: 1.4rem;"></i>
+                        <h4 style="margin: 0; font-family: 'Playfair Display', serif; font-size: 1.5rem;">Cash Benefit (Separate Service)</h4>
+                    </div>
+                    <div style="padding: 20px 22px;">
+                        <p style="color: #4B5563; margin: 0; line-height: 1.7; font-size: 0.95rem;">
+                            Cash Benefit is offered separately from Last Respect Services. In simple terms, after required claim documents are verified, the family can receive an approved cash payout to support urgent funeral expenses.
+                        </p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -161,8 +182,8 @@
             <!-- Right Column: Image with Badge -->
             <div class="col-lg-6">
                 <div class="position-relative">
-                    <img src="https://images.unsplash.com/photo-1495616811223-4d98c6e9c869?w=900&q=80" 
-                         alt="Sunset over water" 
+                    <img src="/public/images/community.jpeg" 
+                        alt="SHENA community" 
                          class="img-fluid" 
                          style="width: 100%; height: auto; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.15);">
                     <div class="position-absolute" style="bottom: 30px; left: 50%; transform: translateX(-50%);">
@@ -205,15 +226,13 @@
                                 Get Started Now
                             </a>
                             <a href="/contact" class="btn btn-lg" style="background-color: transparent; color: white; padding: 14px 40px; border: 2px solid white; border-radius: 30px; font-weight: 600; text-decoration: none;">
-                                Talk to an Agent
+                                Talk to Us
                             </a>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
-</section>
     </div>
 </section>
 

@@ -13,19 +13,24 @@
     <link href="/public/css/modals.css" rel="stylesheet">
     <!-- SHENA Design System CSS -->
     <link href="/public/css/shena-main.css" rel="stylesheet">
+    <link rel="icon" type="image/png" href="/public/images/shena-logo.png">
 </head>
 <body>
     <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg sticky-top" style="background: white; padding: 0.75rem 0; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
+    <nav class="navbar navbar-expand-lg sticky-top shena-public-nav" style="background: white; padding: 0.75rem 0; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
         <div class="container">
             <a class="navbar-brand" href="/" style="display: flex; align-items: center; gap: 12px; margin: 0; padding: 0;">
                 <img src="/public/images/shena-logo.png" alt="SHENA Companion" style="height: 80px; width: auto;">
             </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="shena-hamburger" aria-hidden="true">
+                    <span class="shena-hamburger-line"></span>
+                    <span class="shena-hamburger-line"></span>
+                    <span class="shena-hamburger-line"></span>
+                </span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav mx-auto align-items-center" style="gap: 0.5rem;">
+                <ul class="navbar-nav mx-auto align-items-center shena-nav-links" style="gap: 0.5rem;">
                     <li class="nav-item">
                         <a class="nav-link <?php echo ($page ?? '') === 'home' ? 'active' : ''; ?>" href="/" style="color: <?php echo ($page ?? '') === 'home' ? '#7F3D9E' : '#000000'; ?>; font-weight: 500; padding: 0.5rem 1rem;">Home</a>
                     </li>
@@ -33,16 +38,19 @@
                         <a class="nav-link <?php echo ($page ?? '') === 'about' ? 'active' : ''; ?>" href="/about" style="color: <?php echo ($page ?? '') === 'about' ? '#7F3D9E' : '#000000'; ?>; font-weight: 500; padding: 0.5rem 1rem;">About Us</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?php echo ($page ?? '') === 'services' ? 'active' : ''; ?>" href="/services" style="color: <?php echo ($page ?? '') === 'services' ? '#7F3D9E' : '#000000'; ?>; font-weight: 500; padding: 0.5rem 1rem;">Welfare Services</a>
+                        <a class="nav-link <?php echo ($page ?? '') === 'services' ? 'active' : ''; ?>" href="/services" style="color: <?php echo ($page ?? '') === 'services' ? '#7F3D9E' : '#000000'; ?>; font-weight: 500; padding: 0.5rem 1rem;">Services</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?php echo ($page ?? '') === 'packages' ? 'active' : ''; ?>" href="/membership" style="color: <?php echo ($page ?? '') === 'packages' ? '#7F3D9E' : '#000000'; ?>; font-weight: 500; padding: 0.5rem 1rem;">Packages</a>
+                        <a class="nav-link <?php echo ($page ?? '') === 'membership' ? 'active' : ''; ?>" href="/membership" style="color: <?php echo ($page ?? '') === 'membership' ? '#7F3D9E' : '#000000'; ?>; font-weight: 500; padding: 0.5rem 1rem;">Packages</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link <?php echo ($page ?? '') === 'gallery' ? 'active' : ''; ?>" href="/gallery" style="color: <?php echo ($page ?? '') === 'gallery' ? '#7F3D9E' : '#000000'; ?>; font-weight: 500; padding: 0.5rem 1rem;">Gallery</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link <?php echo ($page ?? '') === 'contact' ? 'active' : ''; ?>" href="/contact" style="color: <?php echo ($page ?? '') === 'contact' ? '#7F3D9E' : '#000000'; ?>; font-weight: 500; padding: 0.5rem 1rem;">Contact</a>
                     </li>
                 </ul>
-                <ul class="navbar-nav align-items-center">
+                <ul class="navbar-nav align-items-center shena-nav-actions">
                     <?php if (isLoggedIn()): ?>
                         <?php if (isAdmin()): ?>
                             <li class="nav-item">

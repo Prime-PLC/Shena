@@ -3,8 +3,11 @@ $page = 'beneficiaries';
 include __DIR__ . '/../layouts/member-header.php';
 
 $beneficiaries = $beneficiaries ?? [];
-$maxBeneficiaries = 5;
-$availableSlots = $maxBeneficiaries - count($beneficiaries);
+$coverageSummary = $coverage_summary ?? ['tier' => 'individual', 'limits' => ['spouse' => 0, 'children' => 0, 'parents' => 0, 'inlaws' => 0, 'other' => 0], 'total_slots' => 0];
+$planLimits = $coverageSummary['limits'] ?? ['spouse' => 0, 'children' => 0, 'parents' => 0, 'inlaws' => 0, 'other' => 0];
+$maxBeneficiaries = (int)($coverageSummary['total_slots'] ?? 0);
+$availableSlots = max(0, $maxBeneficiaries - count($beneficiaries));
+$planTierLabel = ucfirst((string)($coverageSummary['tier'] ?? 'individual'));
 ?>
 
 <style>
@@ -429,7 +432,13 @@ main {
                     <i class="fas fa-user-plus"></i> Add New Dependent
                 </button>
             </div>
-            <p class="section-description">Review and manage your policy beneficiaries and dependents.</p>
+            <p class="section-description">
+                Your <?php echo htmlspecialchars($planTierLabel); ?> plan allows spouse: <?php echo (int)($planLimits['spouse'] ?? 0); ?>,
+                children: <?php echo (int)($planLimits['children'] ?? 0); ?>,
+                parents: <?php echo (int)($planLimits['parents'] ?? 0); ?>,
+                in-laws: <?php echo (int)($planLimits['inlaws'] ?? 0); ?>.
+                Available dependent slots: <?php echo (int)$availableSlots; ?>.
+            </p>
             
             <div class="beneficiaries-grid">
                 <?php if (!empty($beneficiaries)): ?>
@@ -475,7 +484,7 @@ main {
                         <i class="fas fa-plus"></i>
                     </div>
                     <h4>Add Beneficiary</h4>
-                    <p>Available slots: <?php echo $availableSlots; ?></p>
+                    <p>Available slots: <?php echo $availableSlots; ?> / <?php echo $maxBeneficiaries; ?></p>
                 </div>
             </div>
         </div>
@@ -877,10 +886,10 @@ main {
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Date of Birth</label>
-                        <input type="date" name="date_of_birth" id="editDateOfBirth" class="form-control" value="<?php echo getOldValue('date_of_birth_edit') ?: ''; ?>">
+                        <input type="date" name="date_of_birth" id="editDateOfBirth" class="form-control" min="1900-01-01" max="<?php echo date('Y-m-d'); ?>" value="<?php echo getOldValue('date_of_birth_edit') ?: ''; ?>">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Phone Number</label>
+                        <label class="form-label">Phone Number (Optional for minors)</label>
                         <input type="tel" name="phone_number" id="editPhoneNumber" class="form-control" value="<?php echo getOldValue('phone_number_edit') ?: ''; ?>">
                     </div>
                     <div class="mb-3">
@@ -922,10 +931,10 @@ main {
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Date of Birth</label>
-                        <input type="date" name="date_of_birth" class="form-control" value="<?php echo getOldValue('date_of_birth'); ?>">
+                        <input type="date" name="date_of_birth" class="form-control" min="1900-01-01" max="<?php echo date('Y-m-d'); ?>" value="<?php echo getOldValue('date_of_birth'); ?>">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Phone Number</label>
+                        <label class="form-label">Phone Number (Optional for minors)</label>
                         <input type="tel" name="phone_number" class="form-control" value="<?php echo getOldValue('phone_number'); ?>">
                     </div>
                     <div class="mb-3">

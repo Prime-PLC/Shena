@@ -36,7 +36,7 @@
 						<li><a href="/member/support">Help Center</a></li>
 						<li><a href="/profile">Profile Settings</a></li>
 						<li><a href="/member/notification-settings">Notifications</a></li>
-						<li><a href="#">FAQs</a></li>
+						<li><a href="/policy-booklet">Policy Booklet</a></li>
 					</ul>
 				</div>
 				
@@ -45,11 +45,11 @@
 					<p class="footer-portal-text">For assistance or inquiries, please contact our support team.</p>
 					<div class="footer-contact">
 						<i class="fas fa-phone"></i>
-						<span>+254 700 000 000</span>
+						<span>+254 748 585 067</span>
 					</div>
 					<div class="footer-contact">
 						<i class="fas fa-envelope"></i>
-						<span>support@shena.co.ke</span>
+						<span>support@shenacompanion.org</span>
 					</div>
 				</div>
 			</div>
@@ -58,15 +58,17 @@
 		<div class="footer-bottom">
 			<p>© <?php echo date('Y'); ?> Shena Companion Welfare Association. All rights reserved.</p>
 			<div class="footer-bottom-links">
-				<a href="#">Privacy Policy</a>
+				<a href="/privacy-policy">Privacy Policy</a>
 				<span>•</span>
-				<a href="#">Terms of Service</a>
+				<a href="/terms-and-conditions">Terms of Service</a>
 				<span>•</span>
-				<a href="#">Member Agreement</a>
+				<a href="/policy-booklet">Member Agreement</a>
 			</div>
 		</div>
 	</div>
 </footer>
+
+<?php include VIEWS_PATH . '/partials/member-help-widget.php'; ?>
 
 <style>
 .member-footer {

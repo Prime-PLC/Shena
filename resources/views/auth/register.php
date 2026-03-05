@@ -1033,11 +1033,7 @@ include VIEWS_PATH . '/layouts/header.php';
                 </div>
                 
                 <div class="row">
-                    <div class="col-md-6 mb-4">
-                        <label for="email" class="form-label">Email Address</label>
-                        <input type="email" class="form-control" id="email" name="email" placeholder="name@example.com" value="<?php echo e(old('email')); ?>">
-                    </div>
-                    <div class="col-md-6 mb-4">
+                    <div class="col-md-12 mb-4">
                         <label for="date_of_birth" class="form-label">Date of Birth</label>
                         <input type="date" class="form-control" id="date_of_birth" name="date_of_birth" value="<?php echo e(old('date_of_birth')); ?>" required>
                     </div>
