@@ -19,6 +19,9 @@ class PlanUpgradeService
         'family' => 1000,
         'executive' => 1500
     ];
+
+    const CALCULATION_METHOD_PRORATED = 'prorated';
+    const CALCULATION_METHOD_DIRECT = 'direct';
     
     public function __construct()
     {
@@ -82,10 +85,16 @@ class PlanUpgradeService
         $daysRemaining = $today->diff($lastDayOfMonth)->days + 1; // Include today
         $totalDaysInMonth = $today->format('t');
         
-        // Calculate prorated amount
-        // Prorated = (New Fee - Current Fee) × (Days Remaining / Total Days)
-        $proratedAmount = ($newFee - $currentFee) * ($daysRemaining / $totalDaysInMonth);
-        $proratedAmount = round($proratedAmount, 2);
+        $monthlyDifference = max(0, $newFee - $currentFee);
+        $calculationMethod = $this->resolveUpgradeCalculationMethod($fromPackage, $toPackage);
+
+        if ($calculationMethod === self::CALCULATION_METHOD_DIRECT) {
+            $amountDueToday = round($monthlyDifference, 2);
+        } else {
+            // Prorated = (New Fee - Current Fee) × (Days Remaining / Total Days)
+            $amountDueToday = $monthlyDifference * ($daysRemaining / $totalDaysInMonth);
+            $amountDueToday = round($amountDueToday, 2);
+        }
         
         // Effective date is immediate
         $effectiveDate = $today->format('Y-m-d');
@@ -98,12 +107,32 @@ class PlanUpgradeService
             'to_package' => $toPackage,
             'current_monthly_fee' => $currentFee,
             'new_monthly_fee' => $newFee,
+            'monthly_difference' => $monthlyDifference,
             'days_remaining' => $daysRemaining,
             'total_days_in_month' => $totalDaysInMonth,
-            'prorated_amount' => $proratedAmount,
+            'prorated_amount' => $amountDueToday,
+            'amount_due_today' => $amountDueToday,
+            'calculation_method' => $calculationMethod,
             'effective_date' => $effectiveDate,
             'next_full_payment_date' => date('Y-m-01', strtotime('first day of next month'))
         ];
+    }
+
+    /**
+     * Determine upgrade calculation method.
+     * Couple -> Family/Executive upgrades are billed as direct upgrades (no day proration).
+     *
+     * @param string $fromPackage
+     * @param string $toPackage
+     * @return string
+     */
+    private function resolveUpgradeCalculationMethod($fromPackage, $toPackage)
+    {
+        if ($fromPackage === 'couple' && in_array($toPackage, ['family', 'executive'], true)) {
+            return self::CALCULATION_METHOD_DIRECT;
+        }
+
+        return self::CALCULATION_METHOD_PRORATED;
     }
     
     /**

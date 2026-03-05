@@ -3,6 +3,9 @@ $page = 'members';
 include __DIR__ . '/../layouts/agent-header.php';
 
 // Data passed from controller: $member, $dependents, $payment_history
+$coverageSummary = $coverage_summary ?? ['tier' => 'individual', 'limits' => ['spouse' => 0, 'children' => 0, 'parents' => 0, 'inlaws' => 0, 'other' => 0], 'total_slots' => 0];
+$planLimits = $coverageSummary['limits'] ?? ['spouse' => 0, 'children' => 0, 'parents' => 0, 'inlaws' => 0, 'other' => 0];
+$planTierLabel = ucfirst((string)($coverageSummary['tier'] ?? 'individual'));
 // Generate member initials
 $memberInitials = strtoupper(substr($member['first_name'] ?? 'M', 0, 1) . substr($member['last_name'] ?? 'M', 0, 1));
 
@@ -751,7 +754,7 @@ if (!empty($payment_history)) {
                         <i class="fas fa-users section-icon-details"></i>
                         <div>
                             <h3>Dependent List</h3>
-                            <p class="section-subtitle"><?php echo count($dependents); ?> family member<?php echo count($dependents) != 1 ? 's' : ''; ?> covered under this policy</p>
+                            <p class="section-subtitle"><?php echo count($dependents); ?> family member<?php echo count($dependents) != 1 ? 's' : ''; ?> covered under this policy • <?php echo htmlspecialchars($planTierLabel); ?> limits: spouse <?php echo (int)($planLimits['spouse'] ?? 0); ?>, children <?php echo (int)($planLimits['children'] ?? 0); ?>, parents <?php echo (int)($planLimits['parents'] ?? 0); ?>, in-laws <?php echo (int)($planLimits['inlaws'] ?? 0); ?></p>
                         </div>
                     </div>
                     <button class="btn-add-dependent" type="button" data-bs-toggle="modal" data-bs-target="#addDependentModal">Add Dependent</button>
@@ -999,7 +1002,11 @@ if (!empty($payment_history)) {
                         <input type="text" name="id_number" class="form-control" required>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Phone Number</label>
+                        <label class="form-label">Date of Birth <span class="text-danger">*</span></label>
+                        <input type="date" name="date_of_birth" class="form-control" min="1900-01-01" max="<?php echo date('Y-m-d'); ?>" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Phone Number (Optional for minors)</label>
                         <input type="tel" name="phone_number" class="form-control">
                     </div>
                     <div class="mb-3">

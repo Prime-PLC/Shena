@@ -273,7 +273,7 @@ class Member extends BaseModel
             return $membershipPackages[$packageOrKey];
         }
 
-        $age = $this->calculateAge($member['date_of_birth'] ?? ($member['dob'] ?? ''));
+        $age = $this->calculateAge((string) ($member['date_of_birth'] ?? ($member['dob'] ?? '')));
         $requestedCategory = $member['package'] ?? null;
 
         $matched = $this->findPackageByCategoryAndAge($membershipPackages, $requestedCategory, $age);
@@ -395,7 +395,7 @@ class Member extends BaseModel
                 continue;
             }
 
-            $age = $this->calculateAge($dependent['date_of_birth'] ?? ($dependent['dob'] ?? ''));
+            $age = $this->calculateAge((string) ($dependent['date_of_birth'] ?? ($dependent['dob'] ?? '')));
             $overageAmount += $this->getAgeBracketRate($age, $membershipPackages);
         }
 
@@ -434,6 +434,126 @@ class Member extends BaseModel
         }
 
         return 'other';
+    }
+
+    /**
+     * Check whether adding a dependent fits the member's current plan coverage.
+     *
+     * @param array $member
+     * @param array $existingDependents
+     * @param string $relationship
+     * @return array{allowed: bool, bucket: string, required_package: ?string}
+     */
+    public function evaluateDependentCoverageForAddition(array $member, array $existingDependents, string $relationship): array
+    {
+        $packageTier = $this->normalizePackageTier($member['package_key'] ?? ($member['package'] ?? 'individual'));
+        $limits = $this->getPlanCoverageLimitsByTier($packageTier);
+        $bucket = $this->normalizeRelationshipBucket($relationship);
+
+        $currentCount = 0;
+        foreach ($existingDependents as $dependent) {
+            $dependentBucket = $this->normalizeRelationshipBucket($dependent['relationship'] ?? '');
+            if ($dependentBucket === $bucket) {
+                $currentCount++;
+            }
+        }
+
+        $allowedSlots = (int)($limits[$bucket] ?? 0);
+        $allowed = ($currentCount + 1) <= $allowedSlots;
+
+        return [
+            'allowed' => $allowed,
+            'bucket' => $bucket,
+            'required_package' => $allowed ? null : $this->suggestUpgradePackageForBucket($packageTier, $bucket)
+        ];
+    }
+
+    /**
+     * Get relationship slot limits by normalized package tier.
+     *
+     * @param string $packageTier
+     * @return array
+     */
+    private function getPlanCoverageLimitsByTier(string $packageTier): array
+    {
+        $default = [
+            'spouse' => 0,
+            'children' => 0,
+            'parents' => 0,
+            'inlaws' => 0,
+            'other' => 0
+        ];
+
+        if ($packageTier === 'couple') {
+            $default['spouse'] = 1;
+            return $default;
+        }
+
+        if ($packageTier === 'family') {
+            $default['spouse'] = 1;
+            $default['children'] = 10;
+            return $default;
+        }
+
+        if ($packageTier === 'executive') {
+            $default['spouse'] = 1;
+            $default['children'] = 10;
+            $default['parents'] = 4;
+            $default['inlaws'] = 4;
+            return $default;
+        }
+
+        return $default;
+    }
+
+    /**
+     * Build plan coverage summary for dependent UI guidance.
+     *
+     * @param array $member
+     * @return array{tier: string, limits: array, total_slots: int}
+     */
+    public function getPlanCoverageSummary(array $member): array
+    {
+        $tier = $this->normalizePackageTier($member['package_key'] ?? ($member['package'] ?? 'individual'));
+        $limits = $this->getPlanCoverageLimitsByTier($tier);
+
+        return [
+            'tier' => $tier,
+            'limits' => $limits,
+            'total_slots' => array_sum(array_map('intval', $limits))
+        ];
+    }
+
+    /**
+     * Suggest the minimum package needed to cover an additional relationship bucket.
+     *
+     * @param string $currentPackageTier
+     * @param string $bucket
+     * @return string|null
+     */
+    private function suggestUpgradePackageForBucket(string $currentPackageTier, string $bucket)
+    {
+        if ($currentPackageTier === 'executive') {
+            return null;
+        }
+
+        if ($bucket === 'spouse') {
+            return 'couple';
+        }
+
+        if ($bucket === 'children') {
+            if ($currentPackageTier === 'individual' || $currentPackageTier === 'couple') {
+                return 'family';
+            }
+
+            return 'executive';
+        }
+
+        if ($bucket === 'parents' || $bucket === 'inlaws' || $bucket === 'other') {
+            return 'executive';
+        }
+
+        return 'executive';
     }
 
     /**
@@ -679,7 +799,7 @@ class Member extends BaseModel
             // Coverage expired - check grace period
             $gracePeriodDays = 4; // Default grace period
             if (!empty($member['date_of_birth'])) {
-                $age = $this->calculateAge($member['date_of_birth']);
+                $age = $this->calculateAge((string) ($member['date_of_birth'] ?? ''));
                 $gracePeriodDays = ($age >= 80) ? 5 : 4;
             }
 

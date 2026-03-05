@@ -648,31 +648,32 @@ $missingFields = $missing_profile_fields ?? [];
                 <p style="color:#4B5563; margin-bottom: 18px;">Welcome to SHENA. Please complete your profile before continuing.</p>
                 <form method="POST" action="/member/profile/complete">
                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token ?? '', ENT_QUOTES); ?>">
+                    <?php $popupData = $profile_completion_form_data ?? []; ?>
 
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label">National ID <span style="color:#DC2626">*</span></label>
-                            <input type="text" name="national_id" class="form-control" required>
+                            <input type="text" name="national_id" class="form-control" value="<?php echo htmlspecialchars($popupData['national_id'] ?? '', ENT_QUOTES); ?>" required>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Date of Birth <span style="color:#DC2626">*</span></label>
-                            <input type="date" name="date_of_birth" class="form-control" required>
+                            <input type="date" name="date_of_birth" class="form-control" value="<?php echo htmlspecialchars($popupData['date_of_birth'] ?? '', ENT_QUOTES); ?>" required>
                         </div>
                         <div class="col-12">
                             <label class="form-label">Address <span style="color:#DC2626">*</span></label>
-                            <input type="text" name="address" class="form-control" required>
+                            <input type="text" name="address" class="form-control" value="<?php echo htmlspecialchars($popupData['address'] ?? '', ENT_QUOTES); ?>" required>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Next of Kin Name <span style="color:#DC2626">*</span></label>
-                            <input type="text" name="next_of_kin" class="form-control" required>
+                            <input type="text" name="next_of_kin" class="form-control" value="<?php echo htmlspecialchars($popupData['next_of_kin'] ?? '', ENT_QUOTES); ?>" required>
                         </div>
                         <div class="col-md-3">
                             <label class="form-label">Relationship</label>
-                            <input type="text" name="next_of_kin_relationship" class="form-control" placeholder="e.g. Spouse">
+                            <input type="text" name="next_of_kin_relationship" class="form-control" placeholder="e.g. Spouse" value="<?php echo htmlspecialchars($popupData['next_of_kin_relationship'] ?? '', ENT_QUOTES); ?>">
                         </div>
                         <div class="col-md-3">
                             <label class="form-label">Next of Kin Phone <span style="color:#DC2626">*</span></label>
-                            <input type="tel" name="next_of_kin_phone" class="form-control" placeholder="0712345678" required>
+                            <input type="tel" name="next_of_kin_phone" class="form-control" placeholder="0712345678" value="<?php echo htmlspecialchars($popupData['next_of_kin_phone'] ?? '', ENT_QUOTES); ?>" required>
                         </div>
                     </div>
 

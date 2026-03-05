@@ -405,7 +405,7 @@ class AgentDashboardController extends BaseController
             // Calculate monthly contribution using central logic
             $age = 0;
             try {
-                $age = $this->memberModel->calculateAge($_POST['date_of_birth'] ?? '');
+                $age = $this->memberModel->calculateAge((string) ($_POST['date_of_birth'] ?? ''));
             } catch (Exception $e) {
                 error_log('Agent reg age calc error: ' . $e->getMessage());
             }
@@ -682,6 +682,7 @@ class AgentDashboardController extends BaseController
 
         // Get member's dependents/beneficiaries
         $dependents = $this->memberModel->getMemberDependents($memberId);
+        $coverageSummary = $this->memberModel->getPlanCoverageSummary($member);
         
         // Get payment history
         $paymentHistory = $this->memberModel->getMemberPaymentHistory($memberId);
@@ -691,6 +692,7 @@ class AgentDashboardController extends BaseController
             'agent' => $agent,
             'member' => $member,
             'dependents' => $dependents,
+            'coverage_summary' => $coverageSummary,
             'payment_history' => $paymentHistory,
             'csrf_token' => $this->generateCsrfToken()
         ];
@@ -802,9 +804,14 @@ class AgentDashboardController extends BaseController
             'relationship' => $this->sanitizeInput($_POST['relationship'] ?? ''),
             'id_number' => $this->sanitizeInput($_POST['id_number'] ?? ''),
             'date_of_birth' => $this->sanitizeInput($_POST['date_of_birth'] ?? ''),
-            'phone_number' => $this->sanitizeInput($_POST['phone_number'] ?? ''),
+            'phone_number' => null,
             'percentage' => (float)($_POST['percentage'] ?? 0)
         ];
+
+        $dependentPhoneInput = $this->sanitizeInput($_POST['phone_number'] ?? '');
+        if ($dependentPhoneInput !== '') {
+            $dependentData['phone_number'] = formatKenyanPhone($dependentPhoneInput);
+        }
 
         if ($dependentData['full_name'] === '' || $dependentData['relationship'] === '' || $dependentData['id_number'] === '' || $dependentData['date_of_birth'] === '') {
             $_SESSION['error'] = 'Please fill in all required dependent fields.';
@@ -826,7 +833,11 @@ class AgentDashboardController extends BaseController
         }
 
         try {
-            $dependentAge = $this->memberModel->calculateAge($dependentData['date_of_birth']);
+            $dependentDob = $dependentData['date_of_birth'] ?? '';
+            if (!is_string($dependentDob)) {
+                $dependentDob = '';
+            }
+            $dependentAge = $this->memberModel->calculateAge($dependentDob);
             if ($dependentAge <= 0 || $dependentAge > 120) {
                 $_SESSION['error'] = 'Please enter a valid dependent date of birth.';
                 $this->redirect('/agent/member-details/' . (int)$memberId);
@@ -835,6 +846,26 @@ class AgentDashboardController extends BaseController
         } catch (Exception $e) {
             error_log('Dependent age calc error: ' . $e->getMessage());
             $_SESSION['error'] = 'Please enter a valid dependent date of birth.';
+            $this->redirect('/agent/member-details/' . (int)$memberId);
+            return;
+        }
+
+        $currentDependents = $this->beneficiaryModel->getActiveBeneficiaries($memberId) ?: [];
+        $coverageCheck = $this->memberModel->evaluateDependentCoverageForAddition(
+            $member,
+            $currentDependents,
+            (string) ($dependentData['relationship'] ?? '')
+        );
+
+        if (empty($coverageCheck['allowed'])) {
+            $requiredPackage = $coverageCheck['required_package'] ?? null;
+            if (!empty($requiredPackage)) {
+                $_SESSION['error'] = 'Dependent exceeds current plan coverage. Ask member to upgrade to ' . ucfirst($requiredPackage) . ' first.';
+                $this->redirect('/agent/member-details/' . (int)$memberId);
+                return;
+            }
+
+            $_SESSION['error'] = 'Dependent exceeds available coverage limits for this member.';
             $this->redirect('/agent/member-details/' . (int)$memberId);
             return;
         }

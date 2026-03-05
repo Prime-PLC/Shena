@@ -110,7 +110,20 @@ class MemberController extends BaseController
             $missingProfileFields[] = 'next_of_kin_phone';
         }
 
-        $showProfileCompletionPopup = (!empty($_SESSION['is_first_login']) || !empty($missingProfileFields));
+        $showProfileCompletionPopup = (!empty($_SESSION['is_first_login']) && !empty($missingProfileFields));
+
+        $profileCompletionFormData = [
+            'national_id' => (strpos($memberIdNumber, 'TMP') === 0) ? '' : $memberIdNumber,
+            'date_of_birth' => (string) ($member['date_of_birth'] ?? ''),
+            'address' => (string) ($member['address'] ?? ''),
+            'next_of_kin' => (string) ($member['next_of_kin'] ?? ''),
+            'next_of_kin_relationship' => (string) ($member['next_of_kin_relationship'] ?? ''),
+            'next_of_kin_phone' => (string) ($member['next_of_kin_phone'] ?? '')
+        ];
+
+        if (!empty($_SESSION['profile_completion_form_data']) && is_array($_SESSION['profile_completion_form_data'])) {
+            $profileCompletionFormData = array_merge($profileCompletionFormData, $_SESSION['profile_completion_form_data']);
+        }
 
         if (!empty($member['maturity_ends']) && !empty($member['created_at'])) {
             $created = new DateTime($member['created_at']);
@@ -147,6 +160,7 @@ class MemberController extends BaseController
             'maturity_months_total' => $maturityMonthsTotal,
             'show_profile_completion_popup' => $showProfileCompletionPopup,
             'missing_profile_fields' => $missingProfileFields,
+            'profile_completion_form_data' => $profileCompletionFormData,
             'csrf_token' => $this->generateCsrfToken()
         ];
 
@@ -337,7 +351,17 @@ class MemberController extends BaseController
             $address = $this->sanitizeInput($_POST['address'] ?? '');
             $nextOfKin = $this->sanitizeInput($_POST['next_of_kin'] ?? '');
             $nextOfKinRelationship = $this->sanitizeInput($_POST['next_of_kin_relationship'] ?? '');
-            $nextOfKinPhone = $this->sanitizeInput($_POST['next_of_kin_phone'] ?? '');
+            $nextOfKinPhoneInput = $this->sanitizeInput($_POST['next_of_kin_phone'] ?? '');
+            $nextOfKinPhone = preg_replace('/\s+/', '', $nextOfKinPhoneInput);
+
+            $_SESSION['profile_completion_form_data'] = [
+                'national_id' => $nationalId,
+                'date_of_birth' => $dateOfBirth,
+                'address' => $address,
+                'next_of_kin' => $nextOfKin,
+                'next_of_kin_relationship' => $nextOfKinRelationship,
+                'next_of_kin_phone' => $nextOfKinPhoneInput
+            ];
 
             if (empty($nationalId) || empty($dateOfBirth) || empty($address) || empty($nextOfKin) || empty($nextOfKinPhone)) {
                 $_SESSION['error'] = 'Please complete all required profile fields.';
@@ -371,6 +395,7 @@ class MemberController extends BaseController
                 'next_of_kin_phone' => formatKenyanPhone($nextOfKinPhone)
             ]);
 
+            unset($_SESSION['profile_completion_form_data']);
             unset($_SESSION['is_first_login']);
             $_SESSION['success'] = 'Profile updated successfully. Welcome to your dashboard.';
         } catch (Exception $e) {
@@ -841,11 +866,13 @@ class MemberController extends BaseController
         }
         
         $beneficiaries = $this->beneficiaryModel->getMemberBeneficiaries($member['id']);
+        $coverageSummary = $this->memberModel->getPlanCoverageSummary($member);
         
         $data = [
             'title' => 'My Beneficiaries - Shena Companion Welfare Association',
             'member' => $member,
             'beneficiaries' => $beneficiaries,
+            'coverage_summary' => $coverageSummary,
             'csrf_token' => $this->generateCsrfToken()
         ];
         
@@ -877,9 +904,14 @@ class MemberController extends BaseController
                 'relationship' => $this->sanitizeInput($_POST['relationship'] ?? ''),
                 'id_number' => $this->sanitizeInput($_POST['id_number'] ?? ''),
                 'date_of_birth' => $this->sanitizeInput($_POST['date_of_birth'] ?? ''),
-                'phone_number' => formatKenyanPhone($this->sanitizeInput($_POST['phone_number'] ?? '')),
+                'phone_number' => null,
                 'percentage' => (float)($_POST['percentage'] ?? 100)
             ];
+
+            $beneficiaryPhoneInput = $this->sanitizeInput($_POST['phone_number'] ?? '');
+            if ($beneficiaryPhoneInput !== '') {
+                $beneficiaryData['phone_number'] = formatKenyanPhone($beneficiaryPhoneInput);
+            }
             
             error_log('Beneficiary data: ' . print_r($beneficiaryData, true));
             
@@ -901,7 +933,11 @@ class MemberController extends BaseController
             }
 
             try {
-                $benAge = $this->memberModel->calculateAge($beneficiaryData['date_of_birth']);
+                $beneficiaryDob = $beneficiaryData['date_of_birth'] ?? '';
+                if (!is_string($beneficiaryDob)) {
+                    $beneficiaryDob = '';
+                }
+                $benAge = $this->memberModel->calculateAge($beneficiaryDob);
                 if ($benAge <= 0 || $benAge > 120) {
                     $_SESSION['error'] = 'Please enter a valid beneficiary date of birth.';
                     $this->redirect('/beneficiaries');
@@ -910,6 +946,26 @@ class MemberController extends BaseController
             } catch (Exception $e) {
                 error_log('Beneficiary age calc error: ' . $e->getMessage());
                 $_SESSION['error'] = 'Please enter a valid beneficiary date of birth.';
+                $this->redirect('/beneficiaries');
+                return;
+            }
+
+            $currentDependents = $this->beneficiaryModel->getActiveBeneficiaries($member['id']) ?: [];
+            $coverageCheck = $this->memberModel->evaluateDependentCoverageForAddition(
+                $member,
+                $currentDependents,
+                (string) ($beneficiaryData['relationship'] ?? '')
+            );
+
+            if (empty($coverageCheck['allowed'])) {
+                $requiredPackage = $coverageCheck['required_package'] ?? null;
+                if (!empty($requiredPackage)) {
+                    $_SESSION['error'] = 'This beneficiary is outside your current plan coverage. Please upgrade to ' . ucfirst($requiredPackage) . ' to continue.';
+                    $this->redirect('/member/upgrade');
+                    return;
+                }
+
+                $_SESSION['error'] = 'This beneficiary is outside your current plan coverage. Please review your plan limits.';
                 $this->redirect('/beneficiaries');
                 return;
             }

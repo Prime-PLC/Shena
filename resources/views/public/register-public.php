@@ -119,8 +119,8 @@
                                 <input type="tel" class="form-control" id="phone" name="phone" placeholder="0712345678" required>
                             </div>
                             <div class="col-md-6 mb-3">
-                                <label for="email" class="form-label">Email Address <span class="required-star">*</span></label>
-                                <input type="email" class="form-control" id="email" name="email" placeholder="name@example.com" required>
+                                <label for="national_id" class="form-label">National ID Number <span class="required-star">*</span></label>
+                                <input type="text" class="form-control" id="national_id" name="national_id" placeholder="12345678" required>
                             </div>
                         </div>
 

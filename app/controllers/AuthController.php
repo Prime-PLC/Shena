@@ -386,7 +386,7 @@ class AuthController extends BaseController
             $age = null;
             if (!empty($memberData['date_of_birth'])) {
                 try {
-                    $age = $this->memberModel->calculateAge($memberData['date_of_birth']);
+                    $age = $this->memberModel->calculateAge((string) ($memberData['date_of_birth'] ?? ''));
                     if ($age < 18 || $age > 100) {
                         $_SESSION['error'] = 'Members must be between 18 and 100 years old.';
                         $_SESSION['old_input'] = array_merge($userData, $memberData);
@@ -428,7 +428,7 @@ class AuthController extends BaseController
                 
                 // Ensure we have a valid age for contribution/maturity calculations
                 if ($age === null && !empty($memberData['date_of_birth'])) {
-                    $age = $this->memberModel->calculateAge($memberData['date_of_birth']);
+                    $age = $this->memberModel->calculateAge((string) ($memberData['date_of_birth'] ?? ''));
                 }
                 if ($age === null) {
                     $_SESSION['error'] = 'Date of birth is required to determine eligibility and package.';
@@ -930,7 +930,7 @@ class AuthController extends BaseController
             $this->validateCsrf();
             
             // Validate required fields (simple one-step registration)
-            $required = ['first_name', 'last_name', 'email', 'phone'];
+            $required = ['first_name', 'last_name', 'phone', 'national_id'];
             
             foreach ($required as $field) {
                 if (empty($_POST[$field])) {
@@ -944,7 +944,7 @@ class AuthController extends BaseController
             $lastName = $this->sanitizeInput($_POST['last_name']);
             $nationalId = $this->sanitizeInput($_POST['national_id'] ?? '');
             $dateOfBirth = $_POST['date_of_birth'] ?? null;
-            $email = $this->sanitizeInput($_POST['email']);
+            $email = $this->sanitizeInput($_POST['email'] ?? '');
             $phone = $this->sanitizeInput($_POST['phone']);
             $address = $this->sanitizeInput($_POST['address']);
             $county = $this->sanitizeInput($_POST['county']);
@@ -960,8 +960,8 @@ class AuthController extends BaseController
                 $paymentMethod = 'mpesa';
             }
             
-            // Validate email
-            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            // Validate email only when provided
+            if (!empty($email) && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
                 throw new Exception('Invalid email address');
             }
             
@@ -1040,15 +1040,17 @@ class AuthController extends BaseController
             }
             
             // Check if email or national ID already exists
-            $existingUser = $this->userModel->findByEmail($email);
-            if ($existingUser) {
-                echo json_encode([
-                    'success' => false,
-                    'message' => 'Email address already registered',
-                    'field' => 'email',
-                    'old_values' => $_POST
-                ]);
-                return;
+            if (!empty($email)) {
+                $existingUser = $this->userModel->findByEmail($email);
+                if ($existingUser) {
+                    echo json_encode([
+                        'success' => false,
+                        'message' => 'Email address already registered',
+                        'field' => 'email',
+                        'old_values' => $_POST
+                    ]);
+                    return;
+                }
             }
 
             $existingPhone = $this->userModel->findByPhone($phone);
@@ -1060,6 +1062,10 @@ class AuthController extends BaseController
                     'old_values' => $_POST
                 ]);
                 return;
+            }
+
+            if (empty($email)) {
+                $email = $this->generatePublicPlaceholderEmail($phone);
             }
             
             if (!empty($nationalId)) {
@@ -1095,7 +1101,7 @@ class AuthController extends BaseController
                     'status' => 'pending',
                     'created_at' => date('Y-m-d H:i:s')
                 ];
-                
+
                 $userId = $this->userModel->create($userData);
                 
                 // Create member record
@@ -1430,6 +1436,22 @@ class AuthController extends BaseController
     /**
      * Generate unique member number
      */
+    private function generatePublicPlaceholderEmail($phone)
+    {
+        $normalizedPhone = preg_replace('/[^0-9]/', '', (string) $phone);
+        $baseLocalPart = 'public-' . ($normalizedPhone !== '' ? $normalizedPhone : time());
+
+        $email = $baseLocalPart . '@noemail.shena.local';
+        $attempt = 0;
+
+        while ($this->userModel->findByEmail($email)) {
+            $attempt++;
+            $email = $baseLocalPart . '-' . $attempt . '@noemail.shena.local';
+        }
+
+        return $email;
+    }
+
     private function generateMemberNumber()
     {
         return MemberNumberHelper::generateCanonical();
