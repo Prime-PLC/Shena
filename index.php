@@ -12,12 +12,12 @@ ini_set('session.cookie_samesite', 'Strict');
 session_start();
 
 // Define constants
-define('ROOT_PATH', __DIR__);
-define('APP_PATH', ROOT_PATH . '/app');
-define('PUBLIC_PATH', ROOT_PATH . '/public');
-define('CONFIG_PATH', ROOT_PATH . '/config');
-define('VIEWS_PATH', ROOT_PATH . '/resources/views');
-define('UPLOADS_PATH', ROOT_PATH . '/storage/uploads');
+if (!defined('ROOT_PATH'))    define('ROOT_PATH',    __DIR__);
+if (!defined('APP_PATH'))     define('APP_PATH',     ROOT_PATH . '/app');
+if (!defined('PUBLIC_PATH'))  define('PUBLIC_PATH',  ROOT_PATH . '/public');
+if (!defined('CONFIG_PATH'))  define('CONFIG_PATH',  ROOT_PATH . '/config');
+if (!defined('VIEWS_PATH'))   define('VIEWS_PATH',   ROOT_PATH . '/resources/views');
+if (!defined('UPLOADS_PATH')) define('UPLOADS_PATH', ROOT_PATH . '/storage/uploads');
 
 // Load configuration first
 require_once CONFIG_PATH . '/config.php';

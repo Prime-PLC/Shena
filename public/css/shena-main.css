@@ -111,9 +111,15 @@ main {
   padding: 0.35rem 0.55rem;
   min-width: 50px;
   min-height: 38px;
-  display: inline-flex;
+  display: none;
   align-items: center;
   justify-content: center;
+}
+
+@media (max-width: 991.98px) {
+  .shena-public-nav .navbar-toggler {
+    display: inline-flex;
+  }
 }
 
 .shena-public-nav .navbar-toggler:focus {

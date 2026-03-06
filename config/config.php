@@ -23,6 +23,26 @@ if (defined('ROOT_PATH') && file_exists(ROOT_PATH . '/.env')) {
     }
 }
 
+if (!function_exists('envConfig')) {
+    function envConfig($key, $default = null)
+    {
+        $value = getenv($key);
+        if ($value !== false && $value !== '') {
+            return $value;
+        }
+
+        if (isset($_ENV[$key]) && $_ENV[$key] !== '') {
+            return $_ENV[$key];
+        }
+
+        if (isset($_SERVER[$key]) && $_SERVER[$key] !== '') {
+            return $_SERVER[$key];
+        }
+
+        return $default;
+    }
+}
+
 define('DEBUG_MODE', getenv('DEBUG_MODE') === 'true'); // CRITICAL: Set to false in production
 define('APP_NAME', getenv('APP_NAME') ?: 'Shena Companion Welfare Association');
 
@@ -38,16 +58,16 @@ if ($isLocalEnvironment) {
 define('APP_URL', $appUrl);
 
 // Database Configuration
-$dbHost = getenv('DB_HOST') ?: 'localhost';
-$dbName = getenv('DB_NAME') ?: 'shena_welfare_db';
-$dbUser = getenv('DB_USER') ?: 'root';
-$dbPass = getenv('DB_PASS') ?: '4885';
+$dbHost = envConfig('DB_HOST', 'localhost');
+$dbName = envConfig('DB_NAME', 'shena_welfare_db');
+$dbUser = envConfig('DB_USER', 'root');
+$dbPass = envConfig('DB_PASS', '4885');
 
 if ($isLocalEnvironment) {
-    $dbHost = getenv('LOCAL_DB_HOST') ?: '127.0.0.1';
-    $dbName = getenv('LOCAL_DB_NAME') ?: 'shena_welfare_db';
-    $dbUser = getenv('LOCAL_DB_USER') ?: 'root';
-    $dbPass = getenv('LOCAL_DB_PASS') ?: '4885';
+    $dbHost = envConfig('LOCAL_DB_HOST', '127.0.0.1');
+    $dbName = envConfig('LOCAL_DB_NAME', 'shena_welfare_db');
+    $dbUser = envConfig('LOCAL_DB_USER', 'root');
+    $dbPass = envConfig('LOCAL_DB_PASS', '4885');
 }
 
 define('DB_HOST', $dbHost);

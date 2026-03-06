@@ -1,0 +1,9 @@
+[06-Mar-2026 09:03:05 Africa/Nairobi] PHP Warning:  Undefined array key "address" in C:\xampp\htdocs\Shena\app\controllers\AuthController.php on line 949
+[06-Mar-2026 09:03:05 Africa/Nairobi] PHP Deprecated:  trim(): Passing null to parameter #1 ($string) of type string is deprecated in C:\xampp\htdocs\Shena\app\core\BaseController.php on line 102
+[06-Mar-2026 09:03:05 Africa/Nairobi] PHP Warning:  Undefined array key "county" in C:\xampp\htdocs\Shena\app\controllers\AuthController.php on line 950
+[06-Mar-2026 09:03:05 Africa/Nairobi] PHP Deprecated:  trim(): Passing null to parameter #1 ($string) of type string is deprecated in C:\xampp\htdocs\Shena\app\core\BaseController.php on line 102
+[06-Mar-2026 09:03:12 Africa/Nairobi] PHP Warning:  Undefined array key "address" in C:\xampp\htdocs\Shena\app\controllers\AuthController.php on line 949
+[06-Mar-2026 09:03:12 Africa/Nairobi] PHP Deprecated:  trim(): Passing null to parameter #1 ($string) of type string is deprecated in C:\xampp\htdocs\Shena\app\core\BaseController.php on line 102
+[06-Mar-2026 09:03:12 Africa/Nairobi] PHP Warning:  Undefined array key "county" in C:\xampp\htdocs\Shena\app\controllers\AuthController.php on line 950
+[06-Mar-2026 09:03:12 Africa/Nairobi] PHP Deprecated:  trim(): Passing null to parameter #1 ($string) of type string is deprecated in C:\xampp\htdocs\Shena\app\core\BaseController.php on line 102
+[06-Mar-2026 09:03:13 Africa/Nairobi] SMS sending failed: {"status":"error","statusCode":"216","reason":"Invalid credentials"}

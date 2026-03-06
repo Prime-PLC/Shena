@@ -4,7 +4,7 @@
  * REMOVE after debugging.
  *
  * Usage:
- *   /public/diag-admin-login.php?key=shena-debug-2026
+ *   /public/diag-admin-login.php?key=shena-debug-2026&route=/admin-login
  */
 
 if (!isset($_GET['key']) || $_GET['key'] !== 'shena-debug-2026') {
@@ -28,17 +28,17 @@ register_shutdown_function(function () {
     }
 });
 
-if (!defined('ROOT_PATH')) {
-    define('ROOT_PATH', dirname(__DIR__));
-}
+$rootPath = dirname(__DIR__);
+$routeToTest = isset($_GET['route']) && $_GET['route'] !== '' ? $_GET['route'] : '/admin-login';
 
 echo "PHP Version: " . PHP_VERSION . "\n";
-echo "ROOT_PATH: " . ROOT_PATH . "\n";
+echo "ROOT_PATH: " . $rootPath . "\n";
+echo "ROUTE_TO_TEST: " . $routeToTest . "\n";
 
-echo "AdminController exists: " . (file_exists(ROOT_PATH . '/app/controllers/AdminController.php') ? 'yes' : 'no') . "\n";
-echo "Admin login view exists: " . (file_exists(ROOT_PATH . '/resources/views/admin/login.php') ? 'yes' : 'no') . "\n";
+echo "AdminController exists: " . (file_exists($rootPath . '/app/controllers/AdminController.php') ? 'yes' : 'no') . "\n";
+echo "Admin login view exists: " . (file_exists($rootPath . '/resources/views/admin/login.php') ? 'yes' : 'no') . "\n";
 
-$adminControllerPath = ROOT_PATH . '/app/controllers/AdminController.php';
+$adminControllerPath = $rootPath . '/app/controllers/AdminController.php';
 if (file_exists($adminControllerPath)) {
     $adminControllerContent = file_get_contents($adminControllerPath);
     $adminControllerLines = @file($adminControllerPath, FILE_IGNORE_NEW_LINES);
@@ -59,8 +59,11 @@ if (file_exists($adminControllerPath)) {
 
 echo "\n=== DB DIAGNOSTICS ===\n";
 try {
-    require_once ROOT_PATH . '/config/config.php';
-    require_once ROOT_PATH . '/app/core/Database.php';
+    if (!defined('ROOT_PATH')) {
+        define('ROOT_PATH', $rootPath);
+    }
+    require_once $rootPath . '/config/config.php';
+    require_once $rootPath . '/app/core/Database.php';
 
     $db = Database::getInstance();
     $conn = $db->getConnection();
@@ -91,14 +94,14 @@ try {
     echo "DB error: " . $e->getMessage() . "\n";
 }
 
-echo "\n=== Simulating GET /admin-login ===\n";
+echo "\n=== Simulating GET route ===\n";
 
 $_SERVER['REQUEST_METHOD'] = 'GET';
-$_SERVER['REQUEST_URI'] = '/admin-login';
+$_SERVER['REQUEST_URI'] = $routeToTest;
 
 ob_start();
 try {
-    include ROOT_PATH . '/index.php';
+    include $rootPath . '/index.php';
 } catch (Throwable $e) {
     echo "\n=== CAUGHT THROWABLE ===\n";
     echo 'Message: ' . $e->getMessage() . "\n";
