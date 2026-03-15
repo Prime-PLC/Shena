@@ -70,4 +70,61 @@ class User extends BaseModel
     {
         return $this->findAll(['status' => 'pending'], 'created_at DESC');
     }
+    
+    /**
+     * Find user by member number (member_id)
+     * @param string $memberNumber
+     * @return array|null
+     */
+    public function findByMemberNumber($memberNumber)
+    {
+        $sql = "SELECT u.* FROM {$this->table} u 
+                INNER JOIN members m ON u.id = m.user_id 
+                WHERE m.member_number = :member_number";
+        return $this->db->fetch($sql, ['member_number' => $memberNumber]);
+    }
+    
+    /**
+     * Find user by national ID number
+     * @param string $nationalId
+     * @return array|null
+     */
+    public function findByNationalId($nationalId)
+    {
+        $sql = "SELECT u.* FROM {$this->table} u 
+                INNER JOIN members m ON u.id = m.user_id 
+                WHERE m.id_number = :id_number";
+        return $this->db->fetch($sql, ['id_number' => $nationalId]);
+    }
+    
+    /**
+     * Find user by email, member number, or national ID
+     * Tries each credential type in order
+     * @param string $credential
+     * @return array|null
+     */
+    public function findByAnyCredential($credential)
+    {
+        $credential = trim($credential);
+        
+        // Try email first
+        $user = $this->findByEmail($credential);
+        if ($user) {
+            return $user;
+        }
+        
+        // Try member number
+        $user = $this->findByMemberNumber($credential);
+        if ($user) {
+            return $user;
+        }
+        
+        // Try national ID
+        $user = $this->findByNationalId($credential);
+        if ($user) {
+            return $user;
+        }
+        
+        return null;
+    }
 }
