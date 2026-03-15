@@ -61,6 +61,8 @@ class Router
         $this->addRoute('GET', '/profile', 'MemberController@profile');
         $this->addRoute('POST', '/profile', 'MemberController@updateProfile');
         $this->addRoute('POST', '/member/profile/complete', 'MemberController@completeProfileFromPopup');
+        $this->addRoute('POST', '/member/onboarding/package', 'MemberController@updatePackageFromOnboarding');
+        $this->addRoute('POST', '/member/onboarding/dismiss', 'MemberController@dismissOnboarding');
 
         // Agent Routes (Protected)
         $this->addRoute('GET', '/agent/dashboard', 'AgentDashboardController@dashboard');

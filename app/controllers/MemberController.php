@@ -110,7 +110,7 @@ class MemberController extends BaseController
             $missingProfileFields[] = 'next_of_kin_phone';
         }
 
-        $showProfileCompletionPopup = (!empty($_SESSION['is_first_login']) && !empty($missingProfileFields));
+        $showProfileCompletionPopup = !empty($_SESSION['is_first_login']);
 
         $profileCompletionFormData = [
             'national_id' => (strpos($memberIdNumber, 'TMP') === 0) ? '' : $memberIdNumber,
@@ -336,11 +336,19 @@ class MemberController extends BaseController
      */
     public function completeProfileFromPopup()
     {
+        $isAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH'])
+            && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+
         try {
             $this->validateCsrf();
 
             $member = $this->memberModel->findByUserId($_SESSION['user_id']);
             if (!$member) {
+                if ($isAjax) {
+                    header('Content-Type: application/json');
+                    echo json_encode(['success' => false, 'message' => 'Member profile not found.']);
+                    return;
+                }
                 $_SESSION['error'] = 'Member profile not found.';
                 $this->redirect('/dashboard');
                 return;
@@ -364,13 +372,25 @@ class MemberController extends BaseController
             ];
 
             if (empty($nationalId) || empty($dateOfBirth) || empty($address) || empty($nextOfKin) || empty($nextOfKinPhone)) {
-                $_SESSION['error'] = 'Please complete all required profile fields.';
+                $msg = 'Please complete all required profile fields.';
+                if ($isAjax) {
+                    header('Content-Type: application/json');
+                    echo json_encode(['success' => false, 'message' => $msg]);
+                    return;
+                }
+                $_SESSION['error'] = $msg;
                 $this->redirect('/dashboard');
                 return;
             }
 
             if (!$this->validatePhone($nextOfKinPhone)) {
-                $_SESSION['error'] = 'Please provide a valid next of kin phone number.';
+                $msg = 'Please provide a valid next of kin phone number.';
+                if ($isAjax) {
+                    header('Content-Type: application/json');
+                    echo json_encode(['success' => false, 'message' => $msg]);
+                    return;
+                }
+                $_SESSION['error'] = $msg;
                 $this->redirect('/dashboard');
                 return;
             }
@@ -381,7 +401,13 @@ class MemberController extends BaseController
                 ':id' => $member['id']
             ]);
             if ($stmt->fetch()) {
-                $_SESSION['error'] = 'The national ID number is already in use.';
+                $msg = 'The national ID number is already in use.';
+                if ($isAjax) {
+                    header('Content-Type: application/json');
+                    echo json_encode(['success' => false, 'message' => $msg]);
+                    return;
+                }
+                $_SESSION['error'] = $msg;
                 $this->redirect('/dashboard');
                 return;
             }
@@ -396,14 +422,95 @@ class MemberController extends BaseController
             ]);
 
             unset($_SESSION['profile_completion_form_data']);
-            unset($_SESSION['is_first_login']);
-            $_SESSION['success'] = 'Profile updated successfully. Welcome to your dashboard.';
+            // NOTE: is_first_login is intentionally NOT cleared here when AJAX —
+            // it is cleared only via updatePackageFromOnboarding() or dismissOnboarding().
+            if (!$isAjax) {
+                unset($_SESSION['is_first_login']);
+                $_SESSION['success'] = 'Profile updated successfully. Welcome to your dashboard.';
+                $this->redirect('/dashboard');
+                return;
+            }
+
+            header('Content-Type: application/json');
+            echo json_encode(['success' => true, 'message' => 'Personal details saved.']);
+
         } catch (Exception $e) {
             error_log('Complete profile popup update error: ' . $e->getMessage());
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'message' => 'Failed to update profile details. Please try again.']);
+                return;
+            }
             $_SESSION['error'] = 'Failed to update profile details. Please try again.';
+            $this->redirect('/dashboard');
         }
+    }
 
-        $this->redirect('/dashboard');
+    /**
+     * AJAX: Update member package during onboarding wizard (Step 3).
+     * Clears is_first_login so the wizard does not reappear.
+     */
+    public function updatePackageFromOnboarding()
+    {
+        header('Content-Type: application/json');
+        try {
+            $this->validateCsrf();
+
+            $member = $this->memberModel->findByUserId($_SESSION['user_id']);
+            if (!$member) {
+                echo json_encode(['success' => false, 'message' => 'Member not found.']);
+                return;
+            }
+
+            $packageId = $this->sanitizeInput($_POST['package_id'] ?? '');
+            global $membership_packages;
+            if (empty($packageId) || !isset($membership_packages[$packageId])) {
+                echo json_encode(['success' => false, 'message' => 'Invalid package selected.']);
+                return;
+            }
+
+            $package = $membership_packages[$packageId];
+            $packageType = $this->memberModel->normalizePackageTier($packageId, $package);
+            $memberForCalc = [
+                'date_of_birth'         => $member['date_of_birth'],
+                'package'               => $packageId,
+                'package_key'           => $packageId,
+                'corporate_couple_count' => 0
+            ];
+            $monthlyContribution = $this->memberModel->calculateMonthlyContribution($memberForCalc, []);
+
+            $this->memberModel->update($member['id'], [
+                'package'             => $packageType,
+                'package_key'         => $packageId,
+                'monthly_contribution' => $monthlyContribution,
+            ]);
+
+            // Package is selected — clear the onboarding flag
+            unset($_SESSION['is_first_login']);
+
+            echo json_encode(['success' => true, 'message' => 'Membership plan updated successfully.']);
+
+        } catch (Exception $e) {
+            error_log('updatePackageFromOnboarding error: ' . $e->getMessage());
+            echo json_encode(['success' => false, 'message' => 'Failed to update plan. Please try again.']);
+        }
+    }
+
+    /**
+     * AJAX: Dismiss the onboarding wizard (skip / finish).
+     * Simply clears the is_first_login session flag.
+     */
+    public function dismissOnboarding()
+    {
+        header('Content-Type: application/json');
+        try {
+            $this->validateCsrf();
+            unset($_SESSION['is_first_login']);
+            echo json_encode(['success' => true]);
+        } catch (Exception $e) {
+            error_log('dismissOnboarding error: ' . $e->getMessage());
+            echo json_encode(['success' => false]);
+        }
     }
     
     public function payments()

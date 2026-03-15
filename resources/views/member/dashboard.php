@@ -638,68 +638,470 @@ $missingFields = $missing_profile_fields ?? [];
 </div>
 
 <?php if ($showProfileCompletionPopup): ?>
-<div class="modal fade" id="completeProfileModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content" style="border-radius: 16px; border: none; overflow: hidden;">
-            <div class="modal-header" style="background: linear-gradient(135deg, #7F3D9E 0%, #5E2B7A 100%); color: #fff;">
-                <h5 class="modal-title" style="font-weight: 700;">Complete Your Account Details</h5>
+<style>
+/* ─── Onboarding Wizard ─────────────────────────────────────────────────── */
+.onb-modal .modal-content { border: none; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 60px rgba(127,61,158,0.25); }
+.onb-header { background: linear-gradient(135deg, #7F3D9E 0%, #5E2B7A 100%); color: #fff; padding: 24px 28px 20px; }
+.onb-title { font-family: 'Playfair Display', Georgia, serif; font-size: 1.3rem; font-weight: 700; margin: 0 0 2px; color: #fff; }
+.onb-subtitle { color: rgba(255,255,255,0.75); font-size: 0.83rem; margin: 0; }
+.onb-stepper { display: flex; align-items: center; margin-top: 16px; }
+.onb-bubble { width: 34px; height: 34px; border-radius: 50%; background: rgba(255,255,255,0.18); border: 2px solid rgba(255,255,255,0.35); color: rgba(255,255,255,0.8); display: flex; align-items: center; justify-content: center; font-size: 0.82rem; font-weight: 700; flex-shrink: 0; transition: all 0.3s ease; cursor: default; }
+.onb-bubble.active { background: #C9A659; border-color: #C9A659; color: #fff; box-shadow: 0 0 0 4px rgba(201,166,89,0.3); }
+.onb-bubble.done { background: rgba(255,255,255,0.9); border-color: rgba(255,255,255,0.9); color: #7F3D9E; font-size: 0.9rem; }
+.onb-connector { flex: 1; height: 2px; background: rgba(255,255,255,0.2); margin: 0 6px; }
+.onb-step-pane { padding: 28px 32px; }
+.onb-step-heading { font-size: 1rem; font-weight: 700; color: #7F3D9E; margin-bottom: 18px; display: flex; align-items: center; gap: 8px; }
+.onb-req { color: #DC2626; }
+.onb-footer { background: #F8F7FF; border-top: 1px solid #EDE8F5; padding: 14px 28px; display: flex; justify-content: space-between; align-items: center; }
+.onb-btn-next { background: #7F3D9E; color: #fff; border: none; padding: 10px 22px; border-radius: 10px; font-weight: 600; font-size: 0.9rem; cursor: pointer; transition: background 0.2s; }
+.onb-btn-next:hover { background: #6A2F87; }
+.onb-btn-next:disabled { opacity: 0.55; cursor: not-allowed; }
+/* Plan picker */
+.onb-plan-select { font-size: 0.95rem; }
+.onb-bracket-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+.onb-bracket-opt { flex: 1 1 calc(50% - 10px); border: 2px solid #E2E8F0; border-radius: 10px; padding: 12px 14px; cursor: pointer; background: #FAFAFA; transition: border-color .18s, background .18s; user-select: none; }
+.onb-bracket-opt:hover { border-color: #A78BFA; background: #FAF5FF; }
+.onb-bracket-opt.selected { border-color: #7F3D9E; background: #F5F3FF; }
+.onb-bracket-label { font-weight: 600; color: #1E1B4B; font-size: 0.88rem; }
+.onb-bracket-price { color: #7F3D9E; font-weight: 700; font-size: 0.9rem; margin-top: 2px; }
+.onb-plan-summary { background: #F5F3FF; border: 1.5px solid #C4B5FD; border-radius: 10px; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 0.93rem; }
+.onb-plan-summary strong { color: #4C1D95; }
+.onb-plan-summary-price { font-weight: 700; color: #7F3D9E; }
+/* Step 4: Pay */
+.onb-pay-box { background: #FAFAFA; border: 1px solid #E5E7EB; border-radius: 16px; padding: 28px 24px; text-align: center; }
+.onb-pay-amount { font-size: 2.4rem; font-weight: 800; color: #7F3D9E; margin: 6px 0 4px; font-family: 'Playfair Display', Georgia, serif; }
+.onb-pay-desc { color: #6B7280; font-size: 0.88rem; margin-bottom: 20px; }
+.onb-mpesa-btn { background: #00A651; color: #fff; border: none; padding: 13px 32px; border-radius: 12px; font-size: 0.95rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: background 0.2s; }
+.onb-mpesa-btn:hover { background: #008C44; }
+.onb-mpesa-btn:disabled { opacity: .55; cursor: not-allowed; }
+@media(max-width:576px){ .onb-bracket-opt{ flex: 1 1 100%; } .onb-step-pane{ padding:20px 18px; } }
+</style>
+
+<div class="modal fade" id="onboardingWizard" tabindex="-1" aria-labelledby="onbTitle" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-lg modal-dialog-centered onb-modal">
+        <div class="modal-content">
+
+            <!-- ── Header ─────────────────────────────────────────── -->
+            <div class="onb-header">
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                    <div>
+                        <h5 class="onb-title" id="onbTitle">Complete Your SHENA Registration</h5>
+                        <p class="onb-subtitle" id="onb-step-label">Step 1 of 4 — Personal Details</p>
+                    </div>
+                </div>
+                <div class="onb-stepper mt-3">
+                    <div class="onb-bubble active" id="onb-b1" title="Personal Details">1</div>
+                    <div class="onb-connector"></div>
+                    <div class="onb-bubble" id="onb-b2" title="Emergency Contact">2</div>
+                    <div class="onb-connector"></div>
+                    <div class="onb-bubble" id="onb-b3" title="Select Plan">3</div>
+                    <div class="onb-connector"></div>
+                    <div class="onb-bubble" id="onb-b4" title="Activate">4</div>
+                </div>
             </div>
-            <div class="modal-body" style="padding: 24px;">
-                <p style="color:#4B5563; margin-bottom: 18px;">Welcome to SHENA. Please complete your profile before continuing.</p>
-                <form method="POST" action="/member/profile/complete">
-                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token ?? '', ENT_QUOTES); ?>">
-                    <?php $popupData = $profile_completion_form_data ?? []; ?>
 
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label class="form-label">National ID <span style="color:#DC2626">*</span></label>
-                            <input type="text" name="national_id" class="form-control" value="<?php echo htmlspecialchars($popupData['national_id'] ?? '', ENT_QUOTES); ?>" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Date of Birth <span style="color:#DC2626">*</span></label>
-                            <input type="date" name="date_of_birth" class="form-control" value="<?php echo htmlspecialchars($popupData['date_of_birth'] ?? '', ENT_QUOTES); ?>" required>
-                        </div>
-                        <div class="col-12">
-                            <label class="form-label">Address <span style="color:#DC2626">*</span></label>
-                            <input type="text" name="address" class="form-control" value="<?php echo htmlspecialchars($popupData['address'] ?? '', ENT_QUOTES); ?>" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Next of Kin Name <span style="color:#DC2626">*</span></label>
-                            <input type="text" name="next_of_kin" class="form-control" value="<?php echo htmlspecialchars($popupData['next_of_kin'] ?? '', ENT_QUOTES); ?>" required>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Relationship</label>
-                            <input type="text" name="next_of_kin_relationship" class="form-control" placeholder="e.g. Spouse" value="<?php echo htmlspecialchars($popupData['next_of_kin_relationship'] ?? '', ENT_QUOTES); ?>">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Next of Kin Phone <span style="color:#DC2626">*</span></label>
-                            <input type="tel" name="next_of_kin_phone" class="form-control" placeholder="0712345678" value="<?php echo htmlspecialchars($popupData['next_of_kin_phone'] ?? '', ENT_QUOTES); ?>" required>
-                        </div>
+            <!-- ── Step 1: Personal Details ───────────────────────── -->
+            <div id="onb-pane-1" class="onb-step-pane">
+                <h6 class="onb-step-heading"><i class="fas fa-user-circle"></i> Personal Details</h6>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">National ID <span class="onb-req">*</span></label>
+                        <input type="text" class="form-control" id="onb-national-id" placeholder="e.g. 12345678"
+                               value="<?php echo htmlspecialchars($profile_completion_form_data['national_id'] ?? '', ENT_QUOTES); ?>">
                     </div>
-
-                    <div style="margin-top: 14px; color:#6B7280; font-size: 0.85rem;">
-                        Missing fields: <?php echo htmlspecialchars(implode(', ', $missingFields), ENT_QUOTES); ?>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Date of Birth <span class="onb-req">*</span></label>
+                        <input type="date" class="form-control" id="onb-dob"
+                               value="<?php echo htmlspecialchars($profile_completion_form_data['date_of_birth'] ?? '', ENT_QUOTES); ?>">
                     </div>
-
-                    <div class="mt-4 d-flex justify-content-end">
-                        <button type="submit" class="btn" style="background:#7F3D9E;color:#fff;padding:10px 22px;">Save and Continue</button>
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Physical Address <span class="onb-req">*</span></label>
+                        <input type="text" class="form-control" id="onb-address" placeholder="e.g. Nairobi, Westlands"
+                               value="<?php echo htmlspecialchars($profile_completion_form_data['address'] ?? '', ENT_QUOTES); ?>">
                     </div>
-                </form>
+                </div>
             </div>
+
+            <!-- ── Step 2: Emergency Contact ──────────────────────── -->
+            <div id="onb-pane-2" class="onb-step-pane" style="display:none">
+                <h6 class="onb-step-heading"><i class="fas fa-heart"></i> Emergency Contact (Next of Kin)</h6>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Full Name <span class="onb-req">*</span></label>
+                        <input type="text" class="form-control" id="onb-kin-name" placeholder="Full name of next of kin"
+                               value="<?php echo htmlspecialchars($profile_completion_form_data['next_of_kin'] ?? '', ENT_QUOTES); ?>">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Relationship</label>
+                        <input type="text" class="form-control" id="onb-kin-rel" placeholder="e.g. Spouse"
+                               value="<?php echo htmlspecialchars($profile_completion_form_data['next_of_kin_relationship'] ?? '', ENT_QUOTES); ?>">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Phone <span class="onb-req">*</span></label>
+                        <input type="tel" class="form-control" id="onb-kin-phone" placeholder="0712345678"
+                               value="<?php echo htmlspecialchars($profile_completion_form_data['next_of_kin_phone'] ?? '', ENT_QUOTES); ?>">
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Step 3: Select Membership Plan ─────────────────── -->
+            <div id="onb-pane-3" class="onb-step-pane" style="display:none">
+                <h6 class="onb-step-heading"><i class="fas fa-shield-alt"></i> Select Your Membership Plan</h6>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Plan Type <span class="onb-req">*</span></label>
+                    <select class="form-select onb-plan-select" id="onb-plan-type">
+                        <option value="">Choose a plan...</option>
+                        <option value="individual">Individual &mdash; Principal member only (KES 100 &ndash; 650/month)</option>
+                        <option value="family">Family &mdash; Principal + Spouse (KES 150 flat/month)</option>
+                        <option value="extended_family_1">Extended Family 1 &mdash; Couple + Children + Parents (KES 250 &ndash; 650/month)</option>
+                        <option value="extended_family_2">Extended Family 2 &mdash; Couple + Children + Parents + In-laws (KES 300 &ndash; 650/month)</option>
+                        <option value="executive">Executive &mdash; Premium Individual (KES 300 or 500/month)</option>
+                    </select>
+                </div>
+                <div id="onb-bracket-row" style="display:none">
+                    <label class="form-label fw-semibold">Age Bracket <span class="onb-req">*</span> &mdash; <em id="onb-bracket-hint" class="text-muted" style="font-size:0.85rem;"></em></label>
+                    <div class="onb-bracket-grid" id="onb-bracket-options"></div>
+                </div>
+                <div id="onb-plan-summary" class="onb-plan-summary" style="display:none">
+                    <strong id="onb-plan-name"></strong>
+                    <span class="onb-plan-summary-price" id="onb-plan-price"></span>
+                </div>
+            </div>
+
+            <!-- ── Step 4: Activate Membership ────────────────────── -->
+            <div id="onb-pane-4" class="onb-step-pane" style="display:none">
+                <h6 class="onb-step-heading"><i class="fas fa-check-circle"></i> Activate Your Membership</h6>
+                <div class="onb-pay-box">
+                    <p class="text-muted mb-1" style="font-size:0.88rem;">One-time Registration Fee</p>
+                    <div class="onb-pay-amount">KES <?php echo number_format(defined('REGISTRATION_FEE') ? REGISTRATION_FEE : 200); ?></div>
+                    <p class="onb-pay-desc">Pay via M-Pesa to activate your SHENA membership and start coverage immediately after payment confirmation.</p>
+                    <div class="mb-3" style="max-width:280px; margin:0 auto;">
+                        <label class="form-label fw-semibold" style="font-size:0.88rem;">M-Pesa Phone Number</label>
+                        <input type="tel" class="form-control form-control-sm" id="onb-pay-phone" placeholder="0712345678">
+                    </div>
+                    <button class="onb-mpesa-btn" id="onb-pay-btn" type="button">
+                        <i class="fas fa-mobile-alt"></i> Pay with M-Pesa
+                    </button>
+                    <div id="onb-pay-status" style="margin-top:14px; font-size:0.88rem;"></div>
+                </div>
+            </div>
+
+            <!-- ── Message area ────────────────────────────────────── -->
+            <div id="onb-msg" style="margin:0 28px 6px; display:none"></div>
+
+            <!-- ── Footer navigation ────────────────────────────────  -->
+            <div class="onb-footer">
+                <button type="button" id="onb-btn-skip" class="btn btn-link text-muted p-0" style="font-size:0.85rem;">
+                    Skip for now
+                </button>
+                <div class="d-flex gap-2">
+                    <button type="button" id="onb-btn-back" class="btn btn-outline-secondary btn-sm px-3" style="display:none; border-radius:8px;">
+                        <i class="fas fa-arrow-left me-1"></i> Back
+                    </button>
+                    <button type="button" id="onb-btn-next" class="onb-btn-next">
+                        Continue <i class="fas fa-arrow-right ms-1"></i>
+                    </button>
+                </div>
+            </div>
+
         </div>
     </div>
 </div>
-<?php endif; ?>
 
-<?php if ($showProfileCompletionPopup): ?>
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    var modalEl = document.getElementById('completeProfileModal');
-    if (modalEl && window.bootstrap) {
-        var modal = new bootstrap.Modal(modalEl);
-        modal.show();
+(function () {
+    'use strict';
+
+    const CSRF       = <?php echo json_encode($csrf_token ?? ''); ?>;
+    const MEMBER_ID  = <?php echo json_encode((int)($member['id'] ?? 0)); ?>;
+    const MEMBER_PHONE = <?php echo json_encode((string)($member['phone'] ?? '')); ?>;
+    const REG_FEE    = <?php echo json_encode(defined('REGISTRATION_FEE') ? (float)REGISTRATION_FEE : 200.0); ?>;
+
+    const tierMap = {
+        individual: {
+            flat: false, hint: 'Your age',
+            brackets: [
+                { key: 'individual_below_70', label: 'Below 70 years', price: 100 },
+                { key: 'individual_71_80',    label: '71–80 years',    price: 350 },
+                { key: 'individual_81_90',    label: '81–90 years',    price: 450 },
+                { key: 'individual_91_100',   label: '91–100 years',   price: 650 }
+            ]
+        },
+        family: { flat: true, packageKey: 'couple_below_70', price: 150, label: 'Family Plan – Principal + Spouse' },
+        extended_family_1: {
+            flat: false, hint: 'Age of the oldest parent you are covering',
+            brackets: [
+                { key: 'couple_children_parents_below_70', label: 'Below 70 years', price: 250 },
+                { key: 'couple_children_parents_70_80',    label: '70–80 years',    price: 350 },
+                { key: 'couple_children_parents_81_90',    label: '81–90 years',    price: 450 },
+                { key: 'couple_children_parents_91_100',   label: '91–100 years',   price: 650 }
+            ]
+        },
+        extended_family_2: {
+            flat: false, hint: 'Age of the oldest parent or in-law you are covering',
+            brackets: [
+                { key: 'couple_children_parents_inlaws_below_70', label: 'Below 70 years', price: 300 },
+                { key: 'couple_children_parents_inlaws_71_80',    label: '71–80 years',    price: 400 },
+                { key: 'couple_children_parents_inlaws_81_90',    label: '81–90 years',    price: 550 },
+                { key: 'couple_children_parents_inlaws_91_100',   label: '91–100 years',   price: 650 }
+            ]
+        },
+        executive: {
+            flat: false, hint: 'Your age',
+            brackets: [
+                { key: 'executive_below_70', label: 'Below 70 years',  price: 300 },
+                { key: 'executive_above_70', label: '70 years & above', price: 500 }
+            ]
+        }
+    };
+
+    const STEP_LABELS = [
+        '',
+        'Step 1 of 4 — Personal Details',
+        'Step 2 of 4 — Emergency Contact',
+        'Step 3 of 4 — Select Your Plan',
+        'Step 4 of 4 — Activate Membership'
+    ];
+
+    let currentStep       = 1;
+    let selectedPackageId = '';
+
+    const panes    = [null, document.getElementById('onb-pane-1'), document.getElementById('onb-pane-2'), document.getElementById('onb-pane-3'), document.getElementById('onb-pane-4')];
+    const bubbles  = [null, document.getElementById('onb-b1'), document.getElementById('onb-b2'), document.getElementById('onb-b3'), document.getElementById('onb-b4')];
+    const stepLabel = document.getElementById('onb-step-label');
+    const msgBox    = document.getElementById('onb-msg');
+    const btnBack   = document.getElementById('onb-btn-back');
+    const btnNext   = document.getElementById('onb-btn-next');
+    const btnSkip   = document.getElementById('onb-btn-skip');
+
+    function showStep(n) {
+        for (var i = 1; i <= 4; i++) {
+            panes[i].style.display = (i === n) ? '' : 'none';
+            var b = bubbles[i];
+            b.classList.remove('active', 'done');
+            if (i < n)  b.classList.add('done'), b.innerHTML = '<i class="fas fa-check" style="font-size:0.7rem"></i>';
+            if (i === n) b.classList.add('active'), b.textContent = i;
+            if (i > n)  b.textContent = i;
+        }
+        stepLabel.textContent = STEP_LABELS[n];
+        btnBack.style.display = n > 1 ? '' : 'none';
+        if (n === 4) {
+            btnNext.innerHTML = 'Finish <i class="fas fa-check ms-1"></i>';
+        } else {
+            btnNext.innerHTML = 'Continue <i class="fas fa-arrow-right ms-1"></i>';
+        }
+        currentStep = n;
+        clearMsg();
     }
-});
+
+    function showMsg(text, type) {
+        msgBox.innerHTML = '<div class="alert alert-' + type + ' py-2 mb-0 small">' + text + '</div>';
+        msgBox.style.display = '';
+    }
+    function clearMsg() { msgBox.style.display = 'none'; msgBox.innerHTML = ''; }
+
+    /* ── Plan picker ─────────────────────────────────────────────────── */
+    var planSelect   = document.getElementById('onb-plan-type');
+    var bracketRow   = document.getElementById('onb-bracket-row');
+    var bracketHint  = document.getElementById('onb-bracket-hint');
+    var bracketGrid  = document.getElementById('onb-bracket-options');
+    var planSummary  = document.getElementById('onb-plan-summary');
+    var planNameEl   = document.getElementById('onb-plan-name');
+    var planPriceEl  = document.getElementById('onb-plan-price');
+
+    function clearPlan() {
+        bracketGrid.innerHTML = '';
+        bracketRow.style.display  = 'none';
+        planSummary.style.display = 'none';
+        selectedPackageId = '';
+    }
+
+    function setPlanSummary(name, price) {
+        planNameEl.textContent  = name;
+        planPriceEl.textContent = 'KES ' + price.toLocaleString() + '/month';
+        planSummary.style.display = '';
+    }
+
+    planSelect.addEventListener('change', function () {
+        clearPlan();
+        var val = planSelect.value;
+        if (!val || !tierMap[val]) return;
+        var tier = tierMap[val];
+        if (tier.flat) {
+            selectedPackageId = tier.packageKey;
+            var label = planSelect.options[planSelect.selectedIndex].text.split('—')[0].trim();
+            setPlanSummary(label + ' (Flat Rate)', tier.price);
+        } else {
+            bracketHint.textContent = tier.hint;
+            tier.brackets.forEach(function (b) {
+                var el = document.createElement('div');
+                el.className = 'onb-bracket-opt';
+                el.dataset.key = b.key;
+                el.innerHTML = '<div class="onb-bracket-label">' + b.label + '</div>' +
+                               '<div class="onb-bracket-price">KES ' + b.price.toLocaleString() + '/month</div>';
+                el.addEventListener('click', function () {
+                    bracketGrid.querySelectorAll('.onb-bracket-opt').forEach(function (o) { o.classList.remove('selected'); });
+                    el.classList.add('selected');
+                    selectedPackageId = b.key;
+                    var pLabel = planSelect.options[planSelect.selectedIndex].text.split('—')[0].trim();
+                    setPlanSummary(pLabel + ' · ' + b.label, b.price);
+                });
+                bracketGrid.appendChild(el);
+            });
+            bracketRow.style.display = '';
+        }
+    });
+
+    /* ── Validation ──────────────────────────────────────────────────── */
+    function validateStep(n) {
+        if (n === 1) {
+            if (!document.getElementById('onb-national-id').value.trim()) { showMsg('Please enter your National ID number.', 'warning'); return false; }
+            if (!document.getElementById('onb-dob').value)                 { showMsg('Please enter your date of birth.', 'warning'); return false; }
+            if (!document.getElementById('onb-address').value.trim())      { showMsg('Please enter your physical address.', 'warning'); return false; }
+        }
+        if (n === 2) {
+            if (!document.getElementById('onb-kin-name').value.trim())  { showMsg('Please enter the name of your next of kin.', 'warning'); return false; }
+            if (!document.getElementById('onb-kin-phone').value.trim()) { showMsg('Please enter your next of kin phone number.', 'warning'); return false; }
+        }
+        if (n === 3) {
+            if (!selectedPackageId) { showMsg('Please select a plan' + (planSelect.value && !tierMap[planSelect.value]?.flat ? ' and an age bracket' : '') + '.', 'warning'); return false; }
+        }
+        return true;
+    }
+
+    /* ── Submit steps via AJAX ───────────────────────────────────────── */
+    async function submitStep(n) {
+        if (n === 2) {
+            btnNext.disabled = true;
+            btnNext.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Saving...';
+            var fd = new FormData();
+            fd.append('csrf_token', CSRF);
+            fd.append('national_id',              document.getElementById('onb-national-id').value.trim());
+            fd.append('date_of_birth',             document.getElementById('onb-dob').value);
+            fd.append('address',                   document.getElementById('onb-address').value.trim());
+            fd.append('next_of_kin',               document.getElementById('onb-kin-name').value.trim());
+            fd.append('next_of_kin_relationship',  document.getElementById('onb-kin-rel').value.trim());
+            fd.append('next_of_kin_phone',         document.getElementById('onb-kin-phone').value.trim());
+            try {
+                var r = await fetch('/member/profile/complete', { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                var d = await r.json();
+                if (!d.success) {
+                    showMsg(d.message || 'Could not save your details. Please try again.', 'danger');
+                    btnNext.disabled = false;
+                    btnNext.innerHTML = 'Continue <i class="fas fa-arrow-right ms-1"></i>';
+                    return false;
+                }
+            } catch (e) {
+                showMsg('Network error. Please check your connection and try again.', 'danger');
+                btnNext.disabled = false;
+                btnNext.innerHTML = 'Continue <i class="fas fa-arrow-right ms-1"></i>';
+                return false;
+            }
+            btnNext.disabled = false;
+            return true;
+        }
+        if (n === 3) {
+            btnNext.disabled = true;
+            btnNext.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Saving...';
+            var fd2 = new FormData();
+            fd2.append('csrf_token', CSRF);
+            fd2.append('package_id', selectedPackageId);
+            try {
+                var r2 = await fetch('/member/onboarding/package', { method: 'POST', body: fd2, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                var d2 = await r2.json();
+                if (!d2.success) {
+                    showMsg(d2.message || 'Could not update your plan. Please try again.', 'danger');
+                    btnNext.disabled = false;
+                    btnNext.innerHTML = 'Continue <i class="fas fa-arrow-right ms-1"></i>';
+                    return false;
+                }
+            } catch (e) {
+                showMsg('Network error. Please check your connection and try again.', 'danger');
+                btnNext.disabled = false;
+                btnNext.innerHTML = 'Continue <i class="fas fa-arrow-right ms-1"></i>';
+                return false;
+            }
+            btnNext.disabled = false;
+            return true;
+        }
+        return true;
+    }
+
+    /* ── Button events ───────────────────────────────────────────────── */
+    btnNext.addEventListener('click', async function () {
+        clearMsg();
+        if (!validateStep(currentStep)) return;
+        var submitted = await submitStep(currentStep);
+        if (!submitted) return;
+        if (currentStep < 4) {
+            showStep(currentStep + 1);
+        } else {
+            dismissAndReload();
+        }
+    });
+
+    btnBack.addEventListener('click', function () { clearMsg(); if (currentStep > 1) showStep(currentStep - 1); });
+    btnSkip.addEventListener('click', function () { dismissAndReload(); });
+
+    async function dismissAndReload() {
+        try {
+            var fd3 = new FormData();
+            fd3.append('csrf_token', CSRF);
+            await fetch('/member/onboarding/dismiss', { method: 'POST', body: fd3, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        } catch (_) {}
+        var modal = bootstrap.Modal.getInstance(document.getElementById('onboardingWizard'));
+        if (modal) modal.hide();
+        window.location.reload();
+    }
+
+    /* ── M-Pesa payment (Step 4) ─────────────────────────────────────── */
+    var payPhone  = document.getElementById('onb-pay-phone');
+    var payBtn    = document.getElementById('onb-pay-btn');
+    var payStatus = document.getElementById('onb-pay-status');
+
+    if (MEMBER_PHONE) {
+        var ph = MEMBER_PHONE.toString();
+        if (ph.startsWith('254')) ph = '0' + ph.slice(3);
+        payPhone.value = ph;
+    }
+
+    payBtn.addEventListener('click', async function () {
+        var rawPhone = payPhone.value.trim();
+        if (!rawPhone) { payStatus.innerHTML = '<span class="text-danger">Please enter a phone number.</span>'; return; }
+        payBtn.disabled = true;
+        payBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Please wait...';
+        try {
+            var resp = await fetch('/payment/initiate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: JSON.stringify({ member_id: MEMBER_ID, amount: REG_FEE, phone_number: rawPhone, payment_type: 'registration' })
+            });
+            var data = await resp.json();
+            if (data.success) {
+                payStatus.innerHTML = '<span class="text-success"><i class="fas fa-check-circle me-1"></i>' + (data.message || 'STK Push sent! Check your phone for the M-Pesa prompt.') + '</span>';
+                payBtn.innerHTML = '<i class="fas fa-check me-1"></i> Prompt Sent';
+            } else {
+                payStatus.innerHTML = '<span class="text-danger">' + (data.error || data.message || 'Payment failed. Please try again.') + '</span>';
+                payBtn.disabled = false;
+                payBtn.innerHTML = '<i class="fas fa-mobile-alt"></i> Pay with M-Pesa';
+            }
+        } catch (e) {
+            payStatus.innerHTML = '<span class="text-danger">Network error. Please try again.</span>';
+            payBtn.disabled = false;
+            payBtn.innerHTML = '<i class="fas fa-mobile-alt"></i> Pay with M-Pesa';
+        }
+    });
+
+    /* ── Init ────────────────────────────────────────────────────────── */
+    document.addEventListener('DOMContentLoaded', function () {
+        showStep(1);
+        var modalEl = document.getElementById('onboardingWizard');
+        if (modalEl && window.bootstrap) {
+            new bootstrap.Modal(modalEl).show();
+        }
+    });
+
+})();
 </script>
 <?php endif; ?>
 

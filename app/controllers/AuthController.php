@@ -937,8 +937,8 @@ class AuthController extends BaseController
         try {
             $this->validateCsrf();
             
-            // Validate required fields (simple one-step registration)
-            $required = ['first_name', 'last_name', 'phone', 'national_id'];
+            // Validate required fields (minimal registration — package & ID collected on dashboard)
+            $required = ['first_name', 'last_name', 'phone'];
             
             foreach ($required as $field) {
                 if (empty($_POST[$field])) {
