@@ -46,10 +46,20 @@ if (!function_exists('envConfig')) {
 define('DEBUG_MODE', getenv('DEBUG_MODE') === 'true'); // CRITICAL: Set to false in production
 define('APP_NAME', getenv('APP_NAME') ?: 'Shena Companion Welfare Association');
 
+// ── Local override (re-structure branch) ─────────────────────────────────────
+// config/local_config.php is only present in the re-structure branch.
+// It runs before any constants are defined, injects LOCAL_ env vars into
+// $_SERVER so envConfig() picks them up, and forces $isLocalEnvironment=true
+// even for plain CLI runs (php script.php).
+if (file_exists(__DIR__ . '/local_config.php')) {
+    require_once __DIR__ . '/local_config.php';
+}
+
 $httpHost = $_SERVER['HTTP_HOST'] ?? '';
 $isLocalHost = preg_match('/^(localhost|127\.0\.0\.1)(:\d+)?$/i', $httpHost) === 1;
 $isLocalCliServer = PHP_SAPI === 'cli-server';
-$isLocalEnvironment = $isLocalHost || $isLocalCliServer;
+// Also treat as local when local_config.php signalled LOCAL_OVERRIDE_APPLIED
+$isLocalEnvironment = $isLocalHost || $isLocalCliServer || defined('LOCAL_OVERRIDE_APPLIED');
 
 $appUrl = getenv('APP_URL') ?: 'http://localhost';
 if ($isLocalEnvironment) {

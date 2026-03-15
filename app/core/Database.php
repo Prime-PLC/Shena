@@ -18,8 +18,21 @@ class Database
         }
 
         try {
-            $dsn = "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET;
-            $this->connection = new PDO($dsn, DB_USER, DB_PASS, [
+            // When local_config.php is present (re-structure branch), prefer the
+            // LOCAL_ server vars it injects so no production DB is ever touched.
+            if (defined('LOCAL_OVERRIDE_APPLIED')) {
+                $host    = $_SERVER['LOCAL_DB_HOST']    ?? DB_HOST;
+                $dbname  = $_SERVER['LOCAL_DB_NAME']    ?? DB_NAME;
+                $user    = $_SERVER['LOCAL_DB_USER']    ?? DB_USER;
+                $pass    = $_SERVER['LOCAL_DB_PASS']    ?? DB_PASS;
+                $charset = $_SERVER['LOCAL_DB_CHARSET'] ?? DB_CHARSET;
+                $port    = $_SERVER['LOCAL_DB_PORT']    ?? '3306';
+            } else {
+                $host = DB_HOST; $dbname = DB_NAME; $user = DB_USER;
+                $pass = DB_PASS; $charset = DB_CHARSET; $port = '3306';
+            }
+            $dsn = "mysql:host={$host};port={$port};dbname={$dbname};charset={$charset}";
+            $this->connection = new PDO($dsn, $user, $pass, [
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                 PDO::ATTR_EMULATE_PREPARES => false
