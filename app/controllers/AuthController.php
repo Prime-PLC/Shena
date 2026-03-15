@@ -1191,18 +1191,8 @@ class AuthController extends BaseController
                 $otpCode = $this->generateOtpCode();
                 $otpMessage = 'Your SHENA registration verification code is ' . $otpCode . '. It expires in 10 minutes.';
 
-                $smsService = new SmsService();
-                $smsResult = $smsService->sendSms($phone, $otpMessage);
-
-                $otpDeliveryMessage = 'Registration successful. Verify OTP sent to your phone, then create your password.';
-                if (empty($smsResult['success'])) {
-                    if ($this->isLocalOrDebugEnvironment()) {
-                        $otpDeliveryMessage = 'Registration successful. SMS delivery is unavailable in this environment. Use test OTP: ' . $otpCode . ', then create your password.';
-                    } else {
-                        throw new Exception('Unable to send verification code right now. Please try again shortly.');
-                    }
-                }
-                
+                // Commit the transaction BEFORE attempting SMS so the registration
+                // is never rolled back due to an SMS delivery failure.
                 $this->db->getConnection()->commit();
 
                 $_SESSION['signup_otp'] = [
@@ -1214,6 +1204,21 @@ class AuthController extends BaseController
                     'attempts' => 0,
                     'last_sent_at' => time()
                 ];
+
+                $smsService = new SmsService();
+                $smsResult = $smsService->sendSms($phone, $otpMessage);
+
+                $otpDeliveryMessage = 'Registration successful. Verify OTP sent to your phone, then create your password.';
+                if (empty($smsResult['success'])) {
+                    if ($this->isLocalOrDebugEnvironment()) {
+                        $otpDeliveryMessage = 'Registration successful. SMS delivery is unavailable in this environment. Use test OTP: ' . $otpCode . ', then create your password.';
+                    } else {
+                        // SMS failed but registration succeeded — let the user proceed
+                        // and use the resend OTP option on the verification page.
+                        error_log('SMS delivery failed after registration for member ' . $memberNumber . ': ' . ($smsResult['error'] ?? 'unknown'));
+                        $otpDeliveryMessage = 'Registration successful! We could not deliver the SMS right now. Use the "Resend Code" option on the next page to try again.';
+                    }
+                }
                 
                 // Clear any output buffers to prevent warnings from breaking JSON
                 if (ob_get_length()) ob_clean();
