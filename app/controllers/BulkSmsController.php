@@ -351,8 +351,9 @@ class BulkSmsController extends BaseController
                     COUNT(CASE WHEN m.status = 'grace_period' THEN 1 END) as grace_period_count,
                     COUNT(CASE WHEN m.status = 'defaulted' THEN 1 END) as defaulted_count,
                     COUNT(CASE WHEN m.package = 'individual' THEN 1 END) as individual_count,
-                    COUNT(CASE WHEN m.package = 'couple' THEN 1 END) as couple_count,
                     COUNT(CASE WHEN m.package = 'family' THEN 1 END) as family_count,
+                    COUNT(CASE WHEN m.package = 'extended_family_1' THEN 1 END) as extended_family_1_count,
+                    COUNT(CASE WHEN m.package = 'extended_family_2' THEN 1 END) as extended_family_2_count,
                     COUNT(CASE WHEN np.sms_enabled = 1 THEN 1 END) as sms_enabled_count
                 FROM members m
                 LEFT JOIN users u ON m.user_id = u.id

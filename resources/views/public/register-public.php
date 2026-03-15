@@ -63,6 +63,36 @@
     }
     .btn-register:hover { background: #5b21b6; }
     .support-text { color: #64748b; font-size: 0.85rem; }
+    /* 2-step plan picker */
+    .plan-type-select { font-size: 1rem; }
+    .age-bracket-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
+    .abo-option {
+        flex: 1 1 calc(50% - 10px);
+        border: 2px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 12px 14px;
+        cursor: pointer;
+        background: #fafafa;
+        transition: border-color .18s, background .18s;
+        user-select: none;
+    }
+    .abo-option:hover { border-color: #a78bfa; background: #faf5ff; }
+    .abo-option.selected { border-color: #6d28d9; background: #f5f3ff; }
+    .abo-label { font-weight: 600; color: #1e1b4b; font-size: 0.9rem; }
+    .abo-price { color: #6d28d9; font-weight: 700; font-size: 0.95rem; margin-top: 2px; }
+    .plan-summary-box {
+        background: #f5f3ff;
+        border: 1.5px solid #c4b5fd;
+        border-radius: 10px;
+        padding: 12px 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 4px;
+    }
+    .plan-summary-box strong { color: #4c1d95; }
+    .plan-summary-price { font-weight: 700; color: #6d28d9; font-size: 1.05rem; }
+    @media (max-width: 576px) { .abo-option { flex: 1 1 100%; } }
 
     @media (max-width: 991px) {
         .side-panel { min-height: 260px; }
@@ -113,6 +143,52 @@
                             </div>
                         </div>
 
+                        <!-- Step 1: Plan Type -->
+                        <div class="row">
+                            <div class="col-12 mb-3">
+                                <label for="plan_type" class="form-label">Select Plan Type <span class="required-star">*</span></label>
+                                <select class="form-control plan-type-select" id="plan_type" name="plan_type">
+                                    <option value="">Choose a plan...</option>
+                                    <option value="individual">Individual &mdash; Principal member only (KES 100 &ndash; 650/month)</option>
+                                    <option value="family">Family &mdash; Principal + Spouse (KES 150 flat/month)</option>
+                                    <option value="extended_family_1">Extended Family 1 &mdash; Couple + Children + Parents (KES 250 &ndash; 650/month)</option>
+                                    <option value="extended_family_2">Extended Family 2 &mdash; Couple + Children + Parents + In-laws (KES 300 &ndash; 650/month)</option>
+                                    <option value="executive">Executive &mdash; Premium Individual (KES 300 or 500/month)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Step 2: Age bracket (shown when plan needs it) -->
+                        <div class="row">
+                            <div class="col-12 mb-2" id="age_bracket_row" style="display:none;">
+                                <label class="form-label">Age Bracket <span class="required-star">*</span> &mdash; <em id="age_bracket_hint" class="hint-text"></em></label>
+                                <div class="age-bracket-grid" id="age_bracket_options"></div>
+                            </div>
+                        </div>
+
+                        <!-- Selected plan summary -->
+                        <div class="row">
+                            <div class="col-12 mb-1" id="plan_summary_row" style="display:none;">
+                                <div class="plan-summary-box">
+                                    <strong id="plan_summary_name"></strong>
+                                    <span class="plan-summary-price" id="plan_summary_price"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <input type="hidden" name="package_id" id="package_id_hidden">
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="corporate_couple_count" class="form-label">Corporate Couple Count</label>
+                                <select class="form-control" id="corporate_couple_count" name="corporate_couple_count">
+                                    <option value="0" selected>None</option>
+                                    <option value="1">1 Additional Couple (+KES 150)</option>
+                                    <option value="2">2 Additional Couples (+KES 300)</option>
+                                </select>
+                            </div>
+                        </div>
+
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label for="phone" class="form-label">Phone Number <span class="required-star">*</span></label>
@@ -138,17 +214,145 @@
 </div>
 
 <script>
+// ── Package picker data ─────────────────────────────────────────────────────
+const tierPackageMap = {
+    individual: {
+        flat: false,
+        hint: 'Your age',
+        brackets: [
+            { key: 'individual_below_70',  label: 'Below 70 years', price: 100 },
+            { key: 'individual_71_80',     label: '71 – 80 years',  price: 350 },
+            { key: 'individual_81_90',     label: '81 – 90 years',  price: 450 },
+            { key: 'individual_91_100',    label: '91 – 100 years', price: 650 }
+        ]
+    },
+    family: {
+        flat: true,
+        packageKey: 'couple_below_70',
+        price: 150,
+        label: 'Family Plan – Principal + Spouse'
+    },
+    extended_family_1: {
+        flat: false,
+        hint: 'Age of the oldest parent you are covering',
+        brackets: [
+            { key: 'couple_children_parents_below_70', label: 'Below 70 years', price: 250 },
+            { key: 'couple_children_parents_70_80',    label: '70 – 80 years',  price: 350 },
+            { key: 'couple_children_parents_81_90',    label: '81 – 90 years',  price: 450 },
+            { key: 'couple_children_parents_91_100',   label: '91 – 100 years', price: 650 }
+        ]
+    },
+    extended_family_2: {
+        flat: false,
+        hint: 'Age of the oldest parent or in-law you are covering',
+        brackets: [
+            { key: 'couple_children_parents_inlaws_below_70', label: 'Below 70 years', price: 300 },
+            { key: 'couple_children_parents_inlaws_71_80',    label: '71 – 80 years',  price: 400 },
+            { key: 'couple_children_parents_inlaws_81_90',    label: '81 – 90 years',  price: 550 },
+            { key: 'couple_children_parents_inlaws_91_100',   label: '91 – 100 years', price: 650 }
+        ]
+    },
+    executive: {
+        flat: false,
+        hint: 'Your age',
+        brackets: [
+            { key: 'executive_below_70', label: 'Below 70 years',       price: 300 },
+            { key: 'executive_above_70', label: '70 years and above', price: 500 }
+        ]
+    }
+};
+
+// Preselect values injected by server
+const preselectPlan    = <?php echo json_encode($preselect_plan    ?? ''); ?>;
+const preselectBracket = <?php echo json_encode($preselect_bracket ?? ''); ?>;
+
 document.addEventListener('DOMContentLoaded', function () {
-    const form = document.getElementById('simpleRegistrationForm');
-    const submitBtn = document.getElementById('submitBtn');
-    const resultBox = document.getElementById('resultBox');
-    const phoneInput = document.getElementById('phone');
+    const form           = document.getElementById('simpleRegistrationForm');
+    const submitBtn      = document.getElementById('submitBtn');
+    const resultBox      = document.getElementById('resultBox');
+    const phoneInput     = document.getElementById('phone');
+    const planTypeSelect = document.getElementById('plan_type');
+    const bracketRow     = document.getElementById('age_bracket_row');
+    const bracketHint    = document.getElementById('age_bracket_hint');
+    const bracketOptions = document.getElementById('age_bracket_options');
+    const summaryRow     = document.getElementById('plan_summary_row');
+    const summaryName    = document.getElementById('plan_summary_name');
+    const summaryPrice   = document.getElementById('plan_summary_price');
+    const packageHidden  = document.getElementById('package_id_hidden');
+
+    function formatKES(n) { return 'KES ' + n.toLocaleString() + '/month'; }
+
+    function showSummary(name, price) {
+        summaryName.textContent  = name;
+        summaryPrice.textContent = formatKES(price);
+        summaryRow.style.display = '';
+    }
+
+    function clearBracket() {
+        bracketOptions.innerHTML = '';
+        bracketRow.style.display = 'none';
+        packageHidden.value      = '';
+        summaryRow.style.display = 'none';
+    }
+
+    function renderBrackets(tier) {
+        bracketOptions.innerHTML = '';
+        bracketHint.textContent  = tier.hint;
+        tier.brackets.forEach(function(b) {
+            const el = document.createElement('div');
+            el.className = 'abo-option';
+            el.dataset.key   = b.key;
+            el.dataset.price = b.price;
+            el.innerHTML = '<div class="abo-label">' + b.label + '</div><div class="abo-price">' + formatKES(b.price) + '</div>';
+            el.addEventListener('click', function() {
+                bracketOptions.querySelectorAll('.abo-option').forEach(function(o) { o.classList.remove('selected'); });
+                el.classList.add('selected');
+                packageHidden.value = b.key;
+                showSummary(planTypeSelect.options[planTypeSelect.selectedIndex].text.split('—')[0].trim() + ' · ' + b.label, b.price);
+            });
+            bracketOptions.appendChild(el);
+        });
+        bracketRow.style.display = '';
+    }
+
+    function applyBracketPreselect(bracketKey) {
+        const opts = bracketOptions.querySelectorAll('.abo-option');
+        opts.forEach(function(o) {
+            if (o.dataset.key === bracketKey) { o.click(); }
+        });
+    }
+
+    planTypeSelect.addEventListener('change', function() {
+        const val = planTypeSelect.value;
+        clearBracket();
+        if (!val || !tierPackageMap[val]) return;
+        const tier = tierPackageMap[val];
+        if (tier.flat) {
+            packageHidden.value = tier.packageKey;
+            showSummary(tier.label, tier.price);
+        } else {
+            renderBrackets(tier);
+        }
+    });
+
+    // Apply preselect from server-injected params
+    if (preselectPlan && tierPackageMap[preselectPlan]) {
+        planTypeSelect.value = preselectPlan;
+        planTypeSelect.dispatchEvent(new Event('change'));
+        if (preselectBracket) {
+            applyBracketPreselect(
+                tierPackageMap[preselectPlan].brackets
+                    ? tierPackageMap[preselectPlan].brackets.find(function(b) {
+                          return b.key.endsWith(preselectBracket) || b.key === preselectBracket;
+                      })?.key || preselectBracket
+                    : ''
+            );
+        }
+    }
 
     phoneInput.addEventListener('input', function (e) {
         let value = e.target.value.replace(/\D/g, '');
-        if (value.length > 12) {
-            value = value.slice(0, 12);
-        }
+        if (value.length > 12) { value = value.slice(0, 12); }
         e.target.value = value;
     });
 
@@ -158,6 +362,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (!form.checkValidity()) {
             form.reportValidity();
+            return;
+        }
+
+        // Validate package was fully selected
+        if (!packageHidden.value) {
+            resultBox.innerHTML = '<div class="alert alert-warning">Please select a plan type' +
+                (document.getElementById('age_bracket_row').style.display !== 'none' ? ' and an age bracket' : '') + '.</div>';
             return;
         }
 

@@ -535,53 +535,40 @@ $getOldValue = function($field) {
                 </div>
                 
                 <div class="package-options">
-                    <div class="package-option">
-                        <input type="radio" class="package-radio" id="package_individual" name="package" value="individual" required <?php echo $getOldValue('package') === 'individual' ? 'checked' : ''; ?>>
-                        <label for="package_individual" class="package-label">
-                            <div class="package-name">Individual Plan</div>
-                            <div class="package-price">KES 500/month</div>
-                            <ul class="package-features">
-                                <li>Individual coverage</li>
-                                <li>Funeral benefits</li>
-                                <li>24/7 support</li>
-                            </ul>
-                        </label>
-                    </div>
-                    <div class="package-option">
-                        <input type="radio" class="package-radio" id="package_couple" name="package" value="couple" <?php echo $getOldValue('package') === 'couple' ? 'checked' : ''; ?>>
-                        <label for="package_couple" class="package-label">
-                            <div class="package-name">Couple Plan</div>
-                            <div class="package-price">KES 800/month</div>
-                            <ul class="package-features">
-                                <li>Couple coverage</li>
-                                <li>Extended benefits</li>
-                                <li>Priority support</li>
-                            </ul>
-                        </label>
-                    </div>
-                    <div class="package-option">
-                        <input type="radio" class="package-radio" id="package_family" name="package" value="family" <?php echo $getOldValue('package') === 'family' ? 'checked' : ''; ?>>
-                        <label for="package_family" class="package-label">
-                            <div class="package-name">Family Plan</div>
-                            <div class="package-price">KES 1,200/month</div>
-                            <ul class="package-features">
-                                <li>Full family coverage</li>
-                                <li>Comprehensive benefits</li>
-                                <li>Dedicated support</li>
-                            </ul>
-                        </label>
-                    </div>
-                    <div class="package-option">
-                        <input type="radio" class="package-radio" id="package_executive" name="package" value="executive" <?php echo $getOldValue('package') === 'executive' ? 'checked' : ''; ?>>
-                        <label for="package_executive" class="package-label">
-                            <div class="package-name">Executive Plan</div>
-                            <div class="package-price">KES 2,000/month</div>
-                            <ul class="package-features">
-                                <li>Premium coverage</li>
-                                <li>VIP benefits</li>
-                                <li>Concierge service</li>
-                            </ul>
-                        </label>
+                    <?php foreach (($packages ?? []) as $packageKey => $package): ?>
+                        <div class="package-option">
+                            <input
+                                type="radio"
+                                class="package-radio"
+                                id="package_<?php echo htmlspecialchars($packageKey); ?>"
+                                name="package"
+                                value="<?php echo htmlspecialchars($packageKey); ?>"
+                                required
+                                <?php echo $getOldValue('package') === $packageKey ? 'checked' : ''; ?>
+                            >
+                            <label for="package_<?php echo htmlspecialchars($packageKey); ?>" class="package-label">
+                                <div class="package-name"><?php echo htmlspecialchars($package['name'] ?? $packageKey); ?></div>
+                                <div class="package-price">KES <?php echo number_format((float)($package['monthly_contribution'] ?? 0)); ?>/month</div>
+                                <ul class="package-features">
+                                    <li><?php echo htmlspecialchars($package['description'] ?? 'Standard coverage package'); ?></li>
+                                    <li>Category: <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', (string)($package['category'] ?? '')))); ?></li>
+                                    <?php if (isset($package['age_min'], $package['age_max'])): ?>
+                                        <li>Age Band: <?php echo (int)$package['age_min']; ?> - <?php echo (int)$package['age_max']; ?> years</li>
+                                    <?php endif; ?>
+                                </ul>
+                            </label>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+
+                <div class="form-grid" style="margin-top: 16px;">
+                    <div class="form-group">
+                        <label for="corporate_couple_count" class="form-label">Corporate Couple Count</label>
+                        <select class="form-select" id="corporate_couple_count" name="corporate_couple_count">
+                            <option value="0" <?php echo $getOldValue('corporate_couple_count') === '0' ? 'selected' : ''; ?>>None</option>
+                            <option value="1" <?php echo $getOldValue('corporate_couple_count') === '1' ? 'selected' : ''; ?>>1 Additional Couple (+KES 150)</option>
+                            <option value="2" <?php echo $getOldValue('corporate_couple_count') === '2' ? 'selected' : ''; ?>>2 Additional Couples (+KES 300)</option>
+                        </select>
                     </div>
                 </div>
             </div>

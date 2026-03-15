@@ -71,9 +71,9 @@ class AuthController extends BaseController
                 return;
             }
             
-            // Find user by email
+            // Find user by email, member number, or national ID
             try {
-                $user = $this->userModel->findByEmail($email);
+                $user = $this->userModel->findByAnyCredential($email);
             } catch (Exception $e) {
                 error_log('Database error during login: ' . $e->getMessage());
                 $_SESSION['error'] = 'An error occurred. Please try again.';
@@ -442,7 +442,7 @@ class AuthController extends BaseController
                 
                 // Determine package from selected package key
                 global $membership_packages;
-                $packageKey = $memberData['package'] ?? null;
+                $packageKey = $memberData['package_key'] ?? null;
                 
                 if (empty($packageKey) || !isset($membership_packages[$packageKey])) {
                     $_SESSION['error'] = 'Please select a valid membership package.';
@@ -491,6 +491,8 @@ class AuthController extends BaseController
                     'next_of_kin' => $memberData['next_of_kin'] ?? '',
                     'next_of_kin_phone' => $memberData['next_of_kin_phone'] ?? '',
                     'package' => $packageCategory,
+                    'package_key' => $packageKey,
+                    'corporate_couple_count' => 0,
                     'monthly_contribution' => $monthlyContribution,
                     'maturity_ends' => $maturityEnds,
                     'status' => 'inactive',
@@ -898,18 +900,24 @@ class AuthController extends BaseController
     public function showPublicRegistration()
     {
         global $membership_packages;
-        
-        // Convert packages array to include IDs (using array keys as IDs)
-        $packagesWithIds = [];
-        foreach ($membership_packages as $key => $package) {
-            $package['id'] = $key;
-            $package['key'] = $key; // Keep the key for backward compatibility
-            $packagesWithIds[] = $package;
+
+        // Validate and pass URL preselect params for the 2-step plan picker
+        $allowedPlans = ['individual', 'family', 'extended_family_1', 'extended_family_2', 'executive'];
+        $preselectPlan = $this->sanitizeInput($_GET['plan'] ?? '');
+        if (!in_array($preselectPlan, $allowedPlans, true)) {
+            $preselectPlan = '';
         }
-        
+        $allowedBrackets = ['below_70', '71_80', '81_90', '91_100', '70_80', '81_90', 'above_70'];
+        $preselectBracket = $this->sanitizeInput($_GET['bracket'] ?? '');
+        if (!in_array($preselectBracket, $allowedBrackets, true)) {
+            $preselectBracket = '';
+        }
+
         $data = [
             'title' => 'Join Shena Companion - Public Registration',
-            'packages' => $packagesWithIds,
+            'tier_definitions' => MembershipPricingService::getTierDefinitions(),
+            'preselect_plan'    => $preselectPlan,
+            'preselect_bracket' => $preselectBracket,
             'csrf_token' => $this->generateCsrfToken()
         ];
         
@@ -950,6 +958,7 @@ class AuthController extends BaseController
             $county = $this->sanitizeInput($_POST['county']);
             $subCounty = $this->sanitizeInput($_POST['sub_county'] ?? '');
             $postalCode = $this->sanitizeInput($_POST['postal_code'] ?? '');
+            $corporateCoupleCount = max(0, min(5, (int)($_POST['corporate_couple_count'] ?? 0)));
             $paymentMethod = $this->sanitizeInput($_POST['payment_method'] ?? 'mpesa');
             
             // Normalize payment method - STK push is a type of M-Pesa payment
@@ -1115,6 +1124,13 @@ class AuthController extends BaseController
                 
                 // Map configured package to allowed members.package enum value
                 $packageType = $this->memberModel->normalizePackageTier($packageId, $package);
+                $memberForCalc = [
+                    'date_of_birth' => $safeDateOfBirth,
+                    'package' => $packageId,
+                    'package_key' => $packageId,
+                    'corporate_couple_count' => $corporateCoupleCount
+                ];
+                $monthlyContribution = $this->memberModel->calculateMonthlyContribution($memberForCalc, []);
                 
                 $memberData = [
                     'user_id' => $userId,
@@ -1125,7 +1141,8 @@ class AuthController extends BaseController
                     'address' => $address,
                     'package' => $packageType,
                     'package_key' => $packageId,
-                    'monthly_contribution' => $package['monthly_contribution'],
+                    'corporate_couple_count' => $corporateCoupleCount,
+                    'monthly_contribution' => $monthlyContribution,
                     'status' => 'inactive', // Awaiting registration fee payment
                     'maturity_ends' => $maturityEnds,
                     'created_at' => date('Y-m-d H:i:s')
@@ -1500,11 +1517,15 @@ class AuthController extends BaseController
             return 'executive';
         }
 
-        if (strpos($packageId, 'couple') !== false) {
-            return 'couple';
+        if (strpos($packageId, 'inlaws') !== false || strpos($category, 'extended_family_2') !== false || strpos($packageId, 'maximum_family') !== false) {
+            return 'extended_family_2';
         }
 
-        if (strpos($category, 'family') !== false || strpos($packageId, 'family') !== false) {
+        if (strpos($packageId, 'parents') !== false || strpos($category, 'extended_family_1') !== false || strpos($packageId, 'extended_family') !== false) {
+            return 'extended_family_1';
+        }
+
+        if (strpos($category, 'family') !== false || strpos($packageId, 'family') !== false || strpos($packageId, 'couple') !== false) {
             return 'family';
         }
 

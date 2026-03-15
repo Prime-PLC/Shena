@@ -6,12 +6,30 @@ $memberData = $member ?? [];
 $calculation = $calculation ?? [];
 $pendingUpgrades = $pendingUpgrades ?? [];
 $upgradeHistory = $upgradeHistory ?? [];
-$defaultTargetPackage = $defaultTargetPackage ?? 'couple';
-$packageOrder = ['individual', 'couple', 'family', 'executive'];
+$upgradePreviews = $upgradePreviews ?? [];
+$tierDefinitions = $tierDefinitions ?? [];
+$defaultTargetPackage = $defaultTargetPackage ?? 'family';
+$packageOrder = ['individual', 'family', 'extended_family_1', 'extended_family_2', 'executive'];
 $currentPackage = strtolower($memberData['package'] ?? 'individual');
 if (!in_array($currentPackage, $packageOrder, true)) {
     $currentPackage = 'individual';
 }
+
+$labelMap = [
+    'individual' => 'Individual',
+    'family' => 'Family',
+    'extended_family_1' => 'Extended Family 1',
+    'extended_family_2' => 'Extended Family 2',
+    'executive' => 'Executive'
+];
+
+$feeMap = [
+    'individual' => (float)($upgradePreviews['individual']['new_monthly_fee'] ?? ($memberData['monthly_contribution'] ?? 100)),
+    'family' => (float)($upgradePreviews['family']['new_monthly_fee'] ?? 150),
+    'extended_family_1' => (float)($upgradePreviews['extended_family_1']['new_monthly_fee'] ?? 250),
+    'extended_family_2' => (float)($upgradePreviews['extended_family_2']['new_monthly_fee'] ?? 300),
+    'executive' => (float)($upgradePreviews['executive']['new_monthly_fee'] ?? 300)
+];
 
 $currentMonthLabel = date('F');
 $nextMonthStartLabel = date('F 1, Y', strtotime('first day of next month'));
@@ -723,155 +741,53 @@ main {
     <?php $currentIndex = array_search($currentPackage, $packageOrder, true); ?>
     <div class="plans-comparison-section">
         <div class="plans-grid-new">
-            <?php
-                $planKey = 'individual';
-                $planIndex = array_search($planKey, $packageOrder, true);
-                $isCurrent = $currentPackage === $planKey;
-                $canSelect = empty($pendingUpgrades) && $planIndex > $currentIndex;
-            ?>
-            <div class="plan-card-new" data-plan="individual" data-monthly="500">
-                <?php if ($isCurrent): ?>
-                    <div class="current-badge-new">YOUR PLAN</div>
-                <?php endif; ?>
-                <div class="plan-icon-new bronze-icon">
-                    <i class="fas fa-user"></i>
-                </div>
-                <h3 class="plan-name-new">Individual</h3>
-                <div class="plan-price-new">
-                    <span class="price-currency">KES</span>
-                    <span class="price-amount">500</span>
-                    <span class="price-period">/month</span>
-                </div>
-                <p class="plan-subtitle">Essential Coverage</p>
-                <div class="plan-features-new">
-                    <div class="feature-item-new"><i class="fas fa-check-circle"></i><span>Principal member cover</span></div>
-                    <div class="feature-item-new"><i class="fas fa-check-circle"></i><span>Standard claim processing</span></div>
-                    <div class="feature-item-new"><i class="fas fa-check-circle"></i><span>Business hours support</span></div>
-                </div>
-                <?php if ($isCurrent): ?>
-                    <button class="plan-select-btn-new disabled-plan" disabled>Current Plan</button>
-                <?php elseif (!$canSelect): ?>
-                    <button class="plan-select-btn-new disabled-plan" disabled>Not Available</button>
-                <?php else: ?>
-                    <button class="plan-select-btn-new" onclick="selectPlan('individual', true)">
-                        <i class="fas fa-arrow-up"></i> Select Individual
-                    </button>
-                <?php endif; ?>
-            </div>
+            <?php foreach ($packageOrder as $planKey): ?>
+                <?php
+                    $planIndex = array_search($planKey, $packageOrder, true);
+                    $isCurrent = $currentPackage === $planKey;
+                    $canSelect = empty($pendingUpgrades) && $planIndex > $currentIndex;
+                    $isPremium = $planKey === 'executive';
+                    $tierMeta = $tierDefinitions[$planKey] ?? [];
+                    $priceAmount = (float)($feeMap[$planKey] ?? 0);
+                ?>
+                <div class="plan-card-new <?php echo $isPremium ? 'premium-plan' : ''; ?> <?php echo $planKey === 'extended_family_1' ? 'highlight-plan' : ''; ?>" data-plan="<?php echo htmlspecialchars($planKey); ?>" data-monthly="<?php echo (int)$priceAmount; ?>">
+                    <?php if ($isCurrent): ?>
+                        <div class="current-badge-new">YOUR PLAN</div>
+                    <?php elseif ($isPremium): ?>
+                        <div class="premium-badge-new"><i class="fas fa-crown"></i> PREMIUM</div>
+                    <?php elseif ($planKey === 'extended_family_1'): ?>
+                        <div class="popular-badge-new">BEST VALUE</div>
+                    <?php endif; ?>
 
-            <?php
-                $planKey = 'couple';
-                $planIndex = array_search($planKey, $packageOrder, true);
-                $isCurrent = $currentPackage === $planKey;
-                $canSelect = empty($pendingUpgrades) && $planIndex > $currentIndex;
-            ?>
-            <div class="plan-card-new" data-plan="couple" data-monthly="750">
-                <?php if ($isCurrent): ?>
-                    <div class="current-badge-new">YOUR PLAN</div>
-                <?php else: ?>
-                    <div class="popular-badge-new">POPULAR</div>
-                <?php endif; ?>
-                <div class="plan-icon-new silver-icon">
-                    <i class="fas fa-user-friends"></i>
-                </div>
-                <h3 class="plan-name-new">Couple</h3>
-                <div class="plan-price-new">
-                    <span class="price-currency">KES</span>
-                    <span class="price-amount">750</span>
-                    <span class="price-period">/month</span>
-                </div>
-                <p class="plan-subtitle">Couple Coverage</p>
-                <div class="plan-features-new">
-                    <div class="feature-item-new"><i class="fas fa-check-circle"></i><span>Principal + spouse coverage</span></div>
-                    <div class="feature-item-new"><i class="fas fa-check-circle"></i><span>Priority claim handling</span></div>
-                    <div class="feature-item-new"><i class="fas fa-check-circle"></i><span>Extended support hours</span></div>
-                </div>
-                <?php if ($isCurrent): ?>
-                    <button class="plan-select-btn-new disabled-plan" disabled>Current Plan</button>
-                <?php elseif (!$canSelect): ?>
-                    <button class="plan-select-btn-new disabled-plan" disabled>Not Available</button>
-                <?php else: ?>
-                    <button class="plan-select-btn-new" onclick="selectPlan('couple', true)">
-                        <i class="fas fa-arrow-up"></i> Upgrade to Couple
-                    </button>
-                <?php endif; ?>
-            </div>
+                    <div class="plan-icon-new <?php echo $isPremium ? 'premium-icon' : ($planKey === 'individual' ? 'bronze-icon' : ($planKey === 'family' ? 'silver-icon' : 'gold-icon')); ?>">
+                        <i class="fas <?php echo $isPremium ? 'fa-crown' : ($planKey === 'individual' ? 'fa-user' : ($planKey === 'family' ? 'fa-user-friends' : 'fa-home')); ?>"></i>
+                    </div>
 
-            <?php
-                $planKey = 'family';
-                $planIndex = array_search($planKey, $packageOrder, true);
-                $isCurrent = $currentPackage === $planKey;
-                $canSelect = empty($pendingUpgrades) && $planIndex > $currentIndex;
-            ?>
-            <div class="plan-card-new highlight-plan" data-plan="family" data-monthly="1000">
-                <?php if ($isCurrent): ?>
-                    <div class="current-badge-new">YOUR PLAN</div>
-                <?php else: ?>
-                    <div class="popular-badge-new">BEST VALUE</div>
-                <?php endif; ?>
-                <div class="plan-icon-new gold-icon">
-                    <i class="fas fa-home"></i>
-                </div>
-                <h3 class="plan-name-new">Family</h3>
-                <div class="plan-price-new">
-                    <span class="price-currency">KES</span>
-                    <span class="price-amount">1,000</span>
-                    <span class="price-period">/month</span>
-                </div>
-                <p class="plan-subtitle">Family Protection</p>
-                <div class="plan-features-new">
-                    <div class="feature-item-new"><i class="fas fa-check-circle"></i><span>Couple + children coverage</span></div>
-                    <div class="feature-item-new"><i class="fas fa-check-circle"></i><span>Cash alternative option</span></div>
-                    <div class="feature-item-new"><i class="fas fa-check-circle"></i><span>Priority processing</span></div>
-                </div>
-                <?php if ($isCurrent): ?>
-                    <button class="plan-select-btn-new disabled-plan" disabled>Current Plan</button>
-                <?php elseif (!$canSelect): ?>
-                    <button class="plan-select-btn-new disabled-plan" disabled>Not Available</button>
-                <?php else: ?>
-                    <button class="plan-select-btn-new" onclick="selectPlan('family', true)">
-                        <i class="fas fa-arrow-up"></i> Upgrade to Family
-                    </button>
-                <?php endif; ?>
-            </div>
+                    <h3 class="plan-name-new"><?php echo htmlspecialchars($labelMap[$planKey] ?? ucwords(str_replace('_', ' ', $planKey))); ?></h3>
+                    <div class="plan-price-new">
+                        <span class="price-currency">KES</span>
+                        <span class="price-amount"><?php echo number_format($priceAmount, 0); ?></span>
+                        <span class="price-period">/month</span>
+                    </div>
+                    <p class="plan-subtitle"><?php echo htmlspecialchars($tierMeta['description'] ?? 'Coverage tier'); ?></p>
 
-            <?php
-                $planKey = 'executive';
-                $planIndex = array_search($planKey, $packageOrder, true);
-                $isCurrent = $currentPackage === $planKey;
-                $canSelect = empty($pendingUpgrades) && $planIndex > $currentIndex;
-            ?>
-            <div class="plan-card-new premium-plan" data-plan="executive" data-monthly="1500">
-                <?php if ($isCurrent): ?>
-                    <div class="current-badge-new">YOUR PLAN</div>
-                <?php else: ?>
-                    <div class="premium-badge-new"><i class="fas fa-crown"></i> PREMIUM</div>
-                <?php endif; ?>
-                <div class="plan-icon-new premium-icon">
-                    <i class="fas fa-crown"></i>
+                    <div class="plan-features-new">
+                        <?php foreach (array_slice(($tierMeta['coverage'] ?? []), 0, 3) as $coverageItem): ?>
+                            <div class="feature-item-new"><i class="fas fa-check-circle"></i><span><?php echo htmlspecialchars($coverageItem); ?></span></div>
+                        <?php endforeach; ?>
+                    </div>
+
+                    <?php if ($isCurrent): ?>
+                        <button class="plan-select-btn-new disabled-plan" disabled>Current Plan</button>
+                    <?php elseif (!$canSelect): ?>
+                        <button class="plan-select-btn-new disabled-plan" disabled>Not Available</button>
+                    <?php else: ?>
+                        <button class="plan-select-btn-new" onclick="selectPlan('<?php echo htmlspecialchars($planKey); ?>', true)">
+                            <i class="fas fa-arrow-up"></i> Upgrade to <?php echo htmlspecialchars($labelMap[$planKey] ?? ucwords(str_replace('_', ' ', $planKey))); ?>
+                        </button>
+                    <?php endif; ?>
                 </div>
-                <h3 class="plan-name-new">Executive</h3>
-                <div class="plan-price-new">
-                    <span class="price-currency">KES</span>
-                    <span class="price-amount">1,500</span>
-                    <span class="price-period">/month</span>
-                </div>
-                <p class="plan-subtitle">Premium Protection</p>
-                <div class="plan-features-new">
-                    <div class="feature-item-new"><i class="fas fa-check-circle"></i><span>Extended family coverage</span></div>
-                    <div class="feature-item-new"><i class="fas fa-check-circle"></i><span>Express claims & support</span></div>
-                    <div class="feature-item-new"><i class="fas fa-check-circle"></i><span>Dedicated assistance</span></div>
-                </div>
-                <?php if ($isCurrent): ?>
-                    <button class="plan-select-btn-new disabled-plan" disabled>Current Plan</button>
-                <?php elseif (!$canSelect): ?>
-                    <button class="plan-select-btn-new disabled-plan" disabled>Not Available</button>
-                <?php else: ?>
-                    <button class="plan-select-btn-new" onclick="selectPlan('executive', true)">
-                        <i class="fas fa-arrow-up"></i> Upgrade to Executive
-                    </button>
-                <?php endif; ?>
-            </div>
+            <?php endforeach; ?>
         </div>
     </div>
 
@@ -900,23 +816,23 @@ main {
 
                 <div class="cost-breakdown">
                     <div class="cost-row">
-                        <span class="cost-label">Current Plan (<?php echo ucfirst($currentPackage); ?>)</span>
-                        <span class="cost-value" id="currentMonthlyFee">KES <?php echo number_format($calculation['current_monthly_fee'] ?? 500, 2); ?></span>
+                        <span class="cost-label">Current Plan (<?php echo htmlspecialchars($labelMap[$currentPackage] ?? ucwords(str_replace('_', ' ', $currentPackage))); ?>)</span>
+                        <span class="cost-value" id="currentMonthlyFee">KES <?php echo number_format((float)($calculation['current_monthly_fee'] ?? ($memberData['monthly_contribution'] ?? 0)), 2); ?></span>
                     </div>
                     <div class="cost-row">
                         <span class="cost-label">Selected Plan Monthly Fee</span>
-                        <span class="cost-value" id="selectedMonthlyFee">KES <?php echo number_format($calculation['new_monthly_fee'] ?? 750, 2); ?></span>
+                        <span class="cost-value" id="selectedMonthlyFee">KES <?php echo number_format((float)($calculation['new_monthly_fee'] ?? 0), 2); ?></span>
                     </div>
                     <div class="cost-row">
                         <span class="cost-label">Monthly Difference</span>
-                        <span class="cost-value" id="monthlyDifference">+KES <?php echo number_format(($calculation['new_monthly_fee'] ?? 750) - ($calculation['current_monthly_fee'] ?? 500), 2); ?></span>
+                        <span class="cost-value" id="monthlyDifference">+KES <?php echo number_format(((float)($calculation['new_monthly_fee'] ?? 0)) - ((float)($calculation['current_monthly_fee'] ?? 0)), 2); ?></span>
                     </div>
                     <div class="cost-row">
                         <span class="cost-label" id="daysBasisLabel">Days Remaining in <?php echo $currentMonthLabel; ?></span>
                         <span class="cost-value" id="daysBasisValue"><?php echo $calculation['days_remaining'] ?? 15; ?> / <?php echo $calculation['total_days_in_month'] ?? 30; ?> days</span>
                     </div>
                     <div class="cost-row total">
-                        <span class="cost-label" id="payTodayLabel">Pay Today (<?php echo $initialCalculationMethod === 'direct' ? 'Direct Upgrade' : 'Prorated'; ?>)</span>
+                        <span class="cost-label" id="payTodayLabel">Pay Today (Prorated)</span>
                         <span class="cost-value" id="proratedAmount">KES <?php echo number_format($calculation['prorated_amount'] ?? 0, 2); ?></span>
                     </div>
                 </div>
@@ -925,7 +841,7 @@ main {
                     <i class="fas fa-info-circle"></i>
                     <div class="info-alert-content">
                         <h6>How It Works</h6>
-                        <p id="planNoticeText">Standard upgrades are prorated by remaining days in <?php echo $currentMonthLabel; ?>. Couple → Family/Executive upgrades are billed directly (no day proration). Starting <?php echo $nextMonthStartLabel; ?>, your monthly contribution will be <span id="nextMonthFee">KES <?php echo number_format($calculation['new_monthly_fee'] ?? 750, 2); ?></span>.</p>
+                        <p id="planNoticeText">Upgrade charges are prorated by remaining days in <?php echo $currentMonthLabel; ?>. Starting <?php echo $nextMonthStartLabel; ?>, your monthly contribution will be <span id="nextMonthFee">KES <?php echo number_format((float)($calculation['new_monthly_fee'] ?? 0), 2); ?></span>.</p>
                     </div>
                 </div>
 
@@ -943,7 +859,7 @@ main {
                         <input type="checkbox" class="form-check-input" id="agree_terms" required>
                         <label class="form-check-label" for="agree_terms">
                             I understand that by upgrading, my monthly contribution will increase to 
-                            <span id="agreementNewFee">KES <?php echo number_format($calculation['new_monthly_fee'] ?? 750, 2); ?></span> starting next month.
+                            <span id="agreementNewFee">KES <?php echo number_format((float)($calculation['new_monthly_fee'] ?? 0), 2); ?></span> starting next month.
                         </label>
                     </div>
                     
@@ -966,7 +882,7 @@ main {
                     <span class="guide-step">2</span>
                     <div>
                         <strong>Charges follow upgrade type</strong>
-                        <p>Standard upgrades use prorated billing, while Couple → Executive uses direct upgrade billing (no remaining-days proration).</p>
+                        <p>All upgrades use prorated billing based on remaining days in the current month.</p>
                     </div>
                 </div>
                 <div class="guide-item">
@@ -1024,18 +940,8 @@ main {
 const upgradeConfig = {
     currentPackage: '<?php echo $currentPackage; ?>',
     packageOrder: <?php echo json_encode($packageOrder); ?>,
-    fees: {
-        individual: 500,
-        couple: 750,
-        family: 1000,
-        executive: 1500
-    },
-    labels: {
-        individual: 'Individual',
-        couple: 'Couple',
-        family: 'Family',
-        executive: 'Executive'
-    },
+    fees: <?php echo json_encode($feeMap); ?>,
+    labels: <?php echo json_encode($labelMap); ?>,
     daysRemaining: <?php echo (int)($calculation['days_remaining'] ?? 15); ?>,
     totalDays: <?php echo (int)($calculation['total_days_in_month'] ?? 30); ?>,
     currentMonth: '<?php echo $currentMonthLabel; ?>',
@@ -1048,18 +954,6 @@ function formatCurrency(amount) {
 
 function resolveUpgradeCalculation(currentPackage, targetPackage, currentFee, newFee) {
     const difference = Math.max(0, newFee - currentFee);
-    const isDirect = currentPackage === 'couple' && (targetPackage === 'family' || targetPackage === 'executive');
-
-    if (isDirect) {
-        return {
-            method: 'direct',
-            payableToday: difference,
-            payLabel: 'Pay Today (Direct Upgrade)',
-            daysLabel: 'Billing Basis',
-            daysValue: 'Direct upgrade (no day proration)',
-            notice: 'This upgrade is billed directly (no remaining-days proration). Starting ' + upgradeConfig.nextMonthStart + ', your monthly contribution will be ' + formatCurrency(newFee) + '.'
-        };
-    }
 
     const prorated = difference * (upgradeConfig.daysRemaining / upgradeConfig.totalDays);
     return {
@@ -1118,11 +1012,7 @@ function selectPlan(planKey, shouldScroll = false) {
         notice.querySelector('h6').textContent = 'How It Works';
         const planNoticeText = document.getElementById('planNoticeText');
         if (planNoticeText) {
-            if (pricing.method === 'direct') {
-                planNoticeText.innerHTML = 'This upgrade is billed directly (no remaining-days proration). Starting ' + upgradeConfig.nextMonthStart + ', your monthly contribution will be <span id="nextMonthFee">' + formatCurrency(newFee) + '</span>.';
-            } else {
-                planNoticeText.innerHTML = 'This upgrade is prorated by remaining days in ' + upgradeConfig.currentMonth + '. Couple → Family/Executive upgrades are billed directly. Starting ' + upgradeConfig.nextMonthStart + ', your monthly contribution will be <span id="nextMonthFee">' + formatCurrency(newFee) + '</span>.';
-            }
+            planNoticeText.innerHTML = 'This upgrade is prorated by remaining days in ' + upgradeConfig.currentMonth + '. Starting ' + upgradeConfig.nextMonthStart + ', your monthly contribution will be <span id="nextMonthFee">' + formatCurrency(newFee) + '</span>.';
         } else {
             notice.querySelector('p').textContent = pricing.notice;
         }

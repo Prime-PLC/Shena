@@ -92,8 +92,9 @@
                                             <select class="form-select" id="filter_package" name="filter_package">
                                                 <option value="">All Packages</option>
                                                 <option value="individual">Individual</option>
-                                                <option value="couple">Couple</option>
                                                 <option value="family">Family</option>
+                                                <option value="extended_family_1">Extended Family 1</option>
+                                                <option value="extended_family_2">Extended Family 2</option>
                                                 <option value="executive">Executive</option>
                                             </select>
                                         </div>

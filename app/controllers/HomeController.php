@@ -30,17 +30,14 @@ class HomeController extends BaseController
 
         $packageTiers = [
             'individual' => ['slug' => 'individual', 'name' => 'Individual', 'price' => null, 'description' => 'Principal member cover', 'features' => ['Main member coverage', 'Mortuary support', 'Body dressing', 'Body transport', 'Executive coffin', 'Burial gear']],
-            'couple' => ['slug' => 'couple', 'name' => 'Couple', 'price' => null, 'description' => 'Principal + spouse cover', 'features' => ['Principal + spouse', 'Mortuary support', 'Body dressing', 'Body transport', 'Executive coffin', 'Burial gear']],
-            'family' => ['slug' => 'family', 'name' => 'Family', 'price' => null, 'description' => 'Couple and children support', 'features' => ['Couple + children', 'Parents options by plan', 'Mortuary support', 'Body dressing', 'Body transport', 'Burial gear']],
-            'executive' => ['slug' => 'executive', 'name' => 'Executive', 'price' => null, 'description' => 'Premium package support', 'features' => ['Priority response', 'Premium support coordination', 'All standard services', 'Enhanced package handling']]
+            'family' => ['slug' => 'family', 'name' => 'Family', 'price' => null, 'description' => 'Principal + spouse cover', 'features' => ['Principal + spouse', 'Mortuary support', 'Body dressing', 'Body transport', 'Executive coffin', 'Burial gear']],
+            'extended_family_1' => ['slug' => 'extended_family_1', 'name' => 'Extended Family 1', 'price' => null, 'description' => 'Couple + children + parents', 'features' => ['Couple + children', 'Parents coverage', 'Mortuary support', 'Body dressing', 'Body transport', 'Burial gear']],
+            'extended_family_2' => ['slug' => 'extended_family_2', 'name' => 'Extended Family 2', 'price' => null, 'description' => 'Couple + children + parents + in-laws', 'features' => ['Couple + children', 'Parents + in-laws coverage', 'Mortuary support', 'Body dressing', 'Body transport', 'Burial gear']],
+            'executive' => ['slug' => 'executive', 'name' => 'Executive', 'price' => null, 'description' => 'Premium individual package', 'features' => ['Principal member only', 'Premium support coordination', 'All standard services', 'Enhanced package handling']]
         ];
 
         foreach ($membership_packages as $key => $package) {
             $category = strtolower((string)($package['category'] ?? ''));
-
-            if ($category === 'extended_family' || $category === 'maximum_family') {
-                $category = 'family';
-            }
 
             if (!isset($packageTiers[$category])) {
                 continue;

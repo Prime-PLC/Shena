@@ -286,9 +286,13 @@ class AgentDashboardController extends BaseController
             return;
         }
 
+        global $membership_packages;
+
         $data = [
             'title' => 'Register New Member - Shena Companion Welfare Association',
             'agent' => $agent,
+            'packages' => $membership_packages,
+            'tier_definitions' => MembershipPricingService::getTierDefinitions(),
             'csrf_token' => $this->generateCsrfToken()
         ];
 
@@ -322,7 +326,8 @@ class AgentDashboardController extends BaseController
                 'address' => $_POST['address'] ?? '',
                 'next_of_kin' => $_POST['next_of_kin'] ?? '',
                 'next_of_kin_phone' => $_POST['next_of_kin_phone'] ?? '',
-                'package' => $_POST['package'] ?? ''
+                'package' => $_POST['package'] ?? '',
+                'corporate_couple_count' => $_POST['corporate_couple_count'] ?? 0
             ];
 
             // Validate passwords match
@@ -391,15 +396,16 @@ class AgentDashboardController extends BaseController
 
             global $membership_packages;
             $packageKey = $_POST['package'] ?? '';
+            $corporateCoupleCount = max(0, (int)($_POST['corporate_couple_count'] ?? 0));
             $normalizedPackage = $this->memberModel->normalizePackageTier($packageKey, $membership_packages[$packageKey] ?? []);
             
             $memberStmt = $this->db->getConnection()->prepare(
                 'INSERT INTO members (
                     user_id, agent_id, member_number, id_number, date_of_birth, gender, 
-                    address, next_of_kin, next_of_kin_phone, package, monthly_contribution, status, created_at
+                          address, next_of_kin, next_of_kin_phone, package, package_key, corporate_couple_count, monthly_contribution, status, created_at
                  ) VALUES (
                     :user_id, :agent_id, :member_number, :id_number, :date_of_birth, :gender,
-                    :address, :next_of_kin, :next_of_kin_phone, :package, :monthly_contribution, :status, NOW()
+                          :address, :next_of_kin, :next_of_kin_phone, :package, :package_key, :corporate_couple_count, :monthly_contribution, :status, NOW()
                  )'
             );
             // Calculate monthly contribution using central logic
@@ -424,6 +430,8 @@ class AgentDashboardController extends BaseController
                 ':next_of_kin' => $this->sanitizeInput($_POST['next_of_kin']),
                 ':next_of_kin_phone' => formatKenyanPhone($this->sanitizeInput($_POST['next_of_kin_phone'] ?? '')),
                 ':package' => $normalizedPackage,
+                ':package_key' => $packageKey,
+                ':corporate_couple_count' => $corporateCoupleCount,
                 ':monthly_contribution' => $monthlyContribution,
                 // New members registered by agents should start in 'inactive' status
                 // so admins can review/activate them. User account remains 'pending'.

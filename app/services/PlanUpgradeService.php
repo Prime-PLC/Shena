@@ -12,14 +12,6 @@ class PlanUpgradeService
     private $emailService;
     private $smsService;
     
-    // Package monthly fees (in KES)
-    const PACKAGE_FEES = [
-        'individual' => 500,
-        'couple' => 750,
-        'family' => 1000,
-        'executive' => 1500
-    ];
-
     const CALCULATION_METHOD_PRORATED = 'prorated';
     const CALCULATION_METHOD_DIRECT = 'direct';
     
@@ -36,11 +28,11 @@ class PlanUpgradeService
      * Calculate prorated upgrade cost
      * 
      * @param int $memberId Member ID
-     * @param string $toPackage Target package (couple, family, or executive)
+    * @param string $toPackage Target package tier
      * @param string|null $customDate Custom date for calculation (for testing)
      * @return array Calculation details
      */
-    public function calculateUpgradeCost($memberId, $toPackage = 'couple', $customDate = null)
+    public function calculateUpgradeCost($memberId, $toPackage = 'family', $customDate = null)
     {
         // Get member with user information
         $query = "SELECT m.*, u.first_name, u.last_name, u.email, u.phone 
@@ -55,7 +47,7 @@ class PlanUpgradeService
             throw new Exception('Member not found');
         }
         
-        $fromPackage = $this->memberModel->normalizePackageTier($member['package'] ?? 'individual');
+        $fromPackage = $this->memberModel->normalizePackageTier($member['package_key'] ?? ($member['package'] ?? 'individual'));
         $toPackage = $this->memberModel->normalizePackageTier($toPackage);
         
         if ($fromPackage === $toPackage) {
@@ -67,17 +59,29 @@ class PlanUpgradeService
         }
         
         // Validate upgrade path (must be upgrading to a higher tier)
-        $packageHierarchy = ['individual' => 1, 'couple' => 2, 'family' => 3, 'executive' => 4];
+        $packageHierarchy = [];
+        foreach (MembershipPricingService::getTierOrder() as $index => $tier) {
+            $packageHierarchy[$tier] = $index + 1;
+        }
         if (!isset($packageHierarchy[$fromPackage]) || !isset($packageHierarchy[$toPackage])) {
             throw new Exception('Invalid package specified');
         }
         if ($packageHierarchy[$toPackage] <= $packageHierarchy[$fromPackage]) {
             throw new Exception('Can only upgrade to a higher tier package');
         }
-        
-        // Get current and new monthly fees
-        $currentFee = self::PACKAGE_FEES[$fromPackage];
-        $newFee = self::PACKAGE_FEES[$toPackage];
+
+        // Get current and new monthly fees from centralized pricing rules.
+        $dependents = $this->memberModel->getMemberDependents($memberId);
+        $currentFee = (float)($member['monthly_contribution'] ?? 0);
+
+        if ($currentFee <= 0) {
+            $currentFee = (float)$this->memberModel->calculateMonthlyContribution($member, $dependents);
+        }
+
+        $memberForTarget = $member;
+        $memberForTarget['package'] = $toPackage;
+        $memberForTarget['package_key'] = $toPackage;
+        $newFee = (float)$this->memberModel->calculateMonthlyContribution($memberForTarget, $dependents);
         
         // Calculate days remaining in current month
         $today = $customDate ? new DateTime($customDate) : new DateTime();
@@ -120,7 +124,7 @@ class PlanUpgradeService
 
     /**
      * Determine upgrade calculation method.
-     * Couple -> Family/Executive upgrades are billed as direct upgrades (no day proration).
+        * Standardized flow uses prorated billing for all upgrades.
      *
      * @param string $fromPackage
      * @param string $toPackage
@@ -128,10 +132,6 @@ class PlanUpgradeService
      */
     private function resolveUpgradeCalculationMethod($fromPackage, $toPackage)
     {
-        if ($fromPackage === 'couple' && in_array($toPackage, ['family', 'executive'], true)) {
-            return self::CALCULATION_METHOD_DIRECT;
-        }
-
         return self::CALCULATION_METHOD_PRORATED;
     }
     
@@ -142,7 +142,7 @@ class PlanUpgradeService
      * @param string $toPackage Target package
      * @return int Upgrade request ID
      */
-    public function createUpgradeRequest($memberId, $toPackage = 'couple')
+    public function createUpgradeRequest($memberId, $toPackage = 'family')
     {
         $calculation = $this->calculateUpgradeCost($memberId, $toPackage);
         
@@ -243,10 +243,12 @@ class PlanUpgradeService
             // Ensure member array includes the new target package key for calculation
             $memberForCalc = $member;
             $memberForCalc['package'] = $request['to_package'];
+            $memberForCalc['package_key'] = $request['to_package'];
             $newMonthly = $this->memberModel->calculateMonthlyContribution($memberForCalc, $dependents);
 
             $updateMember = "UPDATE members SET 
                 package = :package,
+                package_key = :package_key,
                 monthly_contribution = :monthly_contribution,
                 last_upgrade_date = NOW(),
                 upgrade_count = upgrade_count + 1
@@ -254,6 +256,7 @@ class PlanUpgradeService
 
             $this->db->execute($updateMember, [
                 'package' => $request['to_package'],
+                'package_key' => $request['to_package'],
                 'monthly_contribution' => $newMonthly,
                 'member_id' => $request['member_id']
             ]);
@@ -453,6 +456,30 @@ class PlanUpgradeService
             error_log("Get pending upgrades error: " . $e->getMessage());
             return [];
         }
+    }
+
+    /**
+     * Build upgrade previews for all canonical tiers for UI cards.
+     *
+     * @param int $memberId
+     * @return array
+     */
+    public function getMemberUpgradePreviews($memberId)
+    {
+        $previews = [];
+
+        foreach (MembershipPricingService::getTierOrder() as $tier) {
+            try {
+                $previews[$tier] = $this->calculateUpgradeCost($memberId, $tier);
+            } catch (Exception $e) {
+                $previews[$tier] = [
+                    'to_package' => $tier,
+                    'error' => $e->getMessage()
+                ];
+            }
+        }
+
+        return $previews;
     }
     
     /**

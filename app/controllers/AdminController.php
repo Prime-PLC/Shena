@@ -342,8 +342,12 @@ class AdminController extends BaseController
         
         if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             // Show registration form
+            global $membership_packages;
             $data = [
-                'title' => 'Register New Member - Admin'
+                'title' => 'Register New Member - Admin',
+                'packages' => $membership_packages,
+                'tier_definitions' => MembershipPricingService::getTierDefinitions(),
+                'csrf_token' => $this->generateCsrfToken()
             ];
             
             $this->view('admin.register-member', $data);
@@ -364,6 +368,7 @@ class AdminController extends BaseController
             $gender = $this->sanitizeInput($_POST['gender'] ?? 'male');
             $address = $this->sanitizeInput($_POST['address'] ?? '');
             $packageKey = $this->sanitizeInput($_POST['package'] ?? 'individual_below_70');
+            $corporateCoupleCount = max(0, (int)($_POST['corporate_couple_count'] ?? 0));
             $password = $_POST['password'] ?? null;
 
             // Basic validation
@@ -460,6 +465,8 @@ class AdminController extends BaseController
                 'gender' => $gender,
                 'address' => $address,
                 'package' => $normalizedPackage,
+                'package_key' => $packageKey,
+                'corporate_couple_count' => $corporateCoupleCount,
                 'monthly_contribution' => $monthlyContribution,
                 'maturity_ends' => $maturityEnds,
                 'status' => 'inactive',

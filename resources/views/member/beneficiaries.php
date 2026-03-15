@@ -545,7 +545,7 @@ main {
                     <i class="fas fa-arrow-right"></i>
                 </div>
                 <div class="tier-item highlight">
-                    <div class="tier-badge silver">Couple</div>
+                    <div class="tier-badge silver">Family</div>
                     <div class="tier-value">2 Adults</div>
                     <div class="tier-label">Coverage</div>
                 </div>
@@ -553,16 +553,16 @@ main {
                     <i class="fas fa-arrow-right"></i>
                 </div>
                 <div class="tier-item highlight">
-                    <div class="tier-badge gold">Family</div>
-                    <div class="tier-value">Children</div>
+                    <div class="tier-badge gold">Extended 1</div>
+                    <div class="tier-value">+ Parents</div>
                     <div class="tier-label">Coverage</div>
                 </div>
                 <div class="tier-arrow">
                     <i class="fas fa-arrow-right"></i>
                 </div>
                 <div class="tier-item highlight">
-                    <div class="tier-badge platinum">Executive</div>
-                    <div class="tier-value">Extended</div>
+                    <div class="tier-badge platinum">Extended 2</div>
+                    <div class="tier-value">+ In-laws</div>
                     <div class="tier-label">Coverage</div>
                 </div>
             </div>

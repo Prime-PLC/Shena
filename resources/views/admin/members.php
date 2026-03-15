@@ -970,8 +970,9 @@ $pending_approvals = $pending_approvals ?? [];
             <select class="filter-select" id="filter-package" onchange="filterMembers()">
                 <option value="all">All Packages</option>
                 <option value="individual">Individual</option>
-                <option value="couple">Couple</option>
                 <option value="family">Family</option>
+                <option value="extended_family_1">Extended Family 1</option>
+                <option value="extended_family_2">Extended Family 2</option>
                 <option value="executive">Executive</option>
             </select>
             <button class="tab-action-btn" onclick="resetFilters()">

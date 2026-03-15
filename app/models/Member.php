@@ -101,22 +101,7 @@ class Member extends BaseModel
      */
     public function normalizePackageTier($packageValue, array $packageDefinition = [])
     {
-        $raw = strtolower((string)$packageValue);
-        $category = strtolower((string)($packageDefinition['category'] ?? ''));
-
-        if ($raw === 'executive' || $category === 'executive' || strpos($raw, 'executive') !== false) {
-            return 'executive';
-        }
-
-        if ($raw === 'couple' || strpos($raw, 'couple') !== false) {
-            return 'couple';
-        }
-
-        if ($raw === 'family' || strpos($raw, 'family') !== false || in_array($category, ['family', 'extended_family', 'maximum_family'], true)) {
-            return 'family';
-        }
-
-        return 'individual';
+        return MembershipPricingService::normalizeTier($packageValue, $packageDefinition);
     }
     
     /**
@@ -242,16 +227,20 @@ class Member extends BaseModel
         global $membership_packages;
 
         $basePackage = $this->resolveBasePackageForContribution($member, $membership_packages);
-        $baseAmount = (int)($basePackage['monthly_contribution'] ?? 100);
+        $principalAge = $this->calculateAge((string) ($member['date_of_birth'] ?? ($member['dob'] ?? '')));
+        $tier = $this->normalizePackageTier($member['package_key'] ?? ($member['package'] ?? 'individual'), $basePackage);
 
-        if (empty($dependents)) {
-            return $baseAmount;
-        }
+        $anchors = $this->resolveAnchorAgesFromDependents($dependents);
+        $calculated = MembershipPricingService::calculateMonthlyContribution([
+            'tier' => $tier,
+            'principal_age' => $principalAge,
+            'parents_anchor_age' => $anchors['parents_anchor_age'],
+            'inlaws_anchor_age' => $anchors['inlaws_anchor_age'],
+            'corporate_couple_count' => (int)($member['corporate_couple_count'] ?? 0),
+            'package_definition' => $basePackage
+        ]);
 
-        $limits = $this->extractDependentCoverageLimits($basePackage);
-        $overageAmount = $this->calculateDependentsOverageAmount($dependents, $limits, $membership_packages);
-
-        return $baseAmount + $overageAmount;
+        return (int)$calculated['total_price'];
     }
 
     /**
@@ -309,8 +298,10 @@ class Member extends BaseModel
 
         $normalizedCategory = strtolower((string)$category);
         $categoryAliasMap = [
-            'family' => ['family', 'extended_family', 'maximum_family'],
-            'couple' => ['couple'],
+            'family' => ['family'],
+            'extended_family_1' => ['extended_family_1', 'extended_family'],
+            'extended_family_2' => ['extended_family_2', 'maximum_family'],
+            'couple' => ['family'],
             'executive' => ['executive'],
             'individual' => ['individual']
         ];
@@ -484,18 +475,19 @@ class Member extends BaseModel
             'other' => 0
         ];
 
-        if ($packageTier === 'couple') {
-            $default['spouse'] = 1;
-            return $default;
-        }
-
         if ($packageTier === 'family') {
             $default['spouse'] = 1;
-            $default['children'] = 10;
             return $default;
         }
 
-        if ($packageTier === 'executive') {
+        if ($packageTier === 'extended_family_1') {
+            $default['spouse'] = 1;
+            $default['children'] = 10;
+            $default['parents'] = 4;
+            return $default;
+        }
+
+        if ($packageTier === 'extended_family_2') {
             $default['spouse'] = 1;
             $default['children'] = 10;
             $default['parents'] = 4;
@@ -538,22 +530,57 @@ class Member extends BaseModel
         }
 
         if ($bucket === 'spouse') {
-            return 'couple';
+            return 'family';
         }
 
         if ($bucket === 'children') {
-            if ($currentPackageTier === 'individual' || $currentPackageTier === 'couple') {
-                return 'family';
+            if ($currentPackageTier === 'individual' || $currentPackageTier === 'family') {
+                return 'extended_family_1';
             }
 
-            return 'executive';
+            return 'extended_family_2';
         }
 
-        if ($bucket === 'parents' || $bucket === 'inlaws' || $bucket === 'other') {
-            return 'executive';
+        if ($bucket === 'parents') {
+            return 'extended_family_1';
         }
 
-        return 'executive';
+        if ($bucket === 'inlaws' || $bucket === 'other') {
+            return 'extended_family_2';
+        }
+
+        return 'extended_family_2';
+    }
+
+    /**
+     * Resolve anchor ages used by extended family pricing bands.
+     *
+     * @param array $dependents
+     * @return array
+     */
+    private function resolveAnchorAgesFromDependents(array $dependents): array
+    {
+        $parentsAnchorAge = 0;
+        $inlawsAnchorAge = 0;
+
+        foreach ($dependents as $dependent) {
+            $age = $this->calculateAge((string) ($dependent['date_of_birth'] ?? ($dependent['dob'] ?? '')));
+            $relationship = strtolower((string)($dependent['relationship'] ?? ''));
+
+            if ($relationship === 'parent') {
+                $parentsAnchorAge = max($parentsAnchorAge, $age);
+                continue;
+            }
+
+            if ($relationship === 'father_in_law' || $relationship === 'mother_in_law') {
+                $inlawsAnchorAge = max($inlawsAnchorAge, $age);
+            }
+        }
+
+        return [
+            'parents_anchor_age' => $parentsAnchorAge,
+            'inlaws_anchor_age' => $inlawsAnchorAge
+        ];
     }
 
     /**

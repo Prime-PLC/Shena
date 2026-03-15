@@ -135,6 +135,7 @@
     </div>
 
     <form class="registration-form" action="/admin/members/register" method="POST">
+        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token ?? ''); ?>">
         <!-- Personal Information -->
         <div class="form-section">
             <h2 class="section-title">Personal Information</h2>
@@ -149,7 +150,7 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">National ID <span class="required">*</span></label>
-                    <input type="text" name="national_id" class="form-input" required>
+                    <input type="text" name="id_number" class="form-input" required>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Date of Birth <span class="required">*</span></label>
@@ -211,17 +212,19 @@
                     <label class="form-label">Package <span class="required">*</span></label>
                     <select name="package" class="form-select" required>
                         <option value="">Select Package</option>
-                        <option value="standard">Standard Plan</option>
-                        <option value="gold">Gold Plan</option>
-                        <option value="premium">Premium Plan</option>
+                        <?php foreach (($packages ?? []) as $packageKey => $package): ?>
+                            <option value="<?php echo htmlspecialchars($packageKey); ?>">
+                                <?php echo htmlspecialchars(($package['name'] ?? $packageKey) . ' - KES ' . number_format((float)($package['monthly_contribution'] ?? 0), 0) . '/month'); ?>
+                            </option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Payment Method <span class="required">*</span></label>
-                    <select name="payment_method" class="form-select" required>
-                        <option value="mpesa">M-Pesa</option>
-                        <option value="bank">Bank Transfer</option>
-                        <option value="cash">Cash</option>
+                    <label class="form-label">Corporate Couple Count</label>
+                    <select name="corporate_couple_count" class="form-select">
+                        <option value="0" selected>None</option>
+                        <option value="1">1 Additional Couple (+KES 150)</option>
+                        <option value="2">2 Additional Couples (+KES 300)</option>
                     </select>
                 </div>
                 <div class="form-group">

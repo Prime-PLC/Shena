@@ -1498,7 +1498,7 @@ class MemberController extends BaseController
         // Check for pending upgrades
         $pendingUpgrades = $upgradeService->getMemberPendingUpgrades($member['id']);
         
-        $packageOrder = ['individual', 'couple', 'family', 'executive'];
+        $packageOrder = MembershipPricingService::getTierOrder();
         $currentPackage = strtolower($normalizedCurrentPackage);
         $currentIndex = array_search($currentPackage, $packageOrder, true);
         $defaultTargetPackage = $packageOrder[min(($currentIndex !== false ? $currentIndex + 1 : 1), count($packageOrder) - 1)];
@@ -1514,13 +1514,16 @@ class MemberController extends BaseController
         
         // Get upgrade history
         $upgradeHistory = $upgradeService->getMemberUpgradeHistory($member['id']);
+        $upgradePreviews = $upgradeService->getMemberUpgradePreviews($member['id']);
         
         $this->view('member/upgrade', [
             'member' => $member,
             'calculation' => $calculation,
             'pendingUpgrades' => $pendingUpgrades,
             'upgradeHistory' => $upgradeHistory,
-            'defaultTargetPackage' => $defaultTargetPackage
+            'defaultTargetPackage' => $defaultTargetPackage,
+            'tierDefinitions' => MembershipPricingService::getTierDefinitions(),
+            'upgradePreviews' => $upgradePreviews
         ]);
     }
     
@@ -1551,8 +1554,8 @@ class MemberController extends BaseController
                 $jsonInput = [];
             }
 
-            $toPackage = $jsonInput['to_package'] ?? $_POST['to_package'] ?? 'couple';
-            $allowedPackages = ['individual', 'couple', 'family', 'executive'];
+            $toPackage = $jsonInput['to_package'] ?? $_POST['to_package'] ?? 'family';
+            $allowedPackages = MembershipPricingService::getTierOrder();
             if (!in_array($toPackage, $allowedPackages, true)) {
                 $this->json(['error' => 'Invalid package selected'], 400);
                 return;

@@ -20,8 +20,10 @@ $processed_members = [];
 if (!empty($members)) {
     $package_names = [
         'individual' => 'Individual Plan',
-        'couple' => 'Couple Plan',
+        'couple' => 'Family Plan',
         'family' => 'Family Plan',
+        'extended_family_1' => 'Extended Family 1 Plan',
+        'extended_family_2' => 'Extended Family 2 Plan',
         'executive' => 'Executive Plan'
     ];
     
