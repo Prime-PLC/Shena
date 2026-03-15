@@ -25,6 +25,22 @@ class Payment extends BaseModel
         
         return $this->db->fetchAll($sql, ['member_id' => $memberId]);
     }
+
+    public function getContributions($memberId, $limit = null)
+    {
+        $sql = "SELECT p.*, m.member_number 
+                FROM {$this->table} p 
+                JOIN members m ON p.member_id = m.id 
+                WHERE p.member_id = :member_id 
+                  AND p.payment_type != 'registration'
+                ORDER BY p.created_at DESC";
+        
+        if ($limit) {
+            $sql .= " LIMIT {$limit}";
+        }
+        
+        return $this->db->fetchAll($sql, ['member_id' => $memberId]);
+    }
     
     public function getPaymentsByDateRange($startDate, $endDate)
     {

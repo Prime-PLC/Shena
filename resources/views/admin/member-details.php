@@ -404,6 +404,10 @@ $beneficiaries = $beneficiaries ?? [];
                         <a href="/admin/members/payments/<?= $member['id'] ?>" class="btn btn-secondary" style="width: 100%;">
                             <i class="fas fa-money-bill-wave"></i> View Payments
                         </a>
+
+                        <button type="button" onclick="openAdminPayModal()" class="btn btn-primary" style="width: 100%; background: linear-gradient(135deg, #059669 0%, #047857 100%);">
+                            <i class="fas fa-hand-holding-usd"></i> Collect Payment
+                        </button>
                     </div>
                 </div>
             </div>
@@ -538,7 +542,124 @@ $beneficiaries = $beneficiaries ?? [];
     </div>
 </div>
 
+<!-- Collect Payment Modal -->
+<div class="modal fade" id="adminPayModal" tabindex="-1" aria-labelledby="adminPayModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius: 16px; overflow: hidden;">
+            <div class="modal-header" style="background: linear-gradient(135deg, #059669 0%, #047857 100%); color: white; border: none; padding: 20px 24px;">
+                <div>
+                    <h5 class="modal-title" id="adminPayModalLabel" style="font-weight: 700; margin: 0;">
+                        <i class="fas fa-hand-holding-usd" style="margin-right: 8px;"></i>Send M-Pesa Payment Request
+                    </h5>
+                    <p style="margin: 4px 0 0 0; font-size: 13px; opacity: 0.85;">
+                        Member: <?= htmlspecialchars(($member['first_name'] ?? '') . ' ' . ($member['last_name'] ?? '')) ?>
+                        &nbsp;(<?= htmlspecialchars($member['member_number'] ?? '') ?>)
+                    </p>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" style="padding: 24px;">
+                <div id="adminPayStatus" style="display: none; margin-bottom: 16px;">
+                    <div class="alert" id="adminPayStatusMsg" style="border-radius: 8px;"></div>
+                </div>
+                <div class="mb-3">
+                    <label for="adminPayPhone" class="form-label" style="font-weight: 600; color: #374151;">M-Pesa Phone Number <span style="color: #EF4444;">*</span></label>
+                    <input type="tel" id="adminPayPhone" class="form-control" placeholder="07XXXXXXXX"
+                        value="<?= htmlspecialchars($member['phone'] ?? '') ?>"
+                        style="border-radius: 8px; border: 1px solid #D1D5DB; padding: 10px 14px;">
+                    <div style="font-size: 12px; color: #6B7280; margin-top: 4px;">Format: 07XXXXXXXX or 254XXXXXXXXX</div>
+                </div>
+                <div class="mb-3">
+                    <label for="adminPayAmount" class="form-label" style="font-weight: 600; color: #374151;">Amount (KES) <span style="color: #EF4444;">*</span></label>
+                    <input type="number" id="adminPayAmount" class="form-control" placeholder="0.00" min="1" step="1"
+                        value="<?= (int)($member['monthly_contribution'] ?? 0) > 0 ? (int)$member['monthly_contribution'] : '' ?>"
+                        style="border-radius: 8px; border: 1px solid #D1D5DB; padding: 10px 14px;">
+                </div>
+                <div class="mb-3">
+                    <label for="adminPayType" class="form-label" style="font-weight: 600; color: #374151;">Payment Type</label>
+                    <select id="adminPayType" class="form-select" style="border-radius: 8px; border: 1px solid #D1D5DB; padding: 10px 14px;">
+                        <option value="monthly">Monthly Contribution</option>
+                        <option value="reactivation">Reactivation Fee</option>
+                        <option value="penalty">Penalty</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer" style="border: none; padding: 16px 24px 24px; gap: 10px;">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" style="border-radius: 8px;">Cancel</button>
+                <button type="button" id="adminPayBtn" onclick="submitAdminPayment(<?= (int)($member['id'] ?? 0) ?>)"
+                    style="background: linear-gradient(135deg, #059669 0%, #047857 100%); color: white; border: none; padding: 10px 24px; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                    <i class="fas fa-paper-plane"></i> Send M-Pesa Request
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
+function openAdminPayModal() {
+    const modal = new bootstrap.Modal(document.getElementById('adminPayModal'));
+    document.getElementById('adminPayStatus').style.display = 'none';
+    document.getElementById('adminPayBtn').disabled = false;
+    document.getElementById('adminPayBtn').innerHTML = '<i class="fas fa-paper-plane"></i> Send M-Pesa Request';
+    modal.show();
+}
+
+async function submitAdminPayment(memberId) {
+    const btn = document.getElementById('adminPayBtn');
+    const statusDiv = document.getElementById('adminPayStatus');
+    const statusMsg = document.getElementById('adminPayStatusMsg');
+    const phone = document.getElementById('adminPayPhone').value.trim();
+    const amount = parseFloat(document.getElementById('adminPayAmount').value);
+    const paymentType = document.getElementById('adminPayType').value;
+
+    if (!phone || phone.length < 9) {
+        ShenaApp.showNotification('Please enter a valid phone number.', 'warning');
+        return;
+    }
+    if (!amount || amount <= 0) {
+        ShenaApp.showNotification('Please enter a valid amount.', 'warning');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+    statusDiv.style.display = 'none';
+
+    try {
+        const response = await fetch('/payment/initiate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ member_id: memberId, phone_number: phone, amount: amount, payment_type: paymentType })
+        });
+
+        const data = await response.json();
+
+        statusDiv.style.display = 'block';
+        if (data.success) {
+            statusMsg.className = 'alert alert-success';
+            statusMsg.innerHTML = '<i class="fas fa-check-circle"></i> ' + data.message;
+            btn.innerHTML = '<i class="fas fa-check"></i> Sent';
+            setTimeout(() => {
+                bootstrap.Modal.getInstance(document.getElementById('adminPayModal'))?.hide();
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send M-Pesa Request';
+                statusDiv.style.display = 'none';
+            }, 3500);
+        } else {
+            statusMsg.className = 'alert alert-danger';
+            statusMsg.innerHTML = '<i class="fas fa-times-circle"></i> ' + (data.error || 'Failed to initiate payment.');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send M-Pesa Request';
+        }
+    } catch (err) {
+        statusDiv.style.display = 'block';
+        statusMsg.className = 'alert alert-danger';
+        statusMsg.innerHTML = '<i class="fas fa-times-circle"></i> Network error. Please try again.';
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send M-Pesa Request';
+    }
+}
+
 function confirmSuspend() {
     ShenaApp.confirmAction(
         'Are you sure you want to suspend this member? They will lose access to their account.',

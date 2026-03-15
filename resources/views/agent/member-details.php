@@ -735,7 +735,7 @@ if (!empty($payment_history)) {
                     <i class="fas fa-file-medical"></i>
                     Initiate Claim
                 </button>
-                <button class="btn-assist-payment" type="button" onclick="ShenaApp.showNotification('Payment assistance is only handled by admins.', 'info'); return false;">
+                <button class="btn-assist-payment" type="button" onclick="openAssistPaymentModal()">
                     <i class="fas fa-hand-holding-usd"></i>
                     Assist Payment
                 </button>
@@ -1022,5 +1022,124 @@ if (!empty($payment_history)) {
         </div>
     </div>
 </div>
+
+<!-- Assist Payment Modal -->
+<div class="modal fade" id="assistPaymentModal" tabindex="-1" aria-labelledby="assistPaymentModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius: 16px; overflow: hidden;">
+            <div class="modal-header" style="background: linear-gradient(135deg, #7F20B0 0%, #5E2B7A 100%); color: white; border: none; padding: 20px 24px;">
+                <div>
+                    <h5 class="modal-title" id="assistPaymentModalLabel" style="font-weight: 700; margin: 0;">
+                        <i class="fas fa-hand-holding-usd" style="margin-right: 8px;"></i>Send M-Pesa Payment Request
+                    </h5>
+                    <p style="margin: 4px 0 0 0; font-size: 13px; opacity: 0.85;">
+                        Member: <?php echo htmlspecialchars($member['first_name'] . ' ' . $member['last_name']); ?>
+                        &nbsp;(<?php echo htmlspecialchars($member['member_number'] ?? ''); ?>)
+                    </p>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" style="padding: 24px;">
+                <div id="agentPayStatus" style="display: none; margin-bottom: 16px;">
+                    <div class="alert" id="agentPayStatusMsg" style="border-radius: 8px;"></div>
+                </div>
+                <div class="mb-3">
+                    <label for="agentPayPhone" class="form-label" style="font-weight: 600; color: #374151;">M-Pesa Phone Number <span style="color: #EF4444;">*</span></label>
+                    <input type="tel" id="agentPayPhone" class="form-control" placeholder="07XXXXXXXX"
+                        value="<?php echo htmlspecialchars($member['phone'] ?? ''); ?>"
+                        style="border-radius: 8px; border: 1px solid #D1D5DB; padding: 10px 14px;">
+                    <div style="font-size: 12px; color: #6B7280; margin-top: 4px;">Format: 07XXXXXXXX or 254XXXXXXXXX</div>
+                </div>
+                <div class="mb-3">
+                    <label for="agentPayAmount" class="form-label" style="font-weight: 600; color: #374151;">Amount (KES) <span style="color: #EF4444;">*</span></label>
+                    <input type="number" id="agentPayAmount" class="form-control" placeholder="0.00" min="1" step="1"
+                        value="<?php echo (int)($member['monthly_contribution'] ?? 0) > 0 ? (int)$member['monthly_contribution'] : ''; ?>"
+                        style="border-radius: 8px; border: 1px solid #D1D5DB; padding: 10px 14px;">
+                </div>
+                <div class="mb-3">
+                    <label for="agentPayType" class="form-label" style="font-weight: 600; color: #374151;">Payment Type</label>
+                    <select id="agentPayType" class="form-select" style="border-radius: 8px; border: 1px solid #D1D5DB; padding: 10px 14px;">
+                        <option value="monthly">Monthly Contribution</option>
+                        <option value="reactivation">Reactivation Fee</option>
+                        <option value="penalty">Penalty</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer" style="border: none; padding: 16px 24px 24px; gap: 10px;">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" style="border-radius: 8px;">Cancel</button>
+                <button type="button" id="agentPayBtn" onclick="submitAgentPayment(<?php echo (int)($member['id'] ?? 0); ?>)"
+                    style="background: linear-gradient(135deg, #7F20B0 0%, #5E2B7A 100%); color: white; border: none; padding: 10px 24px; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                    <i class="fas fa-paper-plane"></i> Send M-Pesa Request
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function openAssistPaymentModal() {
+    const modal = new bootstrap.Modal(document.getElementById('assistPaymentModal'));
+    document.getElementById('agentPayStatus').style.display = 'none';
+    document.getElementById('agentPayBtn').disabled = false;
+    document.getElementById('agentPayBtn').innerHTML = '<i class="fas fa-paper-plane"></i> Send M-Pesa Request';
+    modal.show();
+}
+
+async function submitAgentPayment(memberId) {
+    const btn = document.getElementById('agentPayBtn');
+    const statusDiv = document.getElementById('agentPayStatus');
+    const statusMsg = document.getElementById('agentPayStatusMsg');
+    const phone = document.getElementById('agentPayPhone').value.trim();
+    const amount = parseFloat(document.getElementById('agentPayAmount').value);
+    const paymentType = document.getElementById('agentPayType').value;
+
+    if (!phone || phone.length < 9) {
+        ShenaApp.showNotification('Please enter a valid phone number.', 'warning');
+        return;
+    }
+    if (!amount || amount <= 0) {
+        ShenaApp.showNotification('Please enter a valid amount.', 'warning');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+    statusDiv.style.display = 'none';
+
+    try {
+        const response = await fetch('/agent/member-details/' + memberId + '/payment-assist', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone_number: phone, amount: amount, payment_type: paymentType })
+        });
+
+        const data = await response.json();
+
+        statusDiv.style.display = 'block';
+        if (data.success) {
+            statusMsg.className = 'alert alert-success';
+            statusMsg.innerHTML = '<i class="fas fa-check-circle"></i> ' + data.message;
+            btn.innerHTML = '<i class="fas fa-check"></i> Sent';
+            setTimeout(() => {
+                bootstrap.Modal.getInstance(document.getElementById('assistPaymentModal'))?.hide();
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send M-Pesa Request';
+                statusDiv.style.display = 'none';
+            }, 3500);
+        } else {
+            statusMsg.className = 'alert alert-danger';
+            statusMsg.innerHTML = '<i class="fas fa-times-circle"></i> ' + (data.error || 'Failed to initiate payment.');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send M-Pesa Request';
+        }
+    } catch (err) {
+        statusDiv.style.display = 'block';
+        statusMsg.className = 'alert alert-danger';
+        statusMsg.innerHTML = '<i class="fas fa-times-circle"></i> Network error. Please try again.';
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send M-Pesa Request';
+    }
+}
+</script>
 
 <?php include __DIR__ . '/../layouts/agent-footer.php'; ?>

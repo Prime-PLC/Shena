@@ -10,6 +10,7 @@ require_once __DIR__ . '/../models/Beneficiary.php';
 require_once __DIR__ . '/../models/PayoutRequest.php';
 require_once __DIR__ . '/../models/Resource.php';
 require_once __DIR__ . '/../services/InAppNotificationService.php';
+require_once __DIR__ . '/../services/PaymentService.php';
 
 
 
@@ -20,6 +21,7 @@ class AgentDashboardController extends BaseController
     private $memberModel;
     private $beneficiaryModel;
     private $payoutRequestModel;
+    private $paymentService;
 
     public function __construct()
     {
@@ -32,6 +34,7 @@ class AgentDashboardController extends BaseController
         $this->memberModel = new Member();
         $this->beneficiaryModel = new Beneficiary();
         $this->payoutRequestModel = new PayoutRequest();
+        $this->paymentService = new PaymentService();
     }
 
 
@@ -750,42 +753,80 @@ class AgentDashboardController extends BaseController
 
     public function requestPaymentAssistance($memberId)
     {
-        $this->validateCsrf();
+        header('Content-Type: application/json');
 
         $agent = $this->agentModel->getAgentByUserId($_SESSION['user_id']);
         if (!$agent) {
-            $_SESSION['error'] = 'Agent profile not found.';
-            $this->redirect('/agent/members');
+            echo json_encode(['success' => false, 'error' => 'Agent profile not found.']);
             return;
         }
 
         $member = $this->memberModel->getMemberById($memberId);
         if (!$member || $member['agent_id'] != $agent['id']) {
-            $_SESSION['error'] = 'You do not have access to this member.';
-            $this->redirect('/agent/members');
+            echo json_encode(['success' => false, 'error' => 'You do not have access to this member.']);
             return;
         }
 
-        $amount = (float)($_POST['amount'] ?? 0);
-        $paymentMethod = $this->sanitizeInput($_POST['payment_method'] ?? '');
-        $paymentNotes = $this->sanitizeInput($_POST['payment_notes'] ?? '');
+        // Accept JSON or POST
+        $input = json_decode(file_get_contents('php://input'), true);
+        if (!$input) {
+            $input = $_POST;
+        }
 
-        if ($amount <= 0 || $paymentMethod === '') {
-            $_SESSION['error'] = 'Please provide a valid amount and payment method.';
-            $this->redirect('/agent/member-details/' . (int)$memberId);
+        $amount = (float)($input['amount'] ?? 0);
+        $phoneNumber = trim($input['phone_number'] ?? '');
+        $paymentType = $input['payment_type'] ?? 'monthly';
+
+        if ($amount <= 0) {
+            echo json_encode(['success' => false, 'error' => 'Please provide a valid amount.']);
+            return;
+        }
+        if (empty($phoneNumber)) {
+            echo json_encode(['success' => false, 'error' => 'Please provide a phone number.']);
             return;
         }
 
-        $notification = new InAppNotificationService();
-        $notification->notifyAdmins([
-            'subject' => 'Payment assistance request',
-            'message' => "Agent {$agent['first_name']} {$agent['last_name']} requested payment assistance for member #{$member['member_number']} ({$member['first_name']} {$member['last_name']}). Amount: KES " . number_format($amount, 2) . ". Method: {$paymentMethod}. Notes: {$paymentNotes}",
-            'action_url' => '/admin/members/view/' . (int)$memberId,
-            'action_text' => 'View Member'
-        ], $_SESSION['user_id'] ?? null);
+        // Format phone number (254XXXXXXXXX)
+        $phoneNumber = preg_replace('/\D/', '', $phoneNumber);
+        if (strlen($phoneNumber) === 9) {
+            $phoneNumber = '254' . $phoneNumber;
+        } elseif (strlen($phoneNumber) === 10 && $phoneNumber[0] === '0') {
+            $phoneNumber = '254' . substr($phoneNumber, 1);
+        }
+        if (!preg_match('/^254[17]\d{8}$/', $phoneNumber)) {
+            echo json_encode(['success' => false, 'error' => 'Invalid phone number. Use format 07XXXXXXXX or 254XXXXXXXXX.']);
+            return;
+        }
 
-        $_SESSION['success'] = 'Payment assistance request sent to administration.';
-        $this->redirect('/agent/member-details/' . (int)$memberId);
+        try {
+            $response = $this->paymentService->initiateSTKPush(
+                $phoneNumber,
+                $amount,
+                $member['member_number'],
+                ucfirst($paymentType) . ' Contribution'
+            );
+
+            if ($response && isset($response['CheckoutRequestID'])) {
+                $this->paymentService->recordPaymentAttempt(
+                    $member['id'],
+                    $amount,
+                    $phoneNumber,
+                    $response['CheckoutRequestID'],
+                    $paymentType
+                );
+
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'M-Pesa request sent to ' . $phoneNumber . '. Please check your phone for the prompt.',
+                    'checkout_request_id' => $response['CheckoutRequestID']
+                ]);
+            } else {
+                echo json_encode(['success' => false, 'error' => 'Failed to initiate M-Pesa payment. Please try again.']);
+            }
+        } catch (Exception $e) {
+            error_log('Agent payment assistance error: ' . $e->getMessage());
+            echo json_encode(['success' => false, 'error' => 'Payment initiation failed. Please try again.']);
+        }
     }
 
     public function addDependent($memberId)

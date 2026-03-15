@@ -522,7 +522,7 @@ class MemberController extends BaseController
             return;
         }
         
-        $payments = $this->paymentModel->getMemberPayments($member['id']);
+        $payments = $this->paymentModel->getContributions($member['id']);
         $statusFilter = $this->sanitizeInput($_GET['status'] ?? '');
         $yearFilter = $this->sanitizeInput($_GET['year'] ?? '');
         $availableYears = $this->getPaymentYears($payments);
