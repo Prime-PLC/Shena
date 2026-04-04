@@ -3,6 +3,12 @@ RewriteEngine On
 # Serve favicon from existing image asset
 RewriteRule ^favicon\.ico$ public/images/shena-logo.png [L]
 
+# Enforce HTTPS in production
+RewriteCond %{HTTPS} off
+RewriteCond %{HTTP_HOST} !^localhost [NC]
+RewriteCond %{HTTP_HOST} !^127\.0\.0\.1 [NC]
+RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
+
 # Remove www from URL
 RewriteCond %{HTTP_HOST} ^www\.(.*)$ [NC]
 RewriteRule ^(.*)$ https://%1/$1 [R=301,L]
@@ -48,6 +54,17 @@ RewriteRule ^app/ - [F,L]
     Header always set X-Frame-Options SAMEORIGIN
     Header always set X-XSS-Protection "1; mode=block"
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+    # HSTS: 1 year, apply to subdomains — only active over HTTPS
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains" env=HTTPS
+</IfModule>
+
+# Block access to storage logs from web
+<IfModule mod_rewrite.c>
+    RewriteRule ^storage/logs/ - [F,L]
+    RewriteRule ^cron/ - [F,L]
+    RewriteRule ^scripts/ - [F,L]
+    RewriteRule ^archives/ - [F,L]
 </IfModule>
 
 # Compress files

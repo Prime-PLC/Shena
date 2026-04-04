@@ -34,6 +34,36 @@ $requestLog .= "Headers: " . json_encode(getallheaders()) . "\n";
 $requestLog .= str_repeat('-', 80) . "\n";
 file_put_contents($logFile, $requestLog, FILE_APPEND);
 
+// Validate caller IP against known Safaricom IP ranges
+// Production: 196.201.214.0/24, 196.201.215.0/24
+// Sandbox:    196.201.214.200
+function safaricom_ip_allowed(string $ip): bool {
+    // Allow localhost / private ranges during local development only
+    if (defined('DEBUG_MODE') && DEBUG_MODE) {
+        return true;
+    }
+    $allowedCidrs = [
+        '196.201.214.0/24',
+        '196.201.215.0/24',
+    ];
+    $long = ip2long($ip);
+    if ($long === false) return false;
+    foreach ($allowedCidrs as $cidr) {
+        [$base, $bits] = explode('/', $cidr);
+        $mask = -1 << (32 - (int)$bits);
+        if ((ip2long($base) & $mask) === ($long & $mask)) return true;
+    }
+    return false;
+}
+
+$callerIp = $_SERVER['REMOTE_ADDR'] ?? '';
+if (!safaricom_ip_allowed($callerIp)) {
+    http_response_code(403);
+    file_put_contents($logFile, "Error: Forbidden IP {$callerIp}\n\n", FILE_APPEND);
+    echo json_encode(['ResultCode' => 1, 'ResultDesc' => 'Forbidden']);
+    exit;
+}
+
 // Only accept POST requests
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);

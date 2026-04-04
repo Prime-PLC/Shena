@@ -2238,18 +2238,39 @@ class MemberController extends BaseController
             return;
         }
         
-        $subject = trim($_POST['subject'] ?? '');
-        $message = trim($_POST['message'] ?? '');
-        $priority = $_POST['priority'] ?? 'normal';
-        
+        $subject = $this->sanitizeInput(trim($_POST['subject'] ?? ''));
+        $message = $this->sanitizeInput(trim($_POST['message'] ?? ''));
+        $allowedPriorities = ['low', 'normal', 'high', 'urgent'];
+        $priority = in_array($_POST['priority'] ?? '', $allowedPriorities, true)
+            ? $_POST['priority']
+            : 'normal';
+
         if (empty($subject) || empty($message)) {
             $_SESSION['error'] = 'Please fill in all required fields.';
             $this->redirect('/member/support');
             return;
         }
-        
-        // TODO: Store support ticket in database
-        // For now, just show success message
+
+        try {
+            $db = \Database::getInstance()->getConnection();
+            $stmt = $db->prepare(
+                'INSERT INTO support_tickets (member_id, user_id, subject, message, priority)
+                 VALUES (:member_id, :user_id, :subject, :message, :priority)'
+            );
+            $stmt->execute([
+                ':member_id' => $member['id'],
+                ':user_id'   => $_SESSION['user_id'],
+                ':subject'   => $subject,
+                ':message'   => $message,
+                ':priority'  => $priority,
+            ]);
+        } catch (\Exception $e) {
+            error_log('Support ticket insert failed: ' . $e->getMessage());
+            $_SESSION['error'] = 'Failed to submit your request. Please try again.';
+            $this->redirect('/member/support');
+            return;
+        }
+
         $_SESSION['success'] = 'Your support request has been submitted successfully. Our team will get back to you soon.';
         $this->redirect('/member/support');
     }
