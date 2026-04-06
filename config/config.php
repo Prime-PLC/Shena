@@ -119,10 +119,10 @@ define('MAIL_FROM_EMAIL', envConfig('MAIL_FROM_EMAIL', 'noreply@shenacompanion.o
 define('MAIL_FROM_NAME', APP_NAME);
 
 // HostPinnacle SMS Configuration
-define('HOSTPINNACLE_USER_ID', getenv('HOSTPINNACLE_USER_ID') ?: 'oscar');
-define('HOSTPINNACLE_API_KEY', getenv('HOSTPINNACLE_API_KEY') ?: '9cc40ecba14145bdcd11845c744f5f9a5c043ef0');
-define('HOSTPINNACLE_SENDER_ID', getenv('HOSTPINNACLE_SENDER_ID') ?: 'SHENA');
-define('HOSTPINNACLE_SMS_API_URL', getenv('HOSTPINNACLE_SMS_API_URL') ?: 'https://smsportal.hostpinnacle.co.ke/SMSApi/send');
+define('HOSTPINNACLE_USER_ID', envConfig('HOSTPINNACLE_USER_ID', 'oscar'));
+define('HOSTPINNACLE_API_KEY', envConfig('HOSTPINNACLE_API_KEY', ''));
+define('HOSTPINNACLE_SENDER_ID', envConfig('HOSTPINNACLE_SENDER_ID', 'SHENA'));
+define('HOSTPINNACLE_SMS_API_URL', envConfig('HOSTPINNACLE_SMS_API_URL', 'https://smsportal.hostpinnacle.co.ke/SMSApi/send'));
 
 // Security Settings - CRITICAL: Change these in production
 define('ENCRYPTION_KEY', envConfig('ENCRYPTION_KEY', bin2hex(random_bytes(16))));
