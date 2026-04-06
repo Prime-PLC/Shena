@@ -41,30 +41,36 @@ $schema = preg_replace('/CREATE ALGORITHM=UNDEFINED /', '', $schema);
 // ── 3. Reset AUTO_INCREMENT counters (fresh install, no test data) ─────────────
 $schema = preg_replace('/\bAUTO_INCREMENT=\d+\b/', '', $schema);
 
-// ── 4. Update payments table: add STK-push columns & updated payment_type enum ──
-//    Find the payments CREATE TABLE and inject missing columns before PRIMARY KEY.
+// ── 4. Update payments table: ensure STK columns and updated payment_type enum exist.
+//    Use ALTER TABLE IF NOT EXISTS in the extensions block (step 5) so this is
+//    idempotent regardless of whether the source schema already contains them.
+//    Still attempt the regex injection for fresh schema exports that lack the columns.
 $stkCols = "  `merchant_request_id` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'M-Pesa Merchant Request ID',\n"
          . "  `checkout_request_id` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'M-Pesa Checkout Request ID',\n"
          . "  `result_code` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'M-Pesa result code',\n"
          . "  `result_desc` text COLLATE utf8mb4_unicode_ci COMMENT 'M-Pesa result description',\n";
 
-// Inject before the `auto_matched` column (last column before PRIMARY KEY in payments)
-$schema = preg_replace(
-    '/(  `auto_matched` tinyint\(1\) DEFAULT \'0\',\n  PRIMARY KEY \(`id`\))/s',
-    $stkCols . "  `auto_matched` tinyint(1) DEFAULT '0',\n  PRIMARY KEY (`id`)",
-    $schema
-);
+// Only inject if the columns are not already present in the schema
+if (strpos($schema, '`checkout_request_id`') === false) {
+    $schema = preg_replace(
+        '/(  `auto_matched` tinyint\(1\) DEFAULT \'0\',\n  PRIMARY KEY \(`id`\))/s',
+        $stkCols . "  `auto_matched` tinyint(1) DEFAULT '0',\n  PRIMARY KEY (`id`)",
+        $schema
+    );
+}
 
-// Add the STK column indexes before the payments FK constraint
+// Only inject STK indexes if not already present
 $stkIdxs = "  KEY `idx_payments_checkout_request` (`checkout_request_id`),\n"
           . "  KEY `idx_payments_merchant_request` (`merchant_request_id`),\n";
-$schema = preg_replace(
-    '/(  CONSTRAINT `payments_ibfk_1`)/s',
-    $stkIdxs . "  CONSTRAINT `payments_ibfk_1`",
-    $schema
-);
+if (strpos($schema, 'idx_payments_checkout_request') === false) {
+    $schema = preg_replace(
+        '/(  CONSTRAINT `payments_ibfk_1`)/s',
+        $stkIdxs . "  CONSTRAINT `payments_ibfk_1`",
+        $schema
+    );
+}
 
-// Update payment_type enum to include upgrade + other
+// Update payment_type enum (only if old definition still present)
 $schema = str_replace(
     "`payment_type` enum('registration','monthly','reactivation','penalty') COLLATE utf8mb4_unicode_ci DEFAULT 'monthly'",
     "`payment_type` enum('registration','monthly','reactivation','upgrade','penalty','other') COLLATE utf8mb4_unicode_ci DEFAULT 'monthly'",
