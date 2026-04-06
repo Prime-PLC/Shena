@@ -1,9 +1,9 @@
 -- =============================================================
 -- Shena Companion Welfare Association -- PRODUCTION DATABASE
--- Generated : 2026-04-04 14:38:43
+-- Generated : 2026-04-06 15:37:52
 -- Usage     : Import via cPanel -> phpMyAdmin -> Import tab
 --             Create an empty database first, then import.
--- IMPORTANT : Set REPLACE_WITH_PROD_PASSKEY_FROM_SAFARICOM before importing.
+-- IMPORTANT : Update REPLACE_WITH_* placeholders and YOURDOMAIN.COM
 --             before importing into production.
 -- =============================================================
 
@@ -625,10 +625,6 @@ CREATE TABLE `payments` (
   `reconciled_at` datetime DEFAULT NULL,
   `reconciled_by` int DEFAULT NULL,
   `reconciliation_notes` text COLLATE utf8mb4_unicode_ci,
-  `merchant_request_id` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'M-Pesa Merchant Request ID',
-  `checkout_request_id` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'M-Pesa Checkout Request ID',
-  `result_code` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'M-Pesa result code',
-  `result_desc` text COLLATE utf8mb4_unicode_ci COMMENT 'M-Pesa result description',
   `auto_matched` tinyint(1) DEFAULT '0',
   PRIMARY KEY (`id`),
   KEY `idx_payments_member_id` (`member_id`),
@@ -940,8 +936,7 @@ CREATE OR REPLACE VIEW VIEW `vw_unmatched_payments` AS select `p`.`id` AS `id`,`
 -- --------------------------------------------------------
 DROP VIEW IF EXISTS `vw_upgrade_statistics`;
 CREATE OR REPLACE VIEW VIEW `vw_upgrade_statistics` AS select count(0) AS `total_upgrades`,sum((case when (`plan_upgrade_requests`.`status` = 'completed') then 1 else 0 end)) AS `completed_upgrades`,sum((case when (`plan_upgrade_requests`.`status` = 'pending') then 1 else 0 end)) AS `pending_upgrades`,sum((case when (`plan_upgrade_requests`.`status` = 'failed') then 1 else 0 end)) AS `failed_upgrades`,sum((case when (`plan_upgrade_requests`.`status` = 'completed') then `plan_upgrade_requests`.`prorated_amount` else 0 end)) AS `total_upgrade_revenue`,avg((case when (`plan_upgrade_requests`.`status` = 'completed') then `plan_upgrade_requests`.`prorated_amount` end)) AS `avg_upgrade_amount`,avg((case when (`plan_upgrade_requests`.`status` = 'completed') then (to_days(`plan_upgrade_requests`.`completed_at`) - to_days(`plan_upgrade_requests`.`requested_at`)) end)) AS `avg_processing_days` from `plan_upgrade_requests` where (`plan_upgrade_requests`.`requested_at` >= (now() - interval 12 month));
-
-
+
 -- ============================================================
 -- POST-SCHEMA EXTENSIONS (added after Feb-23-2026 snapshot)
 -- ============================================================
@@ -1111,9 +1106,9 @@ VALUES (1, 0, 100);
 -- ── Seed: mpesa_configuration defaults (update values before going live) ──────
 INSERT INTO `mpesa_configuration` (`config_key`, `config_value`, `environment`, `description`) VALUES
 ('business_shortcode', '174379',                                       'sandbox',    'Sandbox Business Shortcode'),
-('business_shortcode', '4163987',                  'production', 'Production Business Shortcode'),
+('business_shortcode', '4163987',                                      'production', 'Production Business Shortcode'),
 ('passkey',            'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919', 'sandbox', 'Sandbox STK Passkey'),
-('passkey',            '8d00fa75b61e3cc62604dd96864519813d46537f248091a747868e6b4123c50a',                    'production', 'Production STK Passkey'),
+('passkey',            'REPLACE_WITH_PROD_PASSKEY_FROM_SAFARICOM',     'production', 'Production STK Passkey'),
 ('api_url',            'https://sandbox.safaricom.co.ke',              'sandbox',    'Sandbox API Base URL'),
 ('api_url',            'https://api.safaricom.co.ke',                  'production', 'Production API Base URL'),
 ('callback_url',       'https://shenacompanion.co.ke/public/mpesa-stk-callback.php', 'production', 'STK Callback URL'),
