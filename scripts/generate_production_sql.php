@@ -31,12 +31,15 @@ $schema = str_replace(
 );
 
 // ── 2. Remove DEFINER=`user`@`host` from views (not portable to shared hosting) ─
+// Original form: CREATE ALGORITHM=UNDEFINED DEFINER=`x`@`y` SQL SECURITY DEFINER VIEW `name`
+// Target form:   CREATE OR REPLACE VIEW `name`
 $schema = preg_replace(
-    '/CREATE ALGORITHM=UNDEFINED DEFINER=`[^`]+`@`[^`]+` SQL SECURITY DEFINER /',
+    '/CREATE(?:\s+ALGORITHM=\w+)?\s+DEFINER=`[^`]+`@`[^`]+`\s+SQL\s+SECURITY\s+\w+\s+VIEW\s+/',
     'CREATE OR REPLACE VIEW ',
     $schema
 );
-$schema = preg_replace('/CREATE ALGORITHM=UNDEFINED /', '', $schema);
+// Catch any remaining bare ALGORITHM clause without DEFINER
+$schema = preg_replace('/CREATE\s+ALGORITHM=\w+\s+/', 'CREATE OR REPLACE ', $schema);
 
 // ── 3. Reset AUTO_INCREMENT counters (fresh install, no test data) ─────────────
 $schema = preg_replace('/\bAUTO_INCREMENT=\d+\b/', '', $schema);
