@@ -1,7 +1,7 @@
 <?php include VIEWS_PATH . '/layouts/header.php'; ?>
 
 <!-- Services Hero Section -->
-<section style="position: relative; min-height: 500px; display: flex; align-items: center; background: linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.45)), url('/public/images/funeral-service1.jpeg') center/cover no-repeat;">
+<section style="position: relative; min-height: 500px; display: flex; align-items: center; background: linear-gradient(rgba(0, 0, 0, 0.50), rgba(0, 0, 0, 0.50)), url('/public/images/services2.jpeg') center/cover no-repeat;">
     <div class="container">
         <div class="row justify-content-center">
             <div class="col-lg-10 text-center text-white">
@@ -127,52 +127,6 @@
                 </div>
             </div>
 
-        </div>
-
-        <div style="background: white; border-radius: 24px; border: 1px solid #E5E7EB; box-shadow: 0 8px 24px rgba(0,0,0,0.08); margin-bottom: 34px; overflow: hidden;">
-            <div style="background: linear-gradient(135deg, #2D1A4A 0%, #1A0F2E 100%); padding: 24px 28px; color: white;">
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    <div style="width: 52px; height: 52px; border-radius: 14px; background: rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center;">
-                        <i class="fas fa-money-bill-wave" style="font-size: 1.5rem;"></i>
-                    </div>
-                    <div>
-                        <p style="margin: 0 0 4px 0; opacity: 0.85; font-size: 0.8rem; letter-spacing: 1px; font-weight: 700;">SEPARATE SERVICE</p>
-                        <h3 style="font-family: 'Playfair Display', serif; margin: 0; font-size: 2rem;">Cash Benefit</h3>
-                    </div>
-                </div>
-            </div>
-
-            <div style="padding: 28px;">
-                <p style="color: #4B5563; line-height: 1.75; margin-bottom: 14px;">
-                    Cash Benefit is different from Last Respect Services. Instead of SHENA arranging all funeral items directly, an approved cash amount is released to the family to support urgent funeral costs.
-                </p>
-                <p style="color: #4B5563; line-height: 1.75; margin-bottom: 14px;">
-                    In plain terms: once a valid claim is filed and required documents are verified, payout is processed and shared with the member/family.
-                </p>
-
-                <div class="row g-3 mt-1">
-                    <div class="col-md-6">
-                        <div style="background: #F8FAFC; border: 1px solid #E5E7EB; border-radius: 12px; padding: 16px; height: 100%;">
-                            <h5 style="font-size: 1rem; font-weight: 700; color: #1A1A1A; margin-bottom: 10px;">Typical onboarding details</h5>
-                            <ul style="margin: 0; padding-left: 18px; color: #4B5563; line-height: 1.7; font-size: 0.92rem;">
-                                <li>Member ID number</li>
-                                <li>KRA PIN</li>
-                                <li>ID details for covered family members</li>
-                            </ul>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div style="background: #F8FAFC; border: 1px solid #E5E7EB; border-radius: 12px; padding: 16px; height: 100%;">
-                            <h5 style="font-size: 1rem; font-weight: 700; color: #1A1A1A; margin-bottom: 10px;">Typical claim requirements</h5>
-                            <ul style="margin: 0; padding-left: 18px; color: #4B5563; line-height: 1.7; font-size: 0.92rem;">
-                                <li>Relevant death documents and IDs</li>
-                                <li>Claim form submission</li>
-                                <li>Verification before payout processing</li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-            </div>
         </div>
 
         <!-- Service Terms & Conditions -->

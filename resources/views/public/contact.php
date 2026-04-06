@@ -1,7 +1,7 @@
 <?php include VIEWS_PATH . '/layouts/header.php'; ?>
 
 <!-- Contact Hero Section -->
-<section style="padding: 80px 0; background: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url('https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=1600&q=80') center/cover no-repeat; border-radius: 30px; margin: 40px auto; max-width: 95%;">
+<section style="position: relative; min-height: 420px; display: flex; align-items: center; background: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url('/public/images/sensitization1.jpeg') center/cover no-repeat;">
     <div class="container">
         <div class="row justify-content-center">
             <div class="col-lg-10 text-center text-white">
@@ -109,6 +109,19 @@
                         <div class="mb-4">
                             <label for="message" style="color: #1A1A1A; font-weight: 600; font-size: 0.9rem; margin-bottom: 8px;">Message</label>
                             <textarea class="form-control" id="message" name="message" rows="5" placeholder="How can we help you?" required style="border: 1px solid #E5E7EB; border-radius: 10px; padding: 12px 16px;"></textarea>
+                        </div>
+
+                        <div style="background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 12px; padding: 18px 20px; margin: 20px 0;">
+                            <div class="form-check d-flex align-items-start gap-2">
+                                <input class="form-check-input" type="checkbox" name="consent" id="consentCheck" required style="width: 20px; height: 20px; margin-top: 2px; flex-shrink: 0; accent-color: #7F3D9E;">
+                                <label class="form-check-label" for="consentCheck" style="font-size: 0.9rem; color: #4B5563; line-height: 1.6;">
+                                    I have read and agree to SHENA Companion's
+                                    <a href="/terms-and-conditions" target="_blank" style="color: #7F3D9E; font-weight: 600;">Terms &amp; Conditions</a>,
+                                    <a href="/privacy-policy" target="_blank" style="color: #7F3D9E; font-weight: 600;">Privacy Policy</a>, and
+                                    <a href="/policy-booklet" target="_blank" style="color: #7F3D9E; font-weight: 600;">Policy Booklet</a>.
+                                    I consent to SHENA Companion processing my personal information for membership, payment, and service delivery.
+                                </label>
+                            </div>
                         </div>
 
                         <button type="submit" class="btn" style="background-color: #7F3D9E; color: white; padding: 14px 40px; border-radius: 10px; font-weight: 700; border: none; width: auto; display: inline-flex; align-items: center; gap: 8px;">

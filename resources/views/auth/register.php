@@ -1039,6 +1039,20 @@ include VIEWS_PATH . '/layouts/header.php';
                     </div>
                 </div>
                 
+                <!-- Consent Checkbox -->
+                <div class="terms-checkbox">
+                    <div class="form-check">
+                        <input type="checkbox" name="consent" id="consentCheck" required>
+                        <label for="consentCheck">
+                            I have read and agree to SHENA Companion's
+                            <a href="/terms-and-conditions" target="_blank">Terms &amp; Conditions</a>,
+                            <a href="/privacy-policy" target="_blank">Privacy Policy</a>, and
+                            <a href="/policy-booklet" target="_blank">Policy Booklet</a>.
+                            I consent to SHENA Companion processing my personal information for membership, payment, and service delivery.
+                        </label>
+                    </div>
+                </div>
+
                 <!-- Action Buttons -->
                 <div class="action-buttons">
                     <button type="button" class="btn-save">

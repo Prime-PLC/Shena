@@ -58,6 +58,13 @@
     .help-contact { display: flex; align-items: center; justify-content: center; gap: 10px; color: #78350F; font-weight: 700; font-size: 1.1rem; }
     
     @media (max-width: 992px) { .main-content { flex-direction: column-reverse; } .payment-sidebar { width: 100%; } }
+
+    .terms-checkbox { background: #F9FAFB; padding: 20px; border-radius: 15px; margin: 20px 0; border: 1px solid #E5E7EB; }
+    .terms-checkbox .form-check { display: flex; align-items: flex-start; gap: 12px; }
+    .terms-checkbox input[type="checkbox"] { width: 20px; height: 20px; margin-top: 3px; flex-shrink: 0; accent-color: #7F3D9E; }
+    .terms-checkbox label { font-size: 0.9rem; color: #4B5563; line-height: 1.6; cursor: pointer; }
+    .terms-checkbox a { color: #7F3D9E; font-weight: 600; text-decoration: none; }
+    .terms-checkbox a:hover { text-decoration: underline; }
 </style>
 
 <div class="registration-container">
@@ -165,6 +172,20 @@
                     </div>
                 </div>
                 
+                <!-- Consent Checkbox -->
+                <div class="terms-checkbox">
+                    <div class="form-check">
+                        <input type="checkbox" name="consent" id="consentCheck" required>
+                        <label for="consentCheck">
+                            I have read and agree to SHENA Companion's
+                            <a href="/terms-and-conditions" target="_blank">Terms &amp; Conditions</a>,
+                            <a href="/privacy-policy" target="_blank">Privacy Policy</a>, and
+                            <a href="/policy-booklet" target="_blank">Policy Booklet</a>.
+                            I consent to SHENA Companion processing my personal information for membership, payment, and service delivery.
+                        </label>
+                    </div>
+                </div>
+
                 <!-- Action Buttons -->
                 <div class="action-buttons">
                     <button type="button" class="btn-save">

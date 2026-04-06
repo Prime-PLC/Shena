@@ -1,28 +1,131 @@
 <?php include VIEWS_PATH . '/layouts/header.php'; ?>
 
-<!-- Hero Section -->
-<section class="hero-section" style="background: linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.45)), url('/public/images/background-image1.jpeg') center/cover no-repeat; min-height: 600px; display: flex; align-items: center;">
-    <div class="container">
-        <div class="row justify-content-center text-center">
-            <div class="col-lg-10">
-                <h1 class="mb-4" style="color: white; font-size: 3.5rem; font-weight: 700; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); font-family: 'Playfair Display', serif;">
-                    Dignified Send-off,<br>Lasting Support.
-                </h1>
-                <p class="lead mb-5" style="color: rgba(255, 255, 255, 0.95); font-size: 1.1rem; max-width: 700px; margin: 0 auto; text-shadow: 1px 1px 2px rgba(0,0,0,0.3);">
-                    A dedicated welfare association serving communities across Kenya with professional funeral cover and compassionate support.
-                </p>
-                <div class="d-flex gap-3 justify-content-center flex-wrap">
-                    <a href="/register" class="btn btn-lg" style="background-color: #7F3D9E; color: white; padding: 14px 40px; border-radius: 30px; font-weight: 600; border: none; box-shadow: 0 4px 12px rgba(127, 61, 158, 0.4);">
-                        Join Association
-                    </a>
-                    <a href="/about" class="btn btn-lg" style="background-color: white; color: #7F3D9E; padding: 14px 40px; border-radius: 30px; font-weight: 600; border: none; box-shadow: 0 4px 12px rgba(255, 255, 255, 0.3);">
-                        Our Benefits
-                    </a>
+<!-- Hero Slideshow Section -->
+<section id="heroSlideshow" style="position: relative; min-height: 620px; overflow: hidden;">
+
+    <!-- Slides -->
+    <?php
+    $heroSlides = [
+        [
+            'image' => '/public/images/background-image1.jpeg',
+            'heading' => 'Dignified Send-off,<br>Lasting Support.',
+            'sub'     => 'A dedicated welfare association serving communities across Kenya with professional funeral cover and compassionate support.',
+        ],
+        [
+            'image' => '/public/images/sensitization1.jpeg',
+            'heading' => 'Together We Stand,<br>Together We Serve.',
+            'sub'     => 'Mobilizing communities across Kenya to secure a peaceful and dignified farewell for every family member.',
+        ],
+        [
+            'image' => '/public/images/services.jpeg',
+            'heading' => 'Royal Care in<br>Every Farewell.',
+            'sub'     => 'From mortuary to burial site, SHENA handles every detail with professionalism, grace, and the highest respect.',
+        ],
+        [
+            'image' => '/public/images/hearse-service2.jpeg',
+            'heading' => 'Professional Services,<br>Heartfelt Compassion.',
+            'sub'     => 'Our specialized hearse fleet and expert team ensure a dignified final journey for your loved one.',
+        ],
+    ];
+    foreach ($heroSlides as $i => $slide):
+    ?>
+    <div class="hero-slide <?php echo $i === 0 ? 'active' : ''; ?>"
+         style="position: absolute; inset: 0; transition: opacity 1.2s ease, transform 1.2s ease; opacity: <?php echo $i === 0 ? '1' : '0'; ?>; transform: <?php echo $i === 0 ? 'scale(1)' : 'scale(1.04)'; ?>;">
+        <div style="position: absolute; inset: 0; background: linear-gradient(135deg, rgba(45,26,74,0.72) 0%, rgba(0,0,0,0.38) 100%), url('<?php echo $slide['image']; ?>') center/cover no-repeat;"></div>
+    </div>
+    <?php endforeach; ?>
+
+    <!-- Slide Content -->
+    <div style="position: relative; z-index: 10; min-height: 620px; display: flex; align-items: center;">
+        <div class="container">
+            <div class="row justify-content-center text-center">
+                <div class="col-lg-10">
+                    <?php foreach ($heroSlides as $i => $slide): ?>
+                    <div class="hero-text <?php echo $i === 0 ? 'active' : ''; ?>"
+                         style="position: absolute; left: 0; right: 0; transition: opacity 0.8s ease, transform 0.8s ease; opacity: <?php echo $i === 0 ? '1' : '0'; ?>; transform: <?php echo $i === 0 ? 'translateY(0)' : 'translateY(20px)'; ?>; pointer-events: <?php echo $i === 0 ? 'auto' : 'none'; ?>;">
+                        <h1 class="mb-4" style="color: white; font-size: clamp(2.2rem, 5vw, 3.5rem); font-weight: 700; text-shadow: 2px 2px 8px rgba(0,0,0,0.5); font-family: 'Playfair Display', serif; line-height: 1.2;">
+                            <?php echo $slide['heading']; ?>
+                        </h1>
+                        <p class="lead mb-5" style="color: rgba(255,255,255,0.93); font-size: 1.1rem; max-width: 680px; margin: 0 auto 2rem; text-shadow: 1px 1px 3px rgba(0,0,0,0.4); line-height: 1.7;">
+                            <?php echo $slide['sub']; ?>
+                        </p>
+                    </div>
+                    <?php endforeach; ?>
+                    <!-- Buttons always visible -->
+                    <div style="margin-top: 220px;" class="d-flex gap-3 justify-content-center flex-wrap">
+                        <a href="/register" class="btn btn-lg" style="background-color: #7F3D9E; color: white; padding: 14px 40px; border-radius: 30px; font-weight: 600; border: none; box-shadow: 0 4px 16px rgba(127,61,158,0.5); transition: background 0.2s;">
+                            Join Association
+                        </a>
+                        <a href="/about" class="btn btn-lg" style="background-color: rgba(255,255,255,0.15); color: white; padding: 14px 40px; border-radius: 30px; font-weight: 600; border: 2px solid rgba(255,255,255,0.7); backdrop-filter: blur(4px); transition: background 0.2s, color 0.2s; text-decoration: none;">
+                            Our Benefits
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
+
+    <!-- Slide Indicators -->
+    <div style="position: absolute; bottom: 28px; left: 0; right: 0; z-index: 20; display: flex; justify-content: center; gap: 10px;">
+        <?php foreach ($heroSlides as $i => $slide): ?>
+        <button class="hero-dot <?php echo $i === 0 ? 'active' : ''; ?>" onclick="goToSlide(<?php echo $i; ?>)"
+                style="width: <?php echo $i === 0 ? '32px' : '10px'; ?>; height: 10px; border-radius: 5px; background: <?php echo $i === 0 ? '#C9A659' : 'rgba(255,255,255,0.5)'; ?>; border: none; cursor: pointer; transition: all 0.4s ease; padding: 0;"></button>
+        <?php endforeach; ?>
+    </div>
+
+    <!-- Prev / Next Arrows -->
+    <button onclick="prevSlide()" style="position:absolute; left:20px; top:50%; transform:translateY(-50%); z-index:20; background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.3); color:white; width:46px; height:46px; border-radius:50%; font-size:1.1rem; cursor:pointer; backdrop-filter:blur(4px); transition:background 0.2s;" aria-label="Previous slide">
+        <i class="fas fa-chevron-left"></i>
+    </button>
+    <button onclick="nextSlide()" style="position:absolute; right:20px; top:50%; transform:translateY(-50%); z-index:20; background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.3); color:white; width:46px; height:46px; border-radius:50%; font-size:1.1rem; cursor:pointer; backdrop-filter:blur(4px); transition:background 0.2s;" aria-label="Next slide">
+        <i class="fas fa-chevron-right"></i>
+    </button>
 </section>
+
+<script>
+(function() {
+    const total = <?php echo count($heroSlides); ?>;
+    let current = 0;
+    let timer;
+
+    function activate(n) {
+        const slides = document.querySelectorAll('.hero-slide');
+        const texts  = document.querySelectorAll('.hero-text');
+        const dots   = document.querySelectorAll('.hero-dot');
+
+        slides[current].style.opacity = '0';
+        slides[current].style.transform = 'scale(1.04)';
+        texts[current].style.opacity  = '0';
+        texts[current].style.transform = 'translateY(20px)';
+        texts[current].style.pointerEvents = 'none';
+        dots[current].style.width = '10px';
+        dots[current].style.background = 'rgba(255,255,255,0.5)';
+        dots[current].classList.remove('active');
+
+        current = (n + total) % total;
+
+        slides[current].style.opacity = '1';
+        slides[current].style.transform = 'scale(1)';
+        texts[current].style.opacity  = '1';
+        texts[current].style.transform = 'translateY(0)';
+        texts[current].style.pointerEvents = 'auto';
+        dots[current].style.width = '32px';
+        dots[current].style.background = '#C9A659';
+        dots[current].classList.add('active');
+    }
+
+    function startTimer() {
+        clearInterval(timer);
+        timer = setInterval(function() { activate(current + 1); }, 5500);
+    }
+
+    window.nextSlide = function() { activate(current + 1); startTimer(); };
+    window.prevSlide = function() { activate(current - 1); startTimer(); };
+    window.goToSlide = function(n)  { if (n !== current) { activate(n); startTimer(); } };
+
+    startTimer();
+})();
+</script>
 
 <!-- Professional Care & Services Section -->
 <section class="section" style="padding: 80px 0; background: white;">
@@ -109,21 +212,6 @@
             </div>
         </div>
 
-        <div class="row justify-content-center mt-4">
-            <div class="col-lg-10">
-                <div style="background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 18px; box-shadow: 0 6px 20px rgba(0,0,0,0.07); overflow: hidden;">
-                    <div style="background: linear-gradient(135deg, #2D1A4A 0%, #1A0F2E 100%); color: white; padding: 18px 22px; display: flex; align-items: center; gap: 12px;">
-                        <i class="fas fa-money-bill-wave" style="font-size: 1.4rem;"></i>
-                        <h4 style="margin: 0; font-family: 'Playfair Display', serif; font-size: 1.5rem;">Cash Benefit (Separate Service)</h4>
-                    </div>
-                    <div style="padding: 20px 22px;">
-                        <p style="color: #4B5563; margin: 0; line-height: 1.7; font-size: 0.95rem;">
-                            Cash Benefit is offered separately from Last Respect Services. In simple terms, after required claim documents are verified, the family can receive an approved cash payout to support urgent funeral expenses.
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
 </section>
 
