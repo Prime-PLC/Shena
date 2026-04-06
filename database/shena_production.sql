@@ -3,7 +3,7 @@
 -- Generated : 2026-04-04 14:38:43
 -- Usage     : Import via cPanel -> phpMyAdmin -> Import tab
 --             Create an empty database first, then import.
--- IMPORTANT : Update REPLACE_WITH_* placeholders and YOURDOMAIN.COM
+-- IMPORTANT : Set REPLACE_WITH_PROD_PASSKEY_FROM_SAFARICOM before importing.
 --             before importing into production.
 -- =============================================================
 
@@ -55,7 +55,7 @@ CREATE TABLE `agent_commissions` (
   CONSTRAINT `agent_commissions_ibfk_1` FOREIGN KEY (`agent_id`) REFERENCES `agents` (`id`) ON DELETE CASCADE,
   CONSTRAINT `agent_commissions_ibfk_2` FOREIGN KEY (`member_id`) REFERENCES `members` (`id`) ON DELETE CASCADE,
   CONSTRAINT `agent_commissions_ibfk_3` FOREIGN KEY (`approved_by`) REFERENCES `users` (`id`)
-) ENGINE=InnoDB  DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB  DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
 DROP TABLE IF EXISTS `agents`;
@@ -87,7 +87,7 @@ CREATE TABLE `agents` (
   KEY `idx_status` (`status`),
   KEY `idx_phone` (`phone`),
   CONSTRAINT `agents_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB  DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB  DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
 DROP TABLE IF EXISTS `beneficiaries`;
@@ -127,7 +127,7 @@ CREATE TABLE `bulk_message_recipients` (
   KEY `idx_user` (`user_id`),
   CONSTRAINT `bulk_message_recipients_ibfk_1` FOREIGN KEY (`bulk_message_id`) REFERENCES `bulk_messages` (`id`) ON DELETE CASCADE,
   CONSTRAINT `bulk_message_recipients_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB  DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB  DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
 DROP TABLE IF EXISTS `bulk_messages`;
@@ -153,7 +153,7 @@ CREATE TABLE `bulk_messages` (
   KEY `idx_type` (`message_type`),
   KEY `idx_scheduled` (`scheduled_at`),
   CONSTRAINT `bulk_messages_ibfk_1` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`)
-) ENGINE=InnoDB  DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB  DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
 DROP TABLE IF EXISTS `claim_cash_alternative_agreements`;
@@ -396,7 +396,7 @@ CREATE TABLE `financial_transactions` (
   CONSTRAINT `financial_transactions_ibfk_2` FOREIGN KEY (`agent_id`) REFERENCES `agents` (`id`) ON DELETE SET NULL,
   CONSTRAINT `financial_transactions_ibfk_3` FOREIGN KEY (`payment_id`) REFERENCES `payments` (`id`) ON DELETE SET NULL,
   CONSTRAINT `financial_transactions_ibfk_4` FOREIGN KEY (`upgrade_request_id`) REFERENCES `plan_upgrade_requests` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
 DROP TABLE IF EXISTS `members`;
@@ -490,7 +490,7 @@ CREATE TABLE `mpesa_config` (
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
 DROP TABLE IF EXISTS `notification_logs`;
@@ -532,7 +532,7 @@ CREATE TABLE `notification_preferences` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `unique_user_prefs` (`user_id`),
   CONSTRAINT `notification_preferences_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB  DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB  DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
 DROP TABLE IF EXISTS `notifications`;
@@ -594,7 +594,7 @@ CREATE TABLE `payment_reminders` (
   KEY `idx_member_reminder` (`member_id`,`reminder_type`),
   KEY `idx_sent_at` (`sent_at`),
   CONSTRAINT `payment_reminders_ibfk_1` FOREIGN KEY (`member_id`) REFERENCES `members` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
 DROP TABLE IF EXISTS `payments`;
@@ -690,7 +690,7 @@ CREATE TABLE `plan_upgrade_history` (
   CONSTRAINT `plan_upgrade_history_ibfk_1` FOREIGN KEY (`member_id`) REFERENCES `members` (`id`) ON DELETE CASCADE,
   CONSTRAINT `plan_upgrade_history_ibfk_2` FOREIGN KEY (`upgrade_request_id`) REFERENCES `plan_upgrade_requests` (`id`) ON DELETE SET NULL,
   CONSTRAINT `plan_upgrade_history_ibfk_3` FOREIGN KEY (`processed_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB  DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB  DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
 DROP TABLE IF EXISTS `plan_upgrade_requests`;
@@ -719,7 +719,7 @@ CREATE TABLE `plan_upgrade_requests` (
   KEY `idx_status` (`status`),
   KEY `idx_requested_at` (`requested_at`),
   CONSTRAINT `plan_upgrade_requests_ibfk_1` FOREIGN KEY (`member_id`) REFERENCES `members` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB  DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB  DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
 DROP TABLE IF EXISTS `resource_downloads`;
@@ -786,7 +786,7 @@ CREATE TABLE `scheduled_campaigns` (
   KEY `idx_status_scheduled` (`status`,`scheduled_at`),
   KEY `idx_created_by` (`created_by`),
   CONSTRAINT `scheduled_campaigns_ibfk_1` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
 DROP TABLE IF EXISTS `settings`;
@@ -936,7 +936,8 @@ CREATE OR REPLACE VIEW VIEW `vw_unmatched_payments` AS select `p`.`id` AS `id`,`
 -- --------------------------------------------------------
 DROP VIEW IF EXISTS `vw_upgrade_statistics`;
 CREATE OR REPLACE VIEW VIEW `vw_upgrade_statistics` AS select count(0) AS `total_upgrades`,sum((case when (`plan_upgrade_requests`.`status` = 'completed') then 1 else 0 end)) AS `completed_upgrades`,sum((case when (`plan_upgrade_requests`.`status` = 'pending') then 1 else 0 end)) AS `pending_upgrades`,sum((case when (`plan_upgrade_requests`.`status` = 'failed') then 1 else 0 end)) AS `failed_upgrades`,sum((case when (`plan_upgrade_requests`.`status` = 'completed') then `plan_upgrade_requests`.`prorated_amount` else 0 end)) AS `total_upgrade_revenue`,avg((case when (`plan_upgrade_requests`.`status` = 'completed') then `plan_upgrade_requests`.`prorated_amount` end)) AS `avg_upgrade_amount`,avg((case when (`plan_upgrade_requests`.`status` = 'completed') then (to_days(`plan_upgrade_requests`.`completed_at`) - to_days(`plan_upgrade_requests`.`requested_at`)) end)) AS `avg_processing_days` from `plan_upgrade_requests` where (`plan_upgrade_requests`.`requested_at` >= (now() - interval 12 month));
-
+
+
 -- ============================================================
 -- POST-SCHEMA EXTENSIONS (added after Feb-23-2026 snapshot)
 -- ============================================================
@@ -1106,13 +1107,13 @@ VALUES (1, 0, 100);
 -- ── Seed: mpesa_configuration defaults (update values before going live) ──────
 INSERT INTO `mpesa_configuration` (`config_key`, `config_value`, `environment`, `description`) VALUES
 ('business_shortcode', '174379',                                       'sandbox',    'Sandbox Business Shortcode'),
-('business_shortcode', 'REPLACE_WITH_PROD_SHORTCODE',                  'production', 'Production Business Shortcode'),
+('business_shortcode', '4163987',                  'production', 'Production Business Shortcode'),
 ('passkey',            'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919', 'sandbox', 'Sandbox STK Passkey'),
-('passkey',            'REPLACE_WITH_PROD_PASSKEY',                    'production', 'Production STK Passkey'),
+('passkey',            'REPLACE_WITH_PROD_PASSKEY_FROM_SAFARICOM',                    'production', 'Production STK Passkey'),
 ('api_url',            'https://sandbox.safaricom.co.ke',              'sandbox',    'Sandbox API Base URL'),
 ('api_url',            'https://api.safaricom.co.ke',                  'production', 'Production API Base URL'),
-('callback_url',       'https://YOURDOMAIN.COM/public/mpesa-stk-callback.php', 'production', 'STK Callback URL'),
-('c2b_callback_url',   'https://YOURDOMAIN.COM/public/mpesa-c2b-callback.php', 'production', 'C2B Callback URL')
+('callback_url',       'https://shenacompanion.co.ke/public/mpesa-stk-callback.php', 'production', 'STK Callback URL'),
+('c2b_callback_url',   'https://shenacompanion.co.ke/public/mpesa-c2b-callback.php', 'production', 'C2B Callback URL')
 ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
 
 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS;
