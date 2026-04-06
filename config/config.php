@@ -111,11 +111,11 @@ define('MPESA_CALLBACK_URL', MPESA_STK_CALLBACK_URL); // Default to STK callback
 
 // Email Configuration (SMTP)
 define('MAIL_ENABLED', filter_var((string) envConfig('MAIL_ENABLED', 'false'), FILTER_VALIDATE_BOOLEAN));
-define('MAIL_HOST', 'smtp.gmail.com');
-define('MAIL_PORT', 587);
+define('MAIL_HOST', envConfig('MAIL_HOST', 'smtp.gmail.com'));
+define('MAIL_PORT', (int) envConfig('MAIL_PORT', 587));
 define('MAIL_USERNAME', envConfig('MAIL_USERNAME', ''));
 define('MAIL_PASSWORD', envConfig('MAIL_PASSWORD', ''));
-define('MAIL_FROM_EMAIL', 'noreply@shenacompanion.org');
+define('MAIL_FROM_EMAIL', envConfig('MAIL_FROM_EMAIL', 'noreply@shenacompanion.org'));
 define('MAIL_FROM_NAME', APP_NAME);
 
 // HostPinnacle SMS Configuration
