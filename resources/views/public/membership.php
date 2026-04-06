@@ -1,24 +1,22 @@
 <?php include VIEWS_PATH . '/layouts/header.php'; ?>
 
 <!-- Membership Hero Section -->
-<section style="padding: 80px 0; background: white;">
+<section style="position: relative; min-height: 480px; display: flex; align-items: center; background: linear-gradient(rgba(45,26,74,0.72), rgba(45,26,74,0.72)), url('/public/images/community.jpeg') center/cover no-repeat;">
     <div class="container">
         <div class="row justify-content-center">
-            <div class="col-lg-10">
-                <div style="background: linear-gradient(135deg, #F3E8FF 0%, #EDE9FE 100%); border-radius: 30px; padding: 80px 60px; text-align: center; box-shadow: 0 20px 60px rgba(127, 61, 158, 0.15);">
-                    <span style="background: rgba(127, 61, 158, 0.15); color: #7F3D9E; padding: 8px 20px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; letter-spacing: 1.5px; display: inline-block; margin-bottom: 30px;">
-                        PREMIUM COVERAGE
-                    </span>
-                    <h1 class="mb-4" style="font-family: 'Playfair Display', serif; font-size: 3.5rem; font-weight: 700; line-height: 1.2; color: #7F3D9E;">
-                        Choose Your Royal Protection
-                    </h1>
-                    <p class="mb-5" style="font-size: 1.1rem; line-height: 1.7; max-width: 700px; margin: 0 auto 40px; color: #4A5568;">
-                        Comprehensive coverage tailored for all ages and family sizes. Secure your future and your loved ones' peace of mind with our flexible monthly contribution plans.
-                    </p>
-                    <a href="#packages" class="btn btn-lg" style="background-color: #7F3D9E; color: white; padding: 16px 50px; border-radius: 10px; font-weight: 700; font-size: 1.1rem; border: none; box-shadow: 0 8px 20px rgba(127, 61, 158, 0.3); text-decoration: none;">
-                        View All Packages
-                    </a>
-                </div>
+            <div class="col-lg-9 text-center text-white">
+                <span style="background: rgba(201,166,89,0.25); color: #C9A659; padding: 8px 22px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; letter-spacing: 1.5px; display: inline-block; margin-bottom: 24px; border: 1px solid rgba(201,166,89,0.4);">
+                    PREMIUM COVERAGE
+                </span>
+                <h1 class="mb-4" style="font-family: 'Playfair Display', serif; font-size: clamp(2.2rem, 5vw, 3.5rem); font-weight: 700; line-height: 1.2; text-shadow: 2px 2px 6px rgba(0,0,0,0.4);">
+                    Choose Your Royal Protection
+                </h1>
+                <p class="mb-5" style="font-size: 1.1rem; line-height: 1.7; max-width: 660px; margin: 0 auto 36px; opacity: 0.92; text-shadow: 1px 1px 2px rgba(0,0,0,0.3);">
+                    Comprehensive coverage tailored for all ages and family sizes. Secure your future and your loved ones' peace of mind with our flexible monthly contribution plans.
+                </p>
+                <a href="#packages" class="btn btn-lg" style="background-color: #C9A659; color: #1A1A1A; padding: 16px 50px; border-radius: 10px; font-weight: 700; font-size: 1.1rem; border: none; box-shadow: 0 8px 20px rgba(201,166,89,0.35); text-decoration: none;">
+                    View All Packages
+                </a>
             </div>
         </div>
     </div>

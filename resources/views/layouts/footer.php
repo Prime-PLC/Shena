@@ -102,6 +102,77 @@
 
     <!-- App JS (Shena modal system) -->
     <script src="/public/js/app.js"></script>
+
+    <!-- ── Scroll Reveal (slide-in from below) ──────────────────── -->
+    <style>
+        .reveal-up {
+            opacity: 0;
+            transform: translateY(48px);
+            transition: opacity 0.65s cubic-bezier(0.22,1,0.36,1), transform 0.65s cubic-bezier(0.22,1,0.36,1);
+        }
+        .reveal-up.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        /* stagger children inside a parent */
+        .reveal-stagger > * {
+            opacity: 0;
+            transform: translateY(40px);
+            transition: opacity 0.6s cubic-bezier(0.22,1,0.36,1), transform 0.6s cubic-bezier(0.22,1,0.36,1);
+        }
+        .reveal-stagger.visible > *:nth-child(1) { transition-delay: 0s;    opacity: 1; transform: translateY(0); }
+        .reveal-stagger.visible > *:nth-child(2) { transition-delay: 0.1s;  opacity: 1; transform: translateY(0); }
+        .reveal-stagger.visible > *:nth-child(3) { transition-delay: 0.2s;  opacity: 1; transform: translateY(0); }
+        .reveal-stagger.visible > *:nth-child(4) { transition-delay: 0.3s;  opacity: 1; transform: translateY(0); }
+        .reveal-stagger.visible > *:nth-child(5) { transition-delay: 0.4s;  opacity: 1; transform: translateY(0); }
+        .reveal-stagger.visible > *:nth-child(n+6) { transition-delay: 0.5s; opacity: 1; transform: translateY(0); }
+    </style>
+    <script>
+    (function() {
+        var io = null;
+
+        function init() {
+            // Auto-mark sections, cards, rows and headings that don't already have reveal class
+            var autoTargets = document.querySelectorAll(
+                'section:not(.hero-section):not(#heroSlideshow) > .container > .row,' +
+                'section:not(.hero-section):not(#heroSlideshow) > .container > .text-center,' +
+                'section:not(.hero-section):not(#heroSlideshow) > .container > div:not(.row):not(.text-center)'
+            );
+            autoTargets.forEach(function(el) {
+                if (!el.classList.contains('reveal-up') && !el.classList.contains('reveal-stagger')) {
+                    el.classList.add('reveal-up');
+                }
+            });
+
+            // Gather all reveal elements
+            var els = document.querySelectorAll('.reveal-up, .reveal-stagger');
+
+            if (!('IntersectionObserver' in window)) {
+                // Fallback: show everything immediately
+                els.forEach(function(el) { el.classList.add('visible'); });
+                return;
+            }
+
+            io = new IntersectionObserver(function(entries) {
+                entries.forEach(function(entry) {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('visible');
+                        io.unobserve(entry.target);
+                    }
+                });
+            }, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
+
+            els.forEach(function(el) { io.observe(el); });
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+    <!-- ────────────────────────────────────────────────────────── -->
     
     <!-- Custom JavaScript -->
     <script>
