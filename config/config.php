@@ -51,9 +51,20 @@ define('APP_NAME', getenv('APP_NAME') ?: 'Shena Companion Welfare Association');
 // It runs before any constants are defined, injects LOCAL_ env vars into
 // $_SERVER so envConfig() picks them up, and forces $isLocalEnvironment=true
 // even for plain CLI runs (php script.php).
-if (file_exists(__DIR__ . '/local_config.php')) {
+// SAFETY: Only load local_config.php on localhost web requests or cli-server.
+// On production (even CLI crons), the HTTP_HOST won't be localhost and
+// SAPI won't be cli-server, so local_config.php is never loaded.
+$_httpHost = $_SERVER['HTTP_HOST'] ?? '';
+$_isDevServer = preg_match('/^(localhost|127\.0\.0\.1)(:\d+)?$/i', $_httpHost) === 1
+             || PHP_SAPI === 'cli-server';
+// For bare CLI (crons, scripts): only load local_config if .env says DEBUG_MODE=true
+if (PHP_SAPI === 'cli') {
+    $_isDevServer = (getenv('DEBUG_MODE') === 'true' || ($_ENV['DEBUG_MODE'] ?? '') === 'true');
+}
+if ($_isDevServer && file_exists(__DIR__ . '/local_config.php')) {
     require_once __DIR__ . '/local_config.php';
 }
+unset($_httpHost, $_isDevServer);
 
 $httpHost = $_SERVER['HTTP_HOST'] ?? '';
 $isLocalHost = preg_match('/^(localhost|127\.0\.0\.1)(:\d+)?$/i', $httpHost) === 1;
