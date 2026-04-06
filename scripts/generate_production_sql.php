@@ -50,8 +50,8 @@ $stkCols = "  `merchant_request_id` varchar(100) COLLATE utf8mb4_unicode_ci DEFA
          . "  `result_code` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'M-Pesa result code',\n"
          . "  `result_desc` text COLLATE utf8mb4_unicode_ci COMMENT 'M-Pesa result description',\n";
 
-// Only inject if the columns are not already present in the schema
-if (strpos($schema, '`checkout_request_id`') === false) {
+// Only inject if the column definition (not just index reference) is absent
+if (!preg_match('/`checkout_request_id`\s+varchar/', $schema)) {
     $schema = preg_replace(
         '/(  `auto_matched` tinyint\(1\) DEFAULT \'0\',\n  PRIMARY KEY \(`id`\))/s',
         $stkCols . "  `auto_matched` tinyint(1) DEFAULT '0',\n  PRIMARY KEY (`id`)",
@@ -59,10 +59,10 @@ if (strpos($schema, '`checkout_request_id`') === false) {
     );
 }
 
-// Only inject STK indexes if not already present
+// Only inject STK indexes if not already present as a KEY line
 $stkIdxs = "  KEY `idx_payments_checkout_request` (`checkout_request_id`),\n"
           . "  KEY `idx_payments_merchant_request` (`merchant_request_id`),\n";
-if (strpos($schema, 'idx_payments_checkout_request') === false) {
+if (!preg_match('/KEY `idx_payments_checkout_request`/', $schema)) {
     $schema = preg_replace(
         '/(  CONSTRAINT `payments_ibfk_1`)/s',
         $stkIdxs . "  CONSTRAINT `payments_ibfk_1`",
