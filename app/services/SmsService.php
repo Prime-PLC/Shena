@@ -75,8 +75,10 @@ class SmsService
             if ($httpCode == 200) {
                 $result = json_decode($response, true);
                 
-                // HostPinnacle returns success with status code 200
-                if (isset($result['status']) && $result['status'] == '200') {
+                // HostPinnacle returns {"status":"success","transactionId":"..."} on success
+                // (older docs listed status:"200" — accept both for safety)
+                $statusVal = strtolower((string)($result['status'] ?? ''));
+                if ($statusVal === 'success' || $statusVal === '200' || !empty($result['transactionId'])) {
                     return ['success' => true, 'data' => $result];
                 } else {
                     error_log('SMS sending failed: ' . $response);

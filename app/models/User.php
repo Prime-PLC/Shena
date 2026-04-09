@@ -113,6 +113,14 @@ class User extends BaseModel
             return $user;
         }
         
+        // Try phone number (for users who registered with phone only)
+        if (function_exists('formatKenyanPhone')) {
+            $user = $this->findByPhone(formatKenyanPhone($credential));
+            if ($user) {
+                return $user;
+            }
+        }
+
         // Try member number
         $user = $this->findByMemberNumber($credential);
         if ($user) {

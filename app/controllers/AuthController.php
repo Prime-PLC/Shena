@@ -160,31 +160,55 @@ class AuthController extends BaseController
                 return;
             }
 
+            // Rate limiting: 60 s cooldown + max 5 sends per 15-min window
+            $rateLimitKey = 'otp_login_' . md5($phone);
+            if (!isset($_SESSION[$rateLimitKey])) {
+                $_SESSION[$rateLimitKey] = ['count' => 0, 'window_start' => time(), 'last_sent' => 0];
+            }
+            if (time() - (int)$_SESSION[$rateLimitKey]['window_start'] > 900) {
+                $_SESSION[$rateLimitKey] = ['count' => 0, 'window_start' => time(), 'last_sent' => 0];
+            }
+            $cooldown = 60 - (time() - (int)$_SESSION[$rateLimitKey]['last_sent']);
+            if ($cooldown > 0) {
+                $this->json(['success' => false, 'message' => 'Please wait ' . $cooldown . ' seconds before requesting another code.'], 429);
+                return;
+            }
+            if ((int)$_SESSION[$rateLimitKey]['count'] >= 5) {
+                $this->json(['success' => false, 'message' => 'Too many OTP requests. Please try again in 15 minutes or use password login.'], 429);
+                return;
+            }
+
             $otpCode = $this->generateOtpCode();
             $otpMessage = 'Your SHENA login verification code is ' . $otpCode . '. It expires in 5 minutes.';
 
-            $smsService = new SmsService();
-            $smsResult = $smsService->sendSms($phone, $otpMessage);
-
-            $responseMessage = 'OTP sent successfully. Enter the code to continue.';
-            if (empty($smsResult['success'])) {
-                if ($this->isLocalOrDebugEnvironment()) {
-                    $responseMessage = 'SMS delivery is unavailable in this environment. Use test OTP: ' . $otpCode;
-                } else {
-                    $this->json(['success' => false, 'message' => 'Unable to send OTP at the moment. Please try password login.'], 500);
-                    return;
-                }
-            }
-
+            // Store session BEFORE sending SMS so verification works even if SMS
+            // delivery reporting has a transient error but the SMS was actually sent.
             $_SESSION['login_otp'] = [
                 'user_id' => (int) $user['id'],
                 'code_hash' => password_hash($otpCode, PASSWORD_DEFAULT),
                 'phone' => $phone,
                 'expires_at' => time() + 300,
-                'attempts' => 0
+                'attempts' => 0,
+                'last_sent_at' => time()
             ];
+            $_SESSION[$rateLimitKey]['count']++;
+            $_SESSION[$rateLimitKey]['last_sent'] = time();
 
-            $this->json(['success' => true, 'message' => $responseMessage]);
+            $smsService = new SmsService();
+            $smsResult = $smsService->sendSms($phone, $otpMessage);
+
+            if (empty($smsResult['success'])) {
+                if ($this->isLocalOrDebugEnvironment()) {
+                    $this->json(['success' => true, 'message' => 'SMS unavailable in this environment. Use test OTP: ' . $otpCode]);
+                } else {
+                    error_log('Login OTP SMS error for ' . $phone . ': ' . ($smsResult['error'] ?? 'unknown'));
+                    // Session is already set — user may still receive the SMS.
+                    $this->json(['success' => true, 'message' => 'Verification code sent. Check your phone and enter the code below.']);
+                }
+                return;
+            }
+
+            $this->json(['success' => true, 'message' => 'Verification code sent to your phone. Enter the code below.']);
         } catch (Exception $e) {
             error_log('Send login OTP error: ' . $e->getMessage());
             $this->json(['success' => false, 'message' => 'Failed to send OTP. Please try again.'], 500);
@@ -1350,6 +1374,14 @@ class AuthController extends BaseController
                 return;
             }
 
+            // Max 3 resends per registration — prevents exhausting SMS credits
+            $resendCount = (int)($otpSession['resend_count'] ?? 0);
+            if ($resendCount >= 3) {
+                $_SESSION['error'] = 'Maximum resend attempts reached. Please start registration again or contact support at +254 748 585 067.';
+                $this->redirect('/register/verify-otp');
+                return;
+            }
+
             $lastSentAt = (int)($otpSession['last_sent_at'] ?? 0);
             $cooldownSeconds = 60;
             $remaining = $cooldownSeconds - (time() - $lastSentAt);
@@ -1374,6 +1406,7 @@ class AuthController extends BaseController
 
             $_SESSION['signup_otp']['code_hash'] = password_hash($otpCode, PASSWORD_DEFAULT);
             $_SESSION['signup_otp']['expires_at'] = time() + 600;
+            $_SESSION['signup_otp']['resend_count'] = $resendCount + 1;
             $_SESSION['signup_otp']['attempts'] = 0;
             $_SESSION['signup_otp']['last_sent_at'] = time();
 

@@ -537,8 +537,8 @@ include VIEWS_PATH . '/layouts/header.php';
                         <input type="hidden" name="csrf_token" value="<?php echo $csrf_token ?? ''; ?>">
                         
                         <div class="form-group">
-                            <label class="form-label">Member ID / Email / National ID</label>
-                            <input type="text" name="email" class="form-control" placeholder="Enter your ID, email, or national ID" required
+                            <label class="form-label">Phone / Member ID / Email / National ID</label>
+                            <input type="text" name="email" class="form-control" placeholder="Enter phone, member ID, email, or national ID" required
                                 value="<?php echo htmlspecialchars($email ?? $_POST['email'] ?? ($_SESSION['email'] ?? ''), ENT_QUOTES); ?>" aria-describedby="emailHelp">
                             <?php if (!empty($_SESSION['email'])) { unset($_SESSION['email']); } ?>
                         </div>
