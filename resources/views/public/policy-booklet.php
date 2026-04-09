@@ -1,7 +1,7 @@
 <?php include VIEWS_PATH . '/layouts/header.php'; ?>
 
 <!-- Policy Booklet Hero -->
-<section style="position: relative; min-height: 340px; display: flex; align-items: center; background: linear-gradient(rgba(45,26,74,0.85), rgba(45,26,74,0.85)), url('/public/images/funeral-service1.jpeg') center/cover no-repeat;" class="d-print-none">
+<section style="position: relative; min-height: 340px; display: flex; align-items: center; background: linear-gradient(rgba(45,26,74,0.85), rgba(45,26,74,0.85)), url('/public/images/funeral-service1.jpeg') center/cover no-repeat;" class="d-print-none reveal-exempt">
     <div class="container">
         <div class="text-center text-white">
             <p style="color: #C9A659; font-size: 0.8rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 12px;">OFFICIAL DOCUMENTATION</p>
@@ -31,7 +31,7 @@
     .booklet-toc a:hover { color: #5A1F73; }
 </style>
 
-<section class="policy-booklet-body" style="padding: 60px 0; background: #F7F7F9;">
+<section class="policy-booklet-body reveal-exempt" style="padding: 60px 0; background: #F7F7F9;">
     <div class="container" style="max-width: 840px;">
         <div class="booklet-wrap" style="background: #fff; border-radius: 16px; padding: 60px 56px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); color: #374151; line-height: 1.85;">
 

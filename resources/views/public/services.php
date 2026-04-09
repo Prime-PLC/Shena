@@ -153,6 +153,51 @@
     </div>
 </section>
 
+<!-- Cash Benefit Teaser -->
+<section class="reveal-exempt" style="padding: 64px 0; background: linear-gradient(135deg, #1A0F2E 0%, #2D1A4A 60%, #3B1F5E 100%);">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 40px; justify-content: space-between;">
+
+                    <!-- Left: Text -->
+                    <div style="flex: 1; min-width: 260px;">
+                        <div style="display: inline-flex; align-items: center; gap: 8px; background: rgba(201,166,89,0.15); border: 1px solid rgba(201,166,89,0.35); border-radius: 20px; padding: 5px 14px; margin-bottom: 18px;">
+                            <i class="fas fa-star" style="color: #C9A659; font-size: 0.75rem;"></i>
+                            <span style="color: #C9A659; font-size: 0.72rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;">Coming Soon</span>
+                        </div>
+                        <h2 style="font-family: 'Playfair Display', serif; color: white; font-size: clamp(1.7rem, 3vw, 2.4rem); font-weight: 700; margin: 0 0 14px; line-height: 1.25;">
+                            Cash Benefit Cover<br>Up to <span style="color: #C9A659;">KES 500,000</span>
+                        </h2>
+                        <p style="color: rgba(255,255,255,0.72); font-size: 1rem; line-height: 1.7; margin: 0 0 10px; max-width: 480px;">
+                            SHENA Companion is introducing a <strong style="color: rgba(255,255,255,0.92);">direct cash benefit service</strong> to complement our Last Respect Services. Members and their registered dependents will be eligible for a lump-sum cash pay-out of up to <strong style="color: #C9A659;">KES 500,000</strong>.
+                        </p>
+                        <p style="color: rgba(255,255,255,0.55); font-size: 0.88rem; margin: 0;">
+                            Full details, eligibility criteria, and enrolment will be announced to all members. Contact our support team to register your interest.
+                        </p>
+                    </div>
+
+                    <!-- Right: CTA card -->
+                    <div style="flex-shrink: 0; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); border-radius: 20px; padding: 32px 36px; text-align: center; min-width: 220px;">
+                        <div style="width: 64px; height: 64px; background: rgba(201,166,89,0.18); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 18px;">
+                            <i class="fas fa-hand-holding-usd" style="color: #C9A659; font-size: 1.7rem;"></i>
+                        </div>
+                        <p style="color: rgba(255,255,255,0.6); font-size: 0.78rem; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; margin: 0 0 6px;">Benefit Amount</p>
+                        <p style="color: #C9A659; font-family: 'Playfair Display', serif; font-size: 2rem; font-weight: 700; margin: 0 0 20px; line-height: 1;">Up to<br>KES 500,000</p>
+                        <a href="/contact" style="display: block; background: #C9A659; color: #1A0F2E; border-radius: 10px; padding: 11px 24px; font-weight: 700; font-size: 0.9rem; text-decoration: none; margin-bottom: 10px;">
+                            <i class="fas fa-envelope me-1"></i> Enquire Now
+                        </a>
+                        <a href="tel:<?php echo defined('ADMIN_PHONE') ? htmlspecialchars(ADMIN_PHONE) : '+254748585067'; ?>" style="display: block; color: rgba(255,255,255,0.65); font-size: 0.82rem; text-decoration: none;">
+                            <i class="fas fa-phone me-1"></i> <?php echo defined('ADMIN_PHONE') ? htmlspecialchars(ADMIN_PHONE) : '+254748585067'; ?>
+                        </a>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
 <!-- CTA Section -->
 <section style="padding: 80px 0; background: white;">
     <div class="container">

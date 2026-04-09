@@ -530,34 +530,25 @@ $successRate = $successRate ?? 0;
                 </tr>
             </thead>
             <tbody>
+                <?php if (!empty($payments)): ?>
+                <?php foreach ($payments as $p): ?>
                 <tr>
-                    <td><strong>TXN2026001</strong></td>
-                    <td>John Kamau</td>
-                    <td><strong>KSh 5,000</strong></td>
-                    <td>M-Pesa</td>
-                    <td>Feb 5, 2026 10:30 AM</td>
-                    <td><span class="status-badge success">Success</span></td>
+                    <td><strong><?php echo htmlspecialchars($p['transaction_id'] ?? $p['mpesa_receipt_number'] ?? '—'); ?></strong></td>
+                    <td><?php echo htmlspecialchars(($p['first_name'] ?? '') . ' ' . ($p['last_name'] ?? '')); ?></td>
+                    <td><strong>KSh <?php echo number_format($p['amount'], 2); ?></strong></td>
+                    <td><?php echo htmlspecialchars(ucfirst(str_replace('_', ' ', $p['payment_method'] ?? '—'))); ?></td>
+                    <td><?php echo date('M j, Y g:i A', strtotime($p['created_at'])); ?></td>
+                    <td><span class="status-badge <?php echo $p['status'] === 'completed' ? 'success' : ($p['status'] === 'failed' ? 'danger' : 'pending'); ?>"><?php echo ucfirst($p['status']); ?></span></td>
                     <td>
-                        <button class="filter-btn" style="padding: 6px 12px; font-size: 12px;">
-                            <i class="fas fa-eye"></i>
-                            View
-                        </button>
+                        <a href="/admin/payment/<?php echo $p['id']; ?>" class="filter-btn" style="padding: 6px 12px; font-size: 12px;">
+                            <i class="fas fa-eye"></i> View
+                        </a>
                     </td>
                 </tr>
-                <tr>
-                    <td><strong>TXN2026002</strong></td>
-                    <td>Mary Wanjiku</td>
-                    <td><strong>KSh 10,000</strong></td>
-                    <td>M-Pesa</td>
-                    <td>Feb 5, 2026 09:15 AM</td>
-                    <td><span class="status-badge success">Success</span></td>
-                    <td>
-                        <button class="filter-btn" style="padding: 6px 12px; font-size: 12px;">
-                            <i class="fas fa-eye"></i>
-                            View
-                        </button>
-                    </td>
-                </tr>
+                <?php endforeach; ?>
+                <?php else: ?>
+                <tr><td colspan="7" style="text-align:center; padding: 24px; color:#6B7280;">No payments found.</td></tr>
+                <?php endif; ?>
             </tbody>
         </table>
     </div>
@@ -593,14 +584,21 @@ $successRate = $successRate ?? 0;
                 </tr>
             </thead>
             <tbody>
+                <?php $mpesaPayments = array_filter($payments ?? [], fn($p) => ($p['payment_method'] ?? '') === 'mpesa' && !empty($p['mpesa_receipt_number'])); ?>
+                <?php if (!empty($mpesaPayments)): ?>
+                <?php foreach ($mpesaPayments as $p): ?>
                 <tr>
-                    <td><strong>QAX123DEFG</strong></td>
-                    <td>John Kamau</td>
-                    <td>+254712345678</td>
-                    <td><strong>KSh 5,000</strong></td>
-                    <td>Feb 5, 2026 10:30 AM</td>
-                    <td><span class="status-badge success">Confirmed</span></td>
+                    <td><strong><?php echo htmlspecialchars($p['mpesa_receipt_number']); ?></strong></td>
+                    <td><?php echo htmlspecialchars(($p['first_name'] ?? '') . ' ' . ($p['last_name'] ?? '')); ?></td>
+                    <td><?php echo htmlspecialchars($p['sender_phone'] ?? '—'); ?></td>
+                    <td><strong>KSh <?php echo number_format($p['amount'], 2); ?></strong></td>
+                    <td><?php echo date('M j, Y g:i A', strtotime($p['created_at'])); ?></td>
+                    <td><span class="status-badge <?php echo $p['status'] === 'completed' ? 'success' : 'pending'; ?>"><?php echo $p['status'] === 'completed' ? 'Confirmed' : ucfirst($p['status']); ?></span></td>
                 </tr>
+                <?php endforeach; ?>
+                <?php else: ?>
+                <tr><td colspan="6" style="text-align:center; padding: 24px; color:#6B7280;">No M-Pesa transactions found.</td></tr>
+                <?php endif; ?>
             </tbody>
         </table>
     </div>
@@ -608,19 +606,28 @@ $successRate = $successRate ?? 0;
     <!-- Reconciliation Tab -->
     <div class="tab-content" id="content-reconciliation">
         <div class="reconciliation-grid">
+            <?php
+                $systemTotal   = count($payments ?? []);
+                $systemSuccess = count(array_filter($payments ?? [], fn($p) => $p['status'] === 'completed'));
+                $systemAmount  = array_sum(array_column(array_filter($payments ?? [], fn($p) => $p['status'] === 'completed'), 'amount'));
+                $mpesaAll      = array_filter($payments ?? [], fn($p) => ($p['payment_method'] ?? '') === 'mpesa');
+                $mpesaSuccess  = count(array_filter($mpesaAll, fn($p) => $p['status'] === 'completed'));
+                $mpesaAmount   = array_sum(array_column(array_filter($mpesaAll, fn($p) => $p['status'] === 'completed'), 'amount'));
+                $unmatched     = count(array_filter($payments ?? [], fn($p) => ($p['reconciliation_status'] ?? '') === 'unmatched'));
+            ?>
             <div class="reconciliation-card">
                 <h4><i class="fas fa-database"></i> System Records</h4>
                 <div class="reconciliation-item">
                     <span class="reconciliation-label">Total Transactions</span>
-                    <span class="reconciliation-value">1,245</span>
+                    <span class="reconciliation-value"><?php echo number_format($systemTotal); ?></span>
                 </div>
                 <div class="reconciliation-item">
                     <span class="reconciliation-label">Total Amount</span>
-                    <span class="reconciliation-value">KSh 5,250,000</span>
+                    <span class="reconciliation-value">KSh <?php echo number_format($systemAmount, 2); ?></span>
                 </div>
                 <div class="reconciliation-item">
                     <span class="reconciliation-label">Successful</span>
-                    <span class="reconciliation-value">1,233</span>
+                    <span class="reconciliation-value"><?php echo number_format($systemSuccess); ?></span>
                 </div>
             </div>
 
@@ -628,31 +635,31 @@ $successRate = $successRate ?? 0;
                 <h4><i class="fas fa-mobile-alt"></i> M-Pesa Records</h4>
                 <div class="reconciliation-item">
                     <span class="reconciliation-label">Total Transactions</span>
-                    <span class="reconciliation-value">1,243</span>
+                    <span class="reconciliation-value"><?php echo number_format(count($mpesaAll)); ?></span>
                 </div>
                 <div class="reconciliation-item">
                     <span class="reconciliation-label">Total Amount</span>
-                    <span class="reconciliation-value">KSh 5,240,000</span>
+                    <span class="reconciliation-value">KSh <?php echo number_format($mpesaAmount, 2); ?></span>
                 </div>
                 <div class="reconciliation-item">
                     <span class="reconciliation-label">Confirmed</span>
-                    <span class="reconciliation-value">1,243</span>
+                    <span class="reconciliation-value"><?php echo number_format($mpesaSuccess); ?></span>
                 </div>
             </div>
 
             <div class="reconciliation-card">
                 <h4><i class="fas fa-exclamation-triangle"></i> Discrepancies</h4>
                 <div class="reconciliation-item">
-                    <span class="reconciliation-label">Missing Transactions</span>
-                    <span class="reconciliation-value" style="color: #DC2626;">2</span>
+                    <span class="reconciliation-label">Unmatched Payments</span>
+                    <span class="reconciliation-value" style="color: #DC2626;"><?php echo number_format($unmatched); ?></span>
                 </div>
                 <div class="reconciliation-item">
                     <span class="reconciliation-label">Amount Difference</span>
-                    <span class="reconciliation-value" style="color: #DC2626;">KSh 10,000</span>
+                    <span class="reconciliation-value" style="color: #DC2626;">KSh <?php echo number_format($systemAmount - $mpesaAmount, 2); ?></span>
                 </div>
                 <div class="reconciliation-item">
                     <span class="reconciliation-label">Pending Review</span>
-                    <span class="reconciliation-value" style="color: #F59E0B;">12</span>
+                    <span class="reconciliation-value" style="color: #F59E0B;"><?php echo number_format(count(array_filter($payments ?? [], fn($p) => $p['status'] === 'pending'))); ?></span>
                 </div>
             </div>
         </div>

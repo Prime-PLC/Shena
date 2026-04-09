@@ -421,6 +421,20 @@ if ($notificationCount === null) {
             left: 80px;
         }
 
+        .top-bar-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-shrink: 0;
+        }
+
+        .portal-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #1F2937;
+            white-space: nowrap;
+        }
+
         .search-box {
             flex: 0 0 400px;
             position: relative;
@@ -636,10 +650,42 @@ if ($notificationCount === null) {
             margin-left: 80px;
         }
 
+        /* Mobile overlay backdrop */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.45);
+            z-index: 999;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .sidebar-overlay.active {
+            display: block;
+            opacity: 1;
+        }
+
+        /* Mobile hamburger button */
+        .mobile-menu-btn {
+            display: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            border: 1px solid #E5E7EB;
+            background: #F9FAFB;
+            color: #374151;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            flex-shrink: 0;
+            font-size: 16px;
+        }
+
         /* Responsive */
         @media (max-width: 1024px) {
             .sidebar {
                 transform: translateX(-100%);
+                width: 280px !important;
                 transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             }
 
@@ -647,22 +693,13 @@ if ($notificationCount === null) {
                 transform: translateX(0);
             }
 
-            .sidebar.collapsed {
-                width: 280px;
-            }
-
+            /* Restore full sidebar text in drawer mode */
+            .sidebar.collapsed { width: 280px !important; }
             .sidebar.collapsed .sidebar-logo-text,
             .sidebar.collapsed .sidebar-menu-label,
             .sidebar.collapsed .sidebar-nav-link span,
-            .sidebar.collapsed .agent-support {
-                display: block;
-            }
-
-            .sidebar.collapsed .sidebar-nav-link {
-                justify-content: flex-start;
-                padding: 13px 24px;
-                gap: 14px;
-            }
+            .sidebar.collapsed .agent-support { display: block !important; opacity: 1 !important; }
+            .sidebar.collapsed .sidebar-nav-link { justify-content: flex-start !important; padding: 13px 24px !important; gap: 14px !important; }
 
             .sidebar-toggle {
                 display: none;
@@ -670,26 +707,36 @@ if ($notificationCount === null) {
 
             .top-bar {
                 left: 0 !important;
+                padding-left: 20px !important;
+                padding-right: 20px !important;
             }
 
             .main-content {
                 margin-left: 0 !important;
             }
+
+            .mobile-menu-btn {
+                display: inline-flex;
+            }
         }
 
-        @media (max-width: 768px) {
+        @media (max-width: 640px) {
             .search-box {
-                flex: 1;
-                max-width: 200px;
+                display: none;
             }
-
             .user-info {
                 display: none;
+            }
+            .top-bar {
+                padding: 12px 16px !important;
             }
         }
     </style>
 </head>
 <body>
+    <!-- Mobile sidebar overlay/backdrop -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeMobileSidebar()"></div>
+
     <!-- Sidebar -->
     <div class="sidebar">
         <div class="sidebar-logo">
@@ -763,6 +810,12 @@ if ($notificationCount === null) {
 
     <!-- Top Bar -->
     <div class="top-bar">
+        <div class="top-bar-left">
+            <button class="mobile-menu-btn" id="mobileMenuBtn" onclick="openMobileSidebar()" aria-label="Open menu">
+                <i class="fas fa-bars"></i>
+            </button>
+            <span class="portal-title">Agent Portal</span>
+        </div>
         <div class="search-box">
             <i class="fas fa-search"></i>
             <input type="text" class="search-input" id="globalSearch" placeholder="Search features, pages, members..." autocomplete="off">

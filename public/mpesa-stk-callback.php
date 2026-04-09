@@ -220,6 +220,15 @@ try {
                         $processLog .= "  Member Reactivated: ID {$payment['member_id']}\n";
                     }
                 }
+
+                // Handle monthly contribution — extend coverage and clear grace period
+                if ($payment['payment_type'] === 'monthly') {
+                    $memberModel->applySuccessfulMonthlyPayment(
+                        $payment['member_id'],
+                        $transactionDate ?: date('Y-m-d H:i:s')
+                    );
+                    $processLog .= "  Monthly coverage extended: Member ID {$payment['member_id']}\n";
+                }
                 
                 // Send notifications
                 try {

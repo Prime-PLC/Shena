@@ -851,6 +851,45 @@ class Member extends BaseModel
     }
 
     /**
+     * Apply the membership effects of a successful monthly contribution payment.
+     * - Extends coverage_ends by 1 month from the later of today or current coverage_ends
+     * - Restores member from grace_period or inactive -> active
+     * - Clears grace_period_expires when status is restored
+     *
+     * @param int    $memberId    Member ID
+     * @param string $paymentDate ISO date of the confirmed payment (Y-m-d or Y-m-d H:i:s)
+     * @return bool
+     */
+    public function applySuccessfulMonthlyPayment(int $memberId, string $paymentDate = ''): bool
+    {
+        $member = $this->find($memberId);
+        if (!$member) {
+            return false;
+        }
+
+        $today = date('Y-m-d');
+
+        // Extend coverage_ends by 1 month from the later of today or current coverage_ends
+        $base = (!empty($member['coverage_ends']) && $member['coverage_ends'] >= $today)
+            ? $member['coverage_ends']
+            : $today;
+
+        $newCoverageEnds = date('Y-m-d', strtotime($base . ' +1 month'));
+
+        $updateData = ['coverage_ends' => $newCoverageEnds];
+
+        // Restore active status if currently in grace_period or inactive
+        if (in_array($member['status'], ['grace_period', 'inactive'], true)) {
+            $updateData['status'] = 'active';
+            $updateData['grace_period_expires'] = null;
+        }
+
+        error_log("Member #{$memberId} coverage extended to {$newCoverageEnds} after monthly payment.");
+
+        return (bool) $this->update($memberId, $updateData);
+    }
+
+    /**
      * Reactivate a member (set status to active and extend coverage)
      *
      * @param int $memberId Member ID

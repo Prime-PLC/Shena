@@ -393,13 +393,17 @@ textarea.form-control {
             <h3><i class="fas fa-phone-alt"></i>Contact Information</h3>
             
             <ul class="contact-info">
+                <?php
+                    $memberSupportPhone   = defined('ADMIN_PHONE') ? ADMIN_PHONE : '+254748585067';
+                    $memberSupportPhoneWa = ltrim(preg_replace('/[^0-9]/', '', $memberSupportPhone), '0');
+                ?>
                 <li>
                     <div class="contact-icon">
                         <i class="fas fa-phone"></i>
                     </div>
                     <div class="contact-details">
                         <h6>Phone</h6>
-                        <p><a href="tel:+254748585067">+254 748 585 067</a></p>
+                        <p><a href="tel:<?php echo htmlspecialchars($memberSupportPhone); ?>"><?php echo htmlspecialchars($memberSupportPhone); ?></a></p>
                     </div>
                 </li>
                 
@@ -419,7 +423,7 @@ textarea.form-control {
                     </div>
                     <div class="contact-details">
                         <h6>WhatsApp</h6>
-                        <p><a href="https://wa.me/+254748585067" target="_blank">+254 748 585 067</a></p>
+                        <p><a href="https://wa.me/<?php echo $memberSupportPhoneWa; ?>" target="_blank"><?php echo htmlspecialchars($memberSupportPhone); ?></a></p>
                     </div>
                 </li>
                 

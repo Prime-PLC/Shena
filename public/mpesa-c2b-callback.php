@@ -5,10 +5,16 @@
  * Endpoint: https://yourdomain.com/mpesa/c2b/callback
  */
 
-require_once __DIR__ . '/../vendor/autoload.php'; // If using Composer
-require_once __DIR__ . '/../config/config.php';
-require_once __DIR__ . '/../app/core/Database.php';
-require_once __DIR__ . '/../app/services/PaymentReconciliationService.php';
+define('ROOT_PATH', dirname(__DIR__));
+
+require_once ROOT_PATH . '/config/config.php';
+require_once ROOT_PATH . '/app/core/Database.php';
+require_once ROOT_PATH . '/app/core/BaseModel.php';
+require_once ROOT_PATH . '/app/models/Payment.php';
+require_once ROOT_PATH . '/app/models/Member.php';
+require_once ROOT_PATH . '/app/models/User.php';
+require_once ROOT_PATH . '/app/services/SmsService.php';
+require_once ROOT_PATH . '/app/services/PaymentReconciliationService.php';
 
 // Log all incoming requests
 $logFile = __DIR__ . '/../storage/logs/mpesa_c2b_' . date('Y-m-d') . '.log';

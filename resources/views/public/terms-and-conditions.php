@@ -1,7 +1,7 @@
 <?php include VIEWS_PATH . '/layouts/header.php'; ?>
 
 <!-- Terms Hero -->
-<section style="position: relative; min-height: 340px; display: flex; align-items: center; background: linear-gradient(rgba(45,26,74,0.80), rgba(45,26,74,0.80)), url('/public/images/community-mobilization1.jpeg') center/cover no-repeat;">
+<section class="reveal-exempt" style="position: relative; min-height: 340px; display: flex; align-items: center; background: linear-gradient(rgba(45,26,74,0.80), rgba(45,26,74,0.80)), url('/public/images/community-mobilization1.jpeg') center/cover no-repeat;">
     <div class="container">
         <div class="text-center text-white">
             <p style="color: #C9A659; font-size: 0.8rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 12px;">LEGAL &amp; COMPLIANCE</p>
@@ -11,7 +11,7 @@
     </div>
 </section>
 
-<section style="padding: 70px 0; background: #F7F7F9;">
+<section class="reveal-exempt" style="padding: 70px 0; background: #F7F7F9;">
     <div class="container" style="max-width: 860px;">
 
         <!-- Meta strip -->
@@ -57,7 +57,7 @@
                         <li>A member is considered <strong>active</strong> only when all current and past contributions are fully settled.</li>
                         <li>Contributions that are <strong>3 or more months in arrears</strong> will result in suspension of benefit coverage.</li>
                         <li>Contributions that are <strong>6 or more months in arrears</strong> may result in termination of membership.</li>
-                        <li>SHENA reserves the right to adjust contribution rates with at least <strong>30 days&apos; prior notice</strong> to members.</li>
+                        <li>SHENA reserves the right to adjust contribution rates with at least <strong>30 days\' prior notice</strong> to members.</li>
                         <li>Payments are non-refundable except where SHENA has accepted a formal written request and confirmed an error.</li>
                     </ul>
                 '],
@@ -76,7 +76,7 @@
                         <li>Hospital admission fees and morgue or hospital entry charges are <strong>not covered</strong> — members are responsible for these upon arrival.</li>
                         <li>Benefits are <strong>not available</strong> to suspended or lapsed members.</li>
                         <li>Coverage does not apply to deaths that occur during a <strong>waiting period</strong> as defined by your package terms.</li>
-                        <li>SHENA does not cover funeral costs for individuals not registered as dependents under the member&apos;s account.</li>
+                        <li>SHENA does not cover funeral costs for individuals not registered as dependents under the member\'s account.</li>
                         <li>Benefits are provided in-kind by SHENA-contracted service providers and are <strong>not transferable to cash</strong>.</li>
                     </ul>
                 '],
@@ -86,8 +86,8 @@
                         <li>The following documents are required to process a valid claim:
                             <ul>
                                 <li>Certified copy of the Death Certificate</li>
-                                <li>Copy of the deceased&apos;s National ID</li>
-                                <li>Copy of the claimant&apos;s (member&apos;s) National ID</li>
+                                <li>Copy of the deceased\'s National ID</li>
+                                <li>Copy of the claimant\'s (member\'s) National ID</li>
                                 <li>Burial Permit</li>
                                 <li>Completed SHENA Claim Form (available via the member portal)</li>
                             </ul>
@@ -120,13 +120,13 @@
                     <ul>
                         <li>Delays in service delivery arising from incomplete or inaccurate claim documentation</li>
                         <li>Acts of God, civil unrest, pandemics, or other force majeure events</li>
-                        <li>Third-party service failures beyond SHENA&apos;s reasonable control</li>
+                        <li>Third-party service failures beyond SHENA\'s reasonable control</li>
                         <li>Any indirect, consequential, or punitive losses arising from use of or inability to use SHENA services</li>
                     </ul>
-                    <p>SHENA&apos;s total liability in any circumstance shall not exceed the value of services that would have been due under the applicable package.</p>
+                    <p>SHENA\'s total liability in any circumstance shall not exceed the value of services that would have been due under the applicable package.</p>
                 '],
                 ['icon' => 'fas fa-edit', 'title' => '9. Amendments', 'content' => '
-                    <p>SHENA reserves the right to amend these Terms and Conditions at any time. Material changes will be communicated to members via SMS or email with at least <strong>30 days&apos; notice</strong>. Continued use of SHENA services after the effective date of changes constitutes acceptance of the updated terms.</p>
+                    <p>SHENA reserves the right to amend these Terms and Conditions at any time. Material changes will be communicated to members via SMS or email with at least <strong>30 days\' notice</strong>. Continued use of SHENA services after the effective date of changes constitutes acceptance of the updated terms.</p>
                 '],
                 ['icon' => 'fas fa-gavel', 'title' => '10. Governing Law & Disputes', 'content' => '
                     <p>These Terms and Conditions are governed by the laws of the <strong>Republic of Kenya</strong>. Any disputes arising from or in connection with membership in SHENA Companion shall first be attempted to be resolved through good-faith negotiation. If unresolved, disputes shall be referred to mediation or arbitration in Kisumu, Kenya, before recourse to the courts.</p>

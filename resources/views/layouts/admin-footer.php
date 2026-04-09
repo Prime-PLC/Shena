@@ -1,7 +1,7 @@
     </div>
 
     <!-- Footer -->
-    <footer style="margin-left: 260px; padding: 20px 30px; background: white; border-top: 1px solid #E5E7EB; font-size: 12px; color: #9CA3AF; display: flex; justify-content: space-between; align-items: center;">
+    <footer style="padding: 20px 30px; background: white; border-top: 1px solid #E5E7EB; font-size: 12px; color: #9CA3AF; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
         <div style="color : #7F3D9E">
             © 2023 SHENA Companion Admin Portal. Secure Management Environment.
         </div>
@@ -17,19 +17,5 @@
     
     <!-- App JS - Modal System & Utilities -->
     <script src="/public/js/app.js"></script>
-    
-    <!-- Mobile Menu Toggle -->
-    <script>
-        // Mobile menu toggle
-        const menuToggle = document.createElement('button');
-        menuToggle.className = 'btn btn-link d-lg-none';
-        menuToggle.innerHTML = '<i class="fas fa-bars"></i>';
-        menuToggle.style.cssText = 'position: fixed; top: 15px; left: 15px; z-index: 1001;';
-        document.body.appendChild(menuToggle);
-
-        menuToggle.addEventListener('click', function() {
-            document.querySelector('.sidebar').classList.toggle('show');
-        });
-    </script>
 </body>
 </html>

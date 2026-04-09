@@ -271,11 +271,43 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 	<script>
 		// Sidebar Toggle Functionality
+		function isMobileLayout() {
+			return window.innerWidth <= 1024;
+		}
+
+		function openMobileSidebar() {
+			const sidebar = document.getElementById('memberSidebar');
+			const overlay = document.getElementById('sidebarOverlay');
+			sidebar.classList.add('active');
+			if (overlay) {
+				overlay.classList.add('active');
+				document.body.style.overflow = 'hidden';
+			}
+		}
+
+		function closeMobileSidebar() {
+			const sidebar = document.getElementById('memberSidebar');
+			const overlay = document.getElementById('sidebarOverlay');
+			sidebar.classList.remove('active');
+			if (overlay) {
+				overlay.classList.remove('active');
+				document.body.style.overflow = '';
+			}
+		}
+
 		function toggleSidebar() {
+			if (isMobileLayout()) {
+				const sidebar = document.getElementById('memberSidebar');
+				if (sidebar.classList.contains('active')) {
+					closeMobileSidebar();
+				} else {
+					openMobileSidebar();
+				}
+				return;
+			}
+			// Desktop: collapse to icon-only
 			const sidebar = document.getElementById('memberSidebar');
 			sidebar.classList.toggle('collapsed');
-			
-			// Save state to localStorage
 			if (sidebar.classList.contains('collapsed')) {
 				localStorage.setItem('memberSidebarCollapsed', 'true');
 			} else {
@@ -283,12 +315,20 @@
 			}
 		}
 
-		// Restore sidebar state on page load
+		// Close mobile sidebar on nav link click
 		document.addEventListener('DOMContentLoaded', function() {
+			// Restore desktop collapsed state
 			const sidebar = document.getElementById('memberSidebar');
-			if (localStorage.getItem('memberSidebarCollapsed') === 'true') {
+			if (!isMobileLayout() && localStorage.getItem('memberSidebarCollapsed') === 'true') {
 				sidebar.classList.add('collapsed');
 			}
+
+			// Close sidebar when a nav link is tapped on mobile
+			document.querySelectorAll('.sidebar-nav-link').forEach(function(link) {
+				link.addEventListener('click', function() {
+					if (isMobileLayout()) { closeMobileSidebar(); }
+				});
+			});
 		});
 
 		// Logout Handler

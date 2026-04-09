@@ -149,9 +149,57 @@ class PaymentReconciliationService
         }
         
         if ($member && $confidence >= 70) {
-            // Create payment record
-            $paymentId = $this->createReconciledPayment($member['id'], $paymentData, true);
-            
+            // Determine payment type from member's current status
+            $paymentType = 'monthly';
+            if ($member['status'] === 'inactive') {
+                $paymentType = 'registration';
+            } elseif ($member['status'] === 'defaulted') {
+                $paymentType = 'reactivation';
+            }
+
+            // Create payment record with correct type
+            $paymentId = $this->createReconciledPayment($member['id'], $paymentData, true, $paymentType);
+
+            // Apply membership side-effects (coverage extension, grace period clearance)
+            if ($paymentType === 'monthly') {
+                $this->memberModel->applySuccessfulMonthlyPayment(
+                    $member['id'],
+                    $paymentData['transaction_date'] ?? date('Y-m-d H:i:s')
+                );
+            } elseif ($paymentType === 'reactivation') {
+                $this->memberModel->reactivateMember($member['id']);
+            } elseif ($paymentType === 'registration') {
+                $totalPaid = $this->db->fetchColumn(
+                    "SELECT COALESCE(SUM(amount), 0) FROM payments
+                     WHERE member_id = :mid AND payment_type = 'registration' AND status = 'completed'",
+                    ['mid' => $member['id']]
+                );
+                if ($totalPaid >= REGISTRATION_FEE) {
+                    require_once ROOT_PATH . '/app/models/User.php';
+                    $this->memberModel->update($member['id'], [
+                        'status' => 'active',
+                        'coverage_ends' => date('Y-m-d', strtotime('+1 year'))
+                    ]);
+                    $userModel = new User();
+                    $userModel->update($member['user_id'], ['status' => 'active']);
+                }
+            }
+
+            // Send payment confirmation SMS
+            try {
+                require_once ROOT_PATH . '/app/services/SmsService.php';
+                $memberData = $this->memberModel->getMemberWithUser($member['id']);
+                if ($memberData && !empty($memberData['phone'])) {
+                    $smsService = new SmsService();
+                    $smsService->sendPaymentConfirmationSms($memberData['phone'], [
+                        'amount'         => $paymentData['amount'],
+                        'transaction_id' => $paymentData['trans_id'],
+                    ]);
+                }
+            } catch (Exception $notifEx) {
+                error_log('C2B auto-match SMS error: ' . $notifEx->getMessage());
+            }
+
             // Log reconciliation
             $this->logReconciliation($paymentId, [
                 'action' => 'matched',
@@ -162,20 +210,21 @@ class PaymentReconciliationService
                 'confidence_score' => $confidence,
                 'notes' => "Auto-matched via {$matchMethod}"
             ]);
-            
+
             // Mark callback as processed
             if (isset($paymentData['callback_id'])) {
                 $this->markCallbackProcessed($paymentData['callback_id'], $paymentId);
             }
-            
+
             return [
-                'success' => true,
-                'matched' => true,
-                'payment_id' => $paymentId,
-                'member_id' => $member['id'],
-                'member_name' => $member['first_name'] . ' ' . $member['last_name'],
+                'success'      => true,
+                'matched'      => true,
+                'payment_id'   => $paymentId,
+                'member_id'    => $member['id'],
+                'member_name'  => $member['first_name'] . ' ' . $member['last_name'],
                 'match_method' => $matchMethod,
-                'confidence' => $confidence
+                'confidence'   => $confidence,
+                'payment_type' => $paymentType,
             ];
         } else {
             // No match found - create unmatched payment
@@ -193,36 +242,37 @@ class PaymentReconciliationService
     /**
      * Create reconciled payment record
      */
-    private function createReconciledPayment($memberId, $paymentData, $autoMatched = false)
+    private function createReconciledPayment($memberId, $paymentData, $autoMatched = false, $paymentType = 'monthly')
     {
         $query = "INSERT INTO payments (
-            member_id, amount, payment_method, payment_date, status,
+            member_id, amount, payment_type, payment_method, payment_date, status,
             reconciliation_status, mpesa_receipt_number, transaction_date,
             sender_phone, sender_name, paybill_account, auto_matched,
             reconciled_at, created_at
         ) VALUES (
-            :member_id, :amount, :payment_method, :payment_date, :status,
+            :member_id, :amount, :payment_type, :payment_method, :payment_date, :status,
             :reconciliation_status, :mpesa_receipt_number, :transaction_date,
             :sender_phone, :sender_name, :paybill_account, :auto_matched,
             :reconciled_at, NOW()
         )";
-        
+
         $params = [
-            'member_id' => $memberId,
-            'amount' => $paymentData['amount'],
-            'payment_method' => 'mpesa',
-            'payment_date' => $paymentData['transaction_date'],
-            'status' => 'completed',
-            'reconciliation_status' => 'matched',
+            'member_id'            => $memberId,
+            'amount'               => $paymentData['amount'],
+            'payment_type'         => $paymentType,
+            'payment_method'       => 'mpesa',
+            'payment_date'         => $paymentData['transaction_date'],
+            'status'               => 'completed',
+            'reconciliation_status'=> 'matched',
             'mpesa_receipt_number' => $paymentData['trans_id'],
-            'transaction_date' => $paymentData['transaction_date'],
-            'sender_phone' => $paymentData['sender_phone'],
-            'sender_name' => $paymentData['sender_name'] ?? '',
-            'paybill_account' => $paymentData['bill_ref_number'] ?? '',
-            'auto_matched' => $autoMatched ? 1 : 0,
-            'reconciled_at' => date('Y-m-d H:i:s')
+            'transaction_date'     => $paymentData['transaction_date'],
+            'sender_phone'         => $paymentData['sender_phone'],
+            'sender_name'          => $paymentData['sender_name'] ?? '',
+            'paybill_account'      => $paymentData['bill_ref_number'] ?? '',
+            'auto_matched'         => $autoMatched ? 1 : 0,
+            'reconciled_at'        => date('Y-m-d H:i:s'),
         ];
-        
+
         $this->db->execute($query, $params);
         return $this->db->getConnection()->lastInsertId();
     }
@@ -271,37 +321,38 @@ class PaymentReconciliationService
     public function manualReconciliation($paymentId, $memberId, $userId, $notes = '')
     {
         try {
-            // Update payment record
-            $query = "UPDATE payments SET 
-                member_id = :member_id,
-                status = 'completed',
-                reconciliation_status = 'manual',
-                reconciled_at = NOW(),
-                reconciled_by = :reconciled_by,
-                reconciliation_notes = :notes
-                WHERE id = :payment_id";
-            
-            $params = [
-                'member_id' => $memberId,
-                'reconciled_by' => $userId,
-                'notes' => $notes,
-                'payment_id' => $paymentId
-            ];
-            
-            $this->db->execute($query, $params);
-            
+            // Assign the member if not already set
+            $this->db->execute(
+                "UPDATE payments SET
+                    member_id            = :member_id,
+                    reconciliation_status = 'manual',
+                    reconciled_at        = NOW(),
+                    reconciled_by        = :reconciled_by,
+                    reconciliation_notes = :notes
+                 WHERE id = :payment_id",
+                [
+                    'member_id'    => $memberId,
+                    'reconciled_by'=> $userId,
+                    'notes'        => $notes,
+                    'payment_id'   => $paymentId,
+                ]
+            );
+
+            // confirmPayment handles status=completed + applySuccessfulMonthlyPayment
+            $this->paymentModel->confirmPayment($paymentId);
+
             // Log reconciliation
             $this->logReconciliation($paymentId, [
-                'action' => 'manual_match',
-                'previous_status' => 'unmatched',
-                'new_status' => 'manual',
-                'matched_member_id' => $memberId,
-                'match_method' => 'manual',
+                'action'           => 'manual_match',
+                'previous_status'  => 'unmatched',
+                'new_status'       => 'manual',
+                'matched_member_id'=> $memberId,
+                'match_method'     => 'manual',
                 'confidence_score' => 100,
-                'reconciled_by' => $userId,
-                'notes' => $notes
+                'reconciled_by'    => $userId,
+                'notes'            => $notes,
             ]);
-            
+
             return true;
         } catch (Exception $e) {
             error_log('Manual reconciliation error: ' . $e->getMessage());

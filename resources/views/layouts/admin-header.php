@@ -662,15 +662,66 @@ if ($notificationCount === null) {
             font-size: 14px;
         }
 
+        /* Sidebar overlay / backdrop */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.45);
+            z-index: 999;
+        }
+
+        .sidebar-overlay.active {
+            display: block;
+        }
+
+        /* Mobile hamburger button */
+        .mobile-menu-btn {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            width: 38px;
+            height: 38px;
+            background: #F3F4F6;
+            border: none;
+            border-radius: 8px;
+            color: #7F3D9E;
+            font-size: 16px;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .top-header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+            min-width: 0;
+        }
+
         /* Responsive */
         @media (max-width: 992px) {
             .sidebar {
                 transform: translateX(-100%);
-                transition: transform 0.3s;
+                transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                width: 260px !important;
+                z-index: 1000;
             }
 
-            .sidebar.show {
+            .sidebar.active {
                 transform: translateX(0);
+            }
+
+            /* Restore full text in drawer mode even if .collapsed is set */
+            .sidebar.collapsed .sidebar-logo-text,
+            .sidebar.collapsed .nav-link span,
+            .sidebar.collapsed .nav-section-title,
+            .sidebar.collapsed .admin-info {
+                display: block !important;
+            }
+
+            .sidebar.collapsed .sidebar-logo {
+                justify-content: flex-start !important;
             }
 
             .top-header,
@@ -690,10 +741,27 @@ if ($notificationCount === null) {
             .header-admin-info {
                 display: none;
             }
+
+            .mobile-menu-btn {
+                display: inline-flex;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .search-bar {
+                display: none;
+            }
+
+            .top-header {
+                padding: 0 16px;
+            }
         }
     </style>
 </head>
 <body>
+    <!-- Mobile sidebar overlay/backdrop -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeMobileSidebar()"></div>
+
     <!-- Sidebar -->
     <div class="sidebar" id="sidebar">
         <div class="sidebar-header">
@@ -859,10 +927,15 @@ if ($notificationCount === null) {
 
     <!-- Top Header -->
     <div class="top-header">
-        <div class="search-bar">
-            <i class="fas fa-search"></i>
-            <input type="text" id="adminSearch" placeholder="Search members, claims, payments..." onkeyup="searchAdmin(this.value)">
-            <div class="search-results" id="searchResults"></div>
+        <div class="top-header-left">
+            <button class="mobile-menu-btn" id="mobileMenuBtn" onclick="openMobileSidebar()" aria-label="Open menu">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="search-bar">
+                <i class="fas fa-search"></i>
+                <input type="text" id="adminSearch" placeholder="Search members, claims, payments..." onkeyup="searchAdmin(this.value)">
+                <div class="search-results" id="searchResults"></div>
+            </div>
         </div>
 
         <div class="header-actions">
@@ -901,21 +974,60 @@ if ($notificationCount === null) {
     <div class="main-content">
 
     <script>
-        // Toggle sidebar collapse
+        // Sidebar Toggle Functionality
+        function isMobileLayout() {
+            return window.innerWidth <= 992;
+        }
+
+        function openMobileSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            if (sidebar) sidebar.classList.add('active');
+            if (overlay) overlay.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeMobileSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            if (sidebar) sidebar.classList.remove('active');
+            if (overlay) overlay.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        // Toggle sidebar collapse (desktop) or drawer (mobile)
         function toggleSidebar() {
+            if (isMobileLayout()) {
+                const sidebar = document.getElementById('sidebar');
+                if (sidebar && sidebar.classList.contains('active')) {
+                    closeMobileSidebar();
+                } else {
+                    openMobileSidebar();
+                }
+                return;
+            }
             const sidebar = document.getElementById('sidebar');
             sidebar.classList.toggle('collapsed');
-            
-            // Save state to localStorage
             localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
         }
 
         // Restore sidebar state on page load
         document.addEventListener('DOMContentLoaded', function() {
-            const sidebarCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
-            if (sidebarCollapsed) {
-                document.getElementById('sidebar').classList.add('collapsed');
+            if (!isMobileLayout()) {
+                const sidebarCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+                if (sidebarCollapsed) {
+                    document.getElementById('sidebar').classList.add('collapsed');
+                }
             }
+
+            // Close the mobile drawer when a nav link is tapped
+            document.querySelectorAll('.nav-link').forEach(function(link) {
+                link.addEventListener('click', function() {
+                    if (isMobileLayout() && !this.classList.contains('has-submenu')) {
+                        closeMobileSidebar();
+                    }
+                });
+            });
         });
 
         // Toggle admin dropdown menu in sidebar

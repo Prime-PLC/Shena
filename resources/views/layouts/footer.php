@@ -134,9 +134,9 @@
         function init() {
             // Auto-mark sections, cards, rows and headings that don't already have reveal class
             var autoTargets = document.querySelectorAll(
-                'section:not(.hero-section):not(#heroSlideshow) > .container > .row,' +
-                'section:not(.hero-section):not(#heroSlideshow) > .container > .text-center,' +
-                'section:not(.hero-section):not(#heroSlideshow) > .container > div:not(.row):not(.text-center)'
+                'section:not(.hero-section):not(#heroSlideshow):not(.reveal-exempt) > .container > .row,' +
+                'section:not(.hero-section):not(#heroSlideshow):not(.reveal-exempt) > .container > .text-center,' +
+                'section:not(.hero-section):not(#heroSlideshow):not(.reveal-exempt) > .container > div:not(.row):not(.text-center)'
             );
             autoTargets.forEach(function(el) {
                 if (!el.classList.contains('reveal-up') && !el.classList.contains('reveal-stagger')) {

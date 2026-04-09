@@ -174,12 +174,11 @@ document.addEventListener('DOMContentLoaded', function () {
             if (data.success) {
                 resultBox.innerHTML =
                     '<div class="alert alert-success">' +
-                    '<strong>Account created!</strong><br>' +
-                    'Member Number: <strong>' + (data.member_number || '—') + '</strong><br>' +
+                    '<strong>Almost there!</strong><br>' +
                     (data.message || 'Please check your phone for the OTP verification code.') +
                     '</div>';
                 if (data.redirect) {
-                    setTimeout(function () { window.location.href = data.redirect; }, 1200);
+                    setTimeout(function () { window.location.href = data.redirect; }, 1500);
                 }
             } else {
                 resultBox.innerHTML =

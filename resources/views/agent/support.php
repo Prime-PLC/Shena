@@ -197,6 +197,12 @@ include __DIR__ . '/../layouts/agent-header.php';
         </div>
 
         <!-- Phone Support -->
+        <?php
+            $supportPhone   = defined('ADMIN_PHONE') ? ADMIN_PHONE : '+254748585067';
+            $supportPhoneWa = ltrim(preg_replace('/[^0-9]/', '', $supportPhone), '0');
+            $supportPhoneDisplay = preg_replace('/^\+/', '', $supportPhone);
+            $supportPhoneDisplay = '+' . wordwrap(ltrim($supportPhoneDisplay, '+'), 3, ' ', true);
+        ?>
         <div class="support-card">
             <div class="support-icon">
                 <i class="fas fa-phone"></i>
@@ -206,14 +212,14 @@ include __DIR__ . '/../layouts/agent-header.php';
             <div class="support-info">
                 <div class="support-info-item">
                     <i class="fas fa-phone-alt"></i>
-                    <span><strong>Hotline:</strong> +254 700 123 456</span>
+                    <span><strong>Hotline:</strong> <?php echo htmlspecialchars($supportPhone); ?></span>
                 </div>
                 <div class="support-info-item">
                     <i class="fas fa-clock"></i>
                     <span>Mon - Fri: 8:00 AM - 6:00 PM</span>
                 </div>
             </div>
-            <button class="btn-contact" onclick="window.location.href='tel:+254700123456'">
+            <button class="btn-contact" onclick="window.location.href='tel:<?php echo htmlspecialchars($supportPhone); ?>'">
                 <i class="fas fa-phone"></i> Call Now
             </button>
         </div>
@@ -228,14 +234,14 @@ include __DIR__ . '/../layouts/agent-header.php';
             <div class="support-info">
                 <div class="support-info-item">
                     <i class="fab fa-whatsapp"></i>
-                    <span><strong>Number:</strong> +254 700 123 456</span>
+                    <span><strong>Number:</strong> <?php echo htmlspecialchars($supportPhone); ?></span>
                 </div>
                 <div class="support-info-item">
                     <i class="fas fa-clock"></i>
                     <span>Mon - Sat: 8:00 AM - 8:00 PM</span>
                 </div>
             </div>
-            <button class="btn-contact" onclick="window.open('https://wa.me/254700123456', '_blank')">
+            <button class="btn-contact" onclick="window.open('https://wa.me/<?php echo $supportPhoneWa; ?>', '_blank')">
                 <i class="fab fa-whatsapp"></i> Chat on WhatsApp
             </button>
         </div>

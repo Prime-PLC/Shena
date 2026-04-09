@@ -266,28 +266,64 @@
     <script src="https://cdn.datatables.net/1.11.5/js/dataTables.bootstrap5.min.js"></script>
     <script>
         // Sidebar Toggle Functionality
-        function toggleSidebar() {
-            const sidebar = document.querySelector('.sidebar');
-            const body = document.body;
-            
-            sidebar.classList.toggle('collapsed');
-            body.classList.toggle('sidebar-collapsed');
-            
-            // Save state to localStorage
-            const isCollapsed = sidebar.classList.contains('collapsed');
-            localStorage.setItem('sidebarCollapsed', isCollapsed);
+        function isMobileLayout() {
+            return window.innerWidth <= 1024;
         }
 
-        // Restore sidebar state on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            const sidebarCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
-            if (sidebarCollapsed) {
+        function openMobileSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            if (sidebar) sidebar.classList.add('active');
+            if (overlay) overlay.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeMobileSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            if (sidebar) sidebar.classList.remove('active');
+            if (overlay) overlay.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        function toggleSidebar() {
+            if (isMobileLayout()) {
                 const sidebar = document.querySelector('.sidebar');
-                if (sidebar) {
-                    sidebar.classList.add('collapsed');
-                    document.body.classList.add('sidebar-collapsed');
+                if (sidebar && sidebar.classList.contains('active')) {
+                    closeMobileSidebar();
+                } else {
+                    openMobileSidebar();
+                }
+                return;
+            }
+            // Desktop: toggle collapsed icon-only mode
+            const sidebar = document.querySelector('.sidebar');
+            const body = document.body;
+            if (!sidebar) return;
+            sidebar.classList.toggle('collapsed');
+            body.classList.toggle('sidebar-collapsed');
+            localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
+        }
+
+        // Restore sidebar state on page load + close drawer on nav-link tap
+        document.addEventListener('DOMContentLoaded', function() {
+            if (!isMobileLayout()) {
+                const sidebarCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+                if (sidebarCollapsed) {
+                    const sidebar = document.querySelector('.sidebar');
+                    if (sidebar) {
+                        sidebar.classList.add('collapsed');
+                        document.body.classList.add('sidebar-collapsed');
+                    }
                 }
             }
+
+            // Close the mobile drawer when a nav link is tapped
+            document.querySelectorAll('.sidebar-nav-link').forEach(function(link) {
+                link.addEventListener('click', function() {
+                    if (isMobileLayout()) closeMobileSidebar();
+                });
+            });
         });
 
         // Logout Confirmation

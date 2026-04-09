@@ -1226,7 +1226,6 @@ class AuthController extends BaseController
                 echo json_encode([
                     'success' => true,
                     'message' => $otpDeliveryMessage,
-                    'member_number' => $memberNumber,
                     'payment_method' => $paymentMethod,
                     'otp_required' => true,
                     'redirect' => '/register/verify-otp'

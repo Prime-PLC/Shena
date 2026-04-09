@@ -21,7 +21,7 @@
     </div>
 </div>
 
-<section style="padding: 56px 0 80px; background: #F2F4F7;">
+<section class="reveal-exempt" style="padding: 56px 0 80px; background: #F2F4F7;">
     <div class="container" style="max-width: 1100px;">
 
         <!-- Your commitments summary strip -->

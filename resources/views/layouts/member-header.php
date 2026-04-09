@@ -618,27 +618,103 @@ if ($notificationCount === null) {
 			font-size: 1.1rem;
 		}
 		
-		@media (max-width: 768px) {
+		/* ── Mobile overlay backdrop ─────────────────────────────── */
+		.sidebar-overlay {
+			display: none;
+			position: fixed;
+			inset: 0;
+			background: rgba(0,0,0,0.45);
+			z-index: 999;
+			opacity: 0;
+			transition: opacity 0.3s ease;
+		}
+		.sidebar-overlay.active {
+			display: block;
+			opacity: 1;
+		}
+
+		/* ── Mobile hamburger in top-bar ─────────────────────────── */
+		.mobile-menu-btn {
+			display: none;
+			width: 40px;
+			height: 40px;
+			border-radius: 10px;
+			border: 1px solid #E5E7EB;
+			background: #F9FAFB;
+			color: #374151;
+			align-items: center;
+			justify-content: center;
+			cursor: pointer;
+			flex-shrink: 0;
+			font-size: 16px;
+		}
+
+		@media (max-width: 1024px) {
+			/* Desktop collapse button – hide on mobile/tablet */
+			.sidebar-toggle-btn {
+				display: none;
+			}
+
+			/* Sidebar is a full drawer on mobile/tablet */
 			.sidebar {
 				transform: translateX(-100%);
+				width: 280px !important; /* never icon-only on mobile */
+				transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 			}
-			
+
+			/* Restore all text that collapsed hides, since drawer always shows full sidebar */
+			.sidebar .sidebar-logo-text,
+			.sidebar .sidebar-menu-label,
+			.sidebar .sidebar-nav-link span,
+			.sidebar .member-support {
+				display: block !important;
+				opacity: 1 !important;
+			}
+			.sidebar .sidebar-nav-link {
+				justify-content: flex-start !important;
+				padding: 14px 20px !important;
+				gap: 16px !important;
+			}
+			.sidebar.active {
+				transform: translateX(0);
+			}
+
 			.main-content {
-				margin-left: 0;
+				margin-left: 0 !important;
 			}
 
-			.sidebar-toggle-btn {
-				left: 16px;
+			.mobile-menu-btn {
+				display: inline-flex;
 			}
 
-			.search-input-wrapper {
-				width: 200px;
+			.top-bar {
+				padding: 16px 20px !important;
+			}
+		}
+
+		@media (max-width: 640px) {
+			/* Hide search on very small screens */
+			.search-container {
+				display: none;
+			}
+			/* Hide name/ID text, keep avatar only */
+			.user-profile-text {
+				display: none;
+			}
+			.top-bar {
+				padding: 12px 16px !important;
+			}
+			.top-bar-left h1 {
+				font-size: 1.1rem;
 			}
 		}
 	</style>
 </head>
 <body>
 	<div class="dashboard-wrapper">
+		<!-- Mobile sidebar overlay/backdrop -->
+		<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeMobileSidebar()"></div>
+
 		<!-- Sidebar -->
 		<aside class="sidebar" id="memberSidebar">
 			<div class="sidebar-logo">
@@ -715,8 +791,11 @@ if ($notificationCount === null) {
 		<!-- Main Content -->
 		<div class="main-content">
 			<div class="top-bar">
-				<div class="top-bar-left">
-					<h1>Member Dashboard</h1>
+				<div class="top-bar-left" style="display:flex;align-items:center;gap:12px;">
+					<button class="mobile-menu-btn" id="mobileMenuBtn" onclick="openMobileSidebar()" aria-label="Open menu">
+						<i class="fas fa-bars"></i>
+					</button>
+					<h1>Member Portal</h1>
 				</div>
 				<div class="top-bar-right">
 					<div class="search-container">

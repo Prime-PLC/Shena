@@ -152,7 +152,7 @@ define('MORTUARY_DAYS_COVERED', 14); // Maximum days of mortuary covered
 
 // Contact Information
 define('ADMIN_EMAIL', envConfig('ADMIN_EMAIL', 'info@shenacompanion.org'));
-define('ADMIN_PHONE', envConfig('ADMIN_PHONE', '+254712345678'));
+define('ADMIN_PHONE', envConfig('ADMIN_PHONE', '+254748585067'));
 define('OFFICE_ADDRESS', 'Shena Companion Welfare Association Office, Nairobi, Kenya');
 
 // Membership Maturity & Grace Period Settings (in months)
