@@ -582,9 +582,10 @@ $missingFields = $missing_profile_fields ?? [];
                 <tbody>
                     <?php if (!empty($recent_payments)): ?>
                         <?php foreach (array_slice($recent_payments, 0, 3) as $payment): ?>
+                        <?php $pmtDate = $payment['created_at'] ?? $payment['payment_date'] ?? null; ?>
                         <tr>
-                            <td><?php echo date('M d, Y', strtotime($payment['payment_date'])); ?></td>
-                            <td class="ref-number">TXN-<?php echo $payment['mpesa_receipt_number'] ?? 'RR2941'; ?></td>
+                            <td><?php echo $pmtDate ? date('M d, Y', strtotime($pmtDate)) : '—'; ?></td>
+                            <td class="ref-number"><?php echo htmlspecialchars($payment['mpesa_receipt_number'] ?? $payment['transaction_reference'] ?? '—'); ?></td>
                             <td class="amount-cell">KES <?php echo number_format($payment['amount'], 2); ?></td>
                             <td><span class="success-badge"><?php echo strtoupper($payment['status'] ?? 'SUCCESS'); ?></span></td>
                             <td><i class="fas fa-receipt receipt-icon"></i></td>
@@ -692,9 +693,9 @@ $missingFields = $missing_profile_fields ?? [];
                 <div class="onb-stepper mt-3">
                     <div class="onb-bubble active" id="onb-b1" title="Personal Details">1</div>
                     <div class="onb-connector"></div>
-                    <div class="onb-bubble" id="onb-b2" title="Emergency Contact">2</div>
+                    <div class="onb-bubble" id="onb-b2" title="Select Plan">2</div>
                     <div class="onb-connector"></div>
-                    <div class="onb-bubble" id="onb-b3" title="Select Plan">3</div>
+                    <div class="onb-bubble" id="onb-b3" title="Emergency Contact">3</div>
                     <div class="onb-connector"></div>
                     <div class="onb-bubble" id="onb-b4" title="Activate">4</div>
                 </div>
@@ -722,8 +723,8 @@ $missingFields = $missing_profile_fields ?? [];
                 </div>
             </div>
 
-            <!-- ── Step 2: Emergency Contact ──────────────────────── -->
-            <div id="onb-pane-2" class="onb-step-pane" style="display:none">
+            <!-- ── Step 2: Select Membership Plan ──────────────────── -->
+            <div id="onb-pane-3" class="onb-step-pane" style="display:none">
                 <h6 class="onb-step-heading"><i class="fas fa-heart"></i> Emergency Contact (Next of Kin)</h6>
                 <div class="row g-3">
                     <div class="col-md-6">
@@ -744,8 +745,8 @@ $missingFields = $missing_profile_fields ?? [];
                 </div>
             </div>
 
-            <!-- ── Step 3: Select Membership Plan ─────────────────── -->
-            <div id="onb-pane-3" class="onb-step-pane" style="display:none">
+            <!-- ── Step 3: Emergency Contact ────────────────────────── -->
+            <div id="onb-pane-2" class="onb-step-pane" style="display:none">
                 <h6 class="onb-step-heading"><i class="fas fa-shield-alt"></i> Select Your Membership Plan</h6>
                 <div class="mb-3">
                     <label class="form-label fw-semibold">Plan Type <span class="onb-req">*</span></label>
@@ -757,6 +758,18 @@ $missingFields = $missing_profile_fields ?? [];
                         <option value="extended_family_2">Extended Family 2 &mdash; Couple + Children + Parents + In-laws (KES 300 &ndash; 650/month)</option>
                         <option value="executive">Executive &mdash; Premium Individual (KES 300 or 500/month)</option>
                     </select>
+                    <div style="text-align:center; margin-top:8px;">
+                        <button type="button" class="btn btn-link btn-sm p-0" style="font-size:0.82rem; color:#7F20B0;" onclick="document.getElementById('onb-pkg-guide').style.display = document.getElementById('onb-pkg-guide').style.display === 'none' ? '' : 'none';">
+                            <i class="fas fa-question-circle"></i> Don&rsquo;t know what to choose? Get a glimpse of how our packages are categorized
+                        </button>
+                    </div>
+                    <div id="onb-pkg-guide" style="display:none; margin-top:8px; padding:10px 14px; background:#f5f0fb; border-radius:8px; font-size:0.82rem; color:#3d1060;">
+                        <strong>Individual</strong> &mdash; Just you. Choose your age bracket to get a monthly rate.<br>
+                        <strong>Family</strong> &mdash; You + spouse. Fixed monthly rate of KES 150.<br>
+                        <strong>Extended Family 1</strong> &mdash; Couple + children + parents. Age-based rate.<br>
+                        <strong>Extended Family 2</strong> &mdash; Extended Family 1 + in-laws. Best for large families.<br>
+                        <strong>Executive</strong> &mdash; Premium individual cover with enhanced benefits.
+                    </div>
                 </div>
                 <div id="onb-bracket-row" style="display:none">
                     <label class="form-label fw-semibold">Age Bracket <span class="onb-req">*</span> &mdash; <em id="onb-bracket-hint" class="text-muted" style="font-size:0.85rem;"></em></label>
@@ -816,6 +829,7 @@ $missingFields = $missing_profile_fields ?? [];
     const MEMBER_ID  = <?php echo json_encode((int)($member['id'] ?? 0)); ?>;
     const MEMBER_PHONE = <?php echo json_encode((string)($member['phone'] ?? '')); ?>;
     const REG_FEE    = <?php echo json_encode(defined('REGISTRATION_FEE') ? (float)REGISTRATION_FEE : 200.0); ?>;
+    const HAS_PAID_REGISTRATION = <?php echo json_encode(($member['status'] ?? 'inactive') === 'active'); ?>;
 
     const tierMap = {
         individual: {
@@ -858,8 +872,8 @@ $missingFields = $missing_profile_fields ?? [];
     const STEP_LABELS = [
         '',
         'Step 1 of 4 — Personal Details',
-        'Step 2 of 4 — Emergency Contact',
-        'Step 3 of 4 — Select Your Plan',
+        'Step 2 of 4 — Select Your Plan',
+        'Step 3 of 4 — Emergency Contact',
         'Step 4 of 4 — Activate Membership'
     ];
 
@@ -960,11 +974,11 @@ $missingFields = $missing_profile_fields ?? [];
             if (!document.getElementById('onb-address').value.trim())      { showMsg('Please enter your physical address.', 'warning'); return false; }
         }
         if (n === 2) {
-            if (!document.getElementById('onb-kin-name').value.trim())  { showMsg('Please enter the name of your next of kin.', 'warning'); return false; }
-            if (!document.getElementById('onb-kin-phone').value.trim()) { showMsg('Please enter your next of kin phone number.', 'warning'); return false; }
+            if (!selectedPackageId) { showMsg('Please select a plan' + (planSelect.value && !tierMap[planSelect.value]?.flat ? ' and an age bracket' : '') + '.', 'warning'); return false; }
         }
         if (n === 3) {
-            if (!selectedPackageId) { showMsg('Please select a plan' + (planSelect.value && !tierMap[planSelect.value]?.flat ? ' and an age bracket' : '') + '.', 'warning'); return false; }
+            if (!document.getElementById('onb-kin-name').value.trim())  { showMsg('Please enter the name of your next of kin.', 'warning'); return false; }
+            if (!document.getElementById('onb-kin-phone').value.trim()) { showMsg('Please enter your next of kin phone number.', 'warning'); return false; }
         }
         return true;
     }
@@ -972,6 +986,32 @@ $missingFields = $missing_profile_fields ?? [];
     /* ── Submit steps via AJAX ───────────────────────────────────────── */
     async function submitStep(n) {
         if (n === 2) {
+            // Step 2 = Select Plan — save package
+            btnNext.disabled = true;
+            btnNext.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Saving...';
+            var fd2 = new FormData();
+            fd2.append('csrf_token', CSRF);
+            fd2.append('package_id', selectedPackageId);
+            try {
+                var r2 = await fetch('/member/onboarding/package', { method: 'POST', body: fd2, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                var d2 = await r2.json();
+                if (!d2.success) {
+                    showMsg(d2.message || 'Could not update your plan. Please try again.', 'danger');
+                    btnNext.disabled = false;
+                    btnNext.innerHTML = 'Continue <i class="fas fa-arrow-right ms-1"></i>';
+                    return false;
+                }
+            } catch (e) {
+                showMsg('Network error. Please check your connection and try again.', 'danger');
+                btnNext.disabled = false;
+                btnNext.innerHTML = 'Continue <i class="fas fa-arrow-right ms-1"></i>';
+                return false;
+            }
+            btnNext.disabled = false;
+            return true;
+        }
+        if (n === 3) {
+            // Step 3 = Emergency Contact — also save personal details from Step 1
             btnNext.disabled = true;
             btnNext.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Saving...';
             var fd = new FormData();
@@ -987,30 +1027,6 @@ $missingFields = $missing_profile_fields ?? [];
                 var d = await r.json();
                 if (!d.success) {
                     showMsg(d.message || 'Could not save your details. Please try again.', 'danger');
-                    btnNext.disabled = false;
-                    btnNext.innerHTML = 'Continue <i class="fas fa-arrow-right ms-1"></i>';
-                    return false;
-                }
-            } catch (e) {
-                showMsg('Network error. Please check your connection and try again.', 'danger');
-                btnNext.disabled = false;
-                btnNext.innerHTML = 'Continue <i class="fas fa-arrow-right ms-1"></i>';
-                return false;
-            }
-            btnNext.disabled = false;
-            return true;
-        }
-        if (n === 3) {
-            btnNext.disabled = true;
-            btnNext.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Saving...';
-            var fd2 = new FormData();
-            fd2.append('csrf_token', CSRF);
-            fd2.append('package_id', selectedPackageId);
-            try {
-                var r2 = await fetch('/member/onboarding/package', { method: 'POST', body: fd2, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-                var d2 = await r2.json();
-                if (!d2.success) {
-                    showMsg(d2.message || 'Could not update your plan. Please try again.', 'danger');
                     btnNext.disabled = false;
                     btnNext.innerHTML = 'Continue <i class="fas fa-arrow-right ms-1"></i>';
                     return false;
@@ -1041,7 +1057,14 @@ $missingFields = $missing_profile_fields ?? [];
     });
 
     btnBack.addEventListener('click', function () { clearMsg(); if (currentStep > 1) showStep(currentStep - 1); });
-    btnSkip.addEventListener('click', function () { dismissAndReload(); });
+    btnSkip.addEventListener('click', function () {
+        if (!HAS_PAID_REGISTRATION) {
+            showMsg('Please complete your registration payment before skipping. Go to Step 4 to pay.', 'warning');
+            showStep(4);
+            return;
+        }
+        dismissAndReload();
+    });
 
     async function dismissAndReload() {
         try {

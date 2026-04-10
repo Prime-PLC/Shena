@@ -467,19 +467,22 @@ class BulkSmsController extends BaseController
             // If action is 'send', start sending immediately
             if ($action === 'send' && $sendTime === 'now') {
                 $this->bulkSmsService->sendCampaign($campaignId);
-                $_SESSION['success'] = 'Campaign created and sending started! (' . count($recipients) . ' recipients)';
+                $successMsg = 'Campaign created and sending started! (' . count($recipients) . ' recipients)';
             } elseif ($sendTime === 'scheduled') {
-                $_SESSION['success'] = 'Campaign scheduled successfully for ' . date('M j, Y H:i', strtotime($scheduledAt));
+                $successMsg = 'Campaign scheduled successfully for ' . date('M j, Y H:i', strtotime($scheduledAt));
             } else {
-                $_SESSION['success'] = 'Campaign saved as draft';
+                $successMsg = 'Campaign saved as draft';
             }
-            
-            $this->redirect('/admin/communications');
-            
+
+            header('Content-Type: application/json');
+            echo json_encode(['success' => true, 'message' => $successMsg, 'campaign_id' => $campaignId]);
+            exit();
+
         } catch (Exception $e) {
             error_log('Campaign creation error: ' . $e->getMessage());
-            $_SESSION['error'] = $e->getMessage();
-            $this->redirect('/admin/communications');
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+            exit();
         }
     }
     
@@ -608,17 +611,19 @@ class BulkSmsController extends BaseController
             $result = $smsService->sendSms($formattedPhone, $message);
 
             if ($result['success']) {
-                $_SESSION['success'] = 'SMS sent successfully to ' . $formattedPhone;
+                header('Content-Type: application/json');
+                echo json_encode(['success' => true, 'message' => 'SMS sent successfully to ' . $formattedPhone]);
+                exit();
             } else {
                 throw new Exception($result['error'] ?? 'Failed to send SMS');
             }
 
         } catch (Exception $e) {
             error_log('Quick SMS error: ' . $e->getMessage());
-            $_SESSION['error'] = $e->getMessage();
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+            exit();
         }
-        
-        $this->redirect('/admin/communications');
     }
     
     /**

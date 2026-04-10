@@ -186,16 +186,16 @@
                     <input type="tel" name="phone" class="form-input" placeholder="0712345678" required>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Email Address <span class="required">*</span></label>
-                    <input type="email" name="email" class="form-input" required>
+                    <label class="form-label">Email Address <small class="text-muted">(optional)</small></label>
+                    <input type="email" name="email" class="form-input">
                 </div>
                 <div class="form-group full-width">
                     <label class="form-label">Physical Address</label>
                     <input type="text" name="address" class="form-input">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">County <span class="required">*</span></label>
-                    <input type="text" name="county" class="form-input" required>
+                    <label class="form-label">County</label>
+                    <input type="text" name="county" class="form-input">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Sub-County</label>
@@ -236,19 +236,19 @@
 
         <!-- Next of Kin -->
         <div class="form-section">
-            <h2 class="section-title">Next of Kin Information</h2>
+            <h2 class="section-title">Next of Kin <small class="text-muted" style="font-size:0.8rem;font-weight:400">(optional — can be added later)</small></h2>
             <div class="form-grid">
                 <div class="form-group">
-                    <label class="form-label">Full Name <span class="required">*</span></label>
-                    <input type="text" name="next_of_kin_name" class="form-input" required>
+                    <label class="form-label">Full Name</label>
+                    <input type="text" name="next_of_kin_name" class="form-input">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Relationship <span class="required">*</span></label>
-                    <input type="text" name="next_of_kin_relationship" class="form-input" required>
+                    <label class="form-label">Relationship</label>
+                    <input type="text" name="next_of_kin_relationship" class="form-input">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Phone Number <span class="required">*</span></label>
-                    <input type="tel" name="next_of_kin_phone" class="form-input" required>
+                    <label class="form-label">Phone Number</label>
+                    <input type="tel" name="next_of_kin_phone" class="form-input">
                 </div>
                 <div class="form-group">
                     <label class="form-label">National ID</label>

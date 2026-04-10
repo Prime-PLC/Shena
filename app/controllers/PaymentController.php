@@ -233,7 +233,28 @@ class PaymentController extends BaseController
     public function viewReconciliation()
     {
         $this->requireRole(['super_admin', 'manager']);
-        $this->view('admin/payments-reconciliation');
+
+        $stats = $this->reconciliationService->getReconciliationStats();
+        $unmatchedPayments = $this->reconciliationService->getUnmatchedPayments();
+
+        // Today's collections
+        $db = Database::getInstance();
+        $todayStats = $db->fetch(
+            "SELECT SUM(amount) as total FROM payments WHERE DATE(created_at)=CURDATE() AND status='completed'"
+        );
+
+        // Defaulters: members with no payment in last 60 days and status not active
+        $defaultersRow = $db->fetch(
+            "SELECT COUNT(*) as cnt FROM members WHERE status IN ('inactive','grace_period','defaulted') 
+             AND (last_payment_date IS NULL OR last_payment_date < DATE_SUB(CURDATE(), INTERVAL 60 DAY))"
+        );
+
+        $this->view('admin/payments-reconciliation', [
+            'recon_stats'         => $stats ?? [],
+            'unmatched_payments'  => $unmatchedPayments ?? [],
+            'today_collections'   => (float)($todayStats['total'] ?? 0),
+            'defaulters_count'    => (int)($defaultersRow['cnt'] ?? 0),
+        ]);
     }
     
     /**

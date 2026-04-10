@@ -409,29 +409,28 @@ class AdminController extends BaseController
                 }
             }
 
-            // Prepare password
+            // Prepare password (raw — createUser() handles hashing)
             if (empty($password)) {
-                $temp = bin2hex(random_bytes(6));
-                $passwordHash = password_hash($temp, PASSWORD_DEFAULT);
+                $rawPassword = bin2hex(random_bytes(6));
             } else {
                 if (strlen($password) < 8) {
                     $_SESSION['error'] = 'Password must be at least 8 characters.';
                     $this->redirect('/admin/members/register');
                     return;
                 }
-                $passwordHash = password_hash($password, PASSWORD_DEFAULT);
+                $rawPassword = $password;
             }
 
             // Start DB transaction
             $this->db->getConnection()->beginTransaction();
 
-            // Create user
+            // Create user (createUser() hashes the password internally)
             $userId = $this->userModel->createUser([
                 'first_name' => $firstName,
                 'last_name' => $lastName,
                 'email' => $email ?: null,
                 'phone' => $phone,
-                'password' => $passwordHash,
+                'password' => $rawPassword,
                 'role' => 'member',
                 'status' => 'pending'
             ]);
@@ -734,6 +733,24 @@ class AdminController extends BaseController
     /**
      * Payment Management
      */
+    public function viewPayment($id)
+    {
+        $this->requireAdminAccess();
+        $payment = $this->paymentModel->getPaymentWithDetails((int)$id);
+        if (!$payment) {
+            $_SESSION['error'] = 'Payment record not found.';
+            $this->redirect('/admin/payments');
+            return;
+        }
+        $this->view('admin.payments', [
+            'title'      => 'Payment #' . $id . ' - Admin',
+            'payments'   => [$payment],
+            'status'     => 'all',
+            'member_id'  => null,
+            'highlight_id' => (int)$id,
+        ]);
+    }
+
     public function payments()
     {
         $this->requireAdminAccess();

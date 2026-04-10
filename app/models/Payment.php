@@ -238,6 +238,17 @@ class Payment extends BaseModel
         return $this->db->fetchAll($sql, ['limit' => $limit]);
     }
     
+    public function getPaymentWithDetails($id)
+    {
+        $sql = "SELECT p.*, m.member_number, u.first_name, u.last_name, u.email, u.phone
+                FROM {$this->table} p
+                JOIN members m ON p.member_id = m.id
+                JOIN users u ON m.user_id = u.id
+                WHERE p.id = :id
+                LIMIT 1";
+        return $this->db->fetch($sql, ['id' => $id]);
+    }
+
     public function getAllPaymentsWithDetails($conditions = [])
     {
         $sql = "SELECT 

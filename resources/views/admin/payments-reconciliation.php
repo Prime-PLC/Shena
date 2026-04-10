@@ -606,55 +606,56 @@
     </div>
 </div>
 
-<!-- Emergency Alert -->
-<div class="emergency-alert">
-    <div class="alert-content">
-        <div class="alert-icon">
-            <i class="fas fa-bell"></i>
-        </div>
-        <div class="alert-text">
-            <span class="alert-badge">EMERGENCY ALERT</span>
-            <div class="alert-title">Death Notification: Member #4592</div>
-            <div class="alert-description">Pending immediate court support fund disbursement: KES 50,000</div>
-        </div>
-    </div>
-    <a class="alert-button" href="/admin/claims">PROCESS CLAIM</a>
-</div>
+<?php
+$recon_stats        = $recon_stats ?? [];
+$unmatched_payments = $unmatched_payments ?? [];
+$today_collections  = $today_collections ?? 0;
+$defaulters_count   = $defaulters_count ?? 0;
+$unmatched_count    = (int)($recon_stats['unmatched'] ?? count($unmatched_payments));
+?>
 
 <!-- Statistics Cards -->
 <div class="stats-row">
     <!-- Today's Collections -->
     <div class="stat-card">
         <div class="stat-label">Today's Collections</div>
-        <div class="stat-value">48,250 <span class="stat-small">KES</span></div>
+        <div class="stat-value"><?php echo number_format($today_collections, 0); ?> <span class="stat-small">KES</span></div>
         <div class="stat-change">
-            <i class="fas fa-arrow-up"></i>
-            14% VS YESTERDAY
+            <i class="fas fa-calendar-day"></i>
+            AS OF TODAY
         </div>
     </div>
 
     <!-- Unmatched Records -->
     <div class="stat-card">
         <div class="stat-label">Unmatched Records</div>
-        <div class="stat-value">14</div>
+        <div class="stat-value"><?php echo $unmatched_count; ?></div>
         <div class="stat-indicator">
+            <?php if ($unmatched_count > 0): ?>
             <i class="fas fa-sync"></i> MANUAL SYNC REQUIRED
+            <?php else: ?>
+            <i class="fas fa-check-circle"></i> ALL MATCHED
+            <?php endif; ?>
         </div>
     </div>
 
-    <!-- Monthly Target -->
+    <!-- Total Matched -->
     <div class="stat-card">
-        <div class="stat-label">Monthly Target</div>
-        <div class="stat-value">82%</div>
+        <div class="stat-label">Total Matched</div>
+        <div class="stat-value"><?php echo number_format((int)($recon_stats['matched'] ?? 0)); ?></div>
         <div class="stat-progress">
-            <div class="stat-progress-bar" style="width: 82%;"></div>
+            <?php
+            $total = max(1, (int)($recon_stats['total_payments'] ?? 1));
+            $matchPct = round(((int)($recon_stats['matched'] ?? 0)) / $total * 100);
+            ?>
+            <div class="stat-progress-bar" style="width: <?php echo $matchPct; ?>%;"></div>
         </div>
     </div>
 
     <!-- Defaulters -->
     <div class="stat-card">
         <div class="stat-label">Defaulters (+60 Days)</div>
-        <div class="stat-value">89</div>
+        <div class="stat-value"><?php echo $defaulters_count; ?></div>
         <div class="stat-indicator">
             <i class="fas fa-flag"></i> RECOVERY PENDING
         </div>
@@ -693,29 +694,24 @@
         <div class="feed-card">
             <div class="feed-title">Unmatched Feed</div>
 
-            <!-- REEXAMINED -->
+            <?php if (!empty($unmatched_payments)): ?>
+            <?php foreach (array_slice($unmatched_payments, 0, 5) as $up): ?>
             <div class="feed-item">
                 <div class="feed-header">
-                    <span class="feed-type">RKM19A883</span>
-                    <span class="feed-time">12:15 AM</span>
+                    <span class="feed-type"><?php echo htmlspecialchars($up['mpesa_receipt_number'] ?? $up['transaction_reference'] ?? 'N/A'); ?></span>
+                    <span class="feed-time"><?php echo date('h:i A', strtotime($up['created_at'] ?? 'now')); ?></span>
                 </div>
-                <div class="feed-amount">KES 1,200.00</div>
-                <div class="feed-description">No contribution - Amani...</div>
-                <div class="feed-meta">E-Pay Member ID</div>
-                <a class="feed-button" href="/admin/payments?tab=reconciliation">Link</a>
+                <div class="feed-amount">KES <?php echo number_format((float)($up['amount'] ?? 0), 2); ?></div>
+                <div class="feed-description"><?php echo htmlspecialchars($up['notes'] ?? 'No account match'); ?></div>
+                <div class="feed-meta"><?php echo htmlspecialchars($up['payment_method'] ?? 'M-Pesa'); ?></div>
+                <a class="feed-button" href="/admin/payments/unmatched">Link</a>
             </div>
-
-            <!-- OUTGEARED -->
-            <div class="feed-item">
-                <div class="feed-header">
-                    <span class="feed-type">Q7PP9U889</span>
-                    <span class="feed-time">08:15 AM</span>
-                </div>
-                <div class="feed-amount">KES 500.00</div>
-                <div class="feed-description">No transaction found</div>
-                <div class="feed-meta">E-Pay Member ID</div>
-                <a class="feed-button" href="/admin/payments?tab=reconciliation">Link</a>
+            <?php endforeach; ?>
+            <?php else: ?>
+            <div style="padding:24px; text-align:center; color:#6B7280; font-size:0.9rem;">
+                <i class="fas fa-check-circle text-success me-1"></i> No unmatched payments.
             </div>
+            <?php endif; ?>
         </div>
     </div>
 </div>

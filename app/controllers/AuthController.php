@@ -1498,20 +1498,12 @@ class AuthController extends BaseController
             // Send welcome SMS with member number
             $memberNumber = (string) ($otpSession['member_number'] ?? '');
             $phone = (string) ($otpSession['phone'] ?? '');
-            if ($memberNumber && $phone) {
-                try {
-                    $smsService = new SmsService();
-                    $smsService->sendSms(
-                        $phone,
-                        'Welcome to SHENA Companion Welfare Association! Your member number is ' . $memberNumber
-                        . '. Log in at shenacompanion.co.ke to create your password and complete registration.'
-                    );
-                } catch (Exception $smsEx) {
-                    error_log('Welcome SMS error for member ' . $memberNumber . ': ' . $smsEx->getMessage());
-                }
-            }
 
-            $_SESSION['signup_password_setup'] = ['user_id' => $userId];
+            $_SESSION['signup_password_setup'] = [
+                'user_id'       => $userId,
+                'phone'         => $phone,
+                'member_number' => $memberNumber,
+            ];
             unset($_SESSION['signup_otp']);
 
             $_SESSION['success'] = 'Phone verification successful. Create your password to continue.';
@@ -1640,6 +1632,25 @@ class AuthController extends BaseController
             }
 
             $this->userModel->updatePassword($userId, $password);
+
+            // Send welcome SMS now that account is fully set up
+            $memberNumber = (string) ($_SESSION['signup_password_setup']['member_number'] ?? '');
+            $phone        = (string) ($_SESSION['signup_password_setup']['phone'] ?? '');
+            if ($memberNumber && $phone) {
+                try {
+                    // Fetch national ID for payment account reference
+                    $memberRecord = $this->memberModel->findByUserId($userId);
+                    $nationalId   = (string) ($memberRecord['id_number'] ?? $memberNumber);
+                    $smsService   = new SmsService();
+                    $smsService->sendSms(
+                        $phone,
+                        'Welcome to SHENA! Mbr: ' . $memberNumber . '. Pay KES 200 reg fee via Paybill 4163987, Acct: ' . $nationalId . '. Login: shenacompanion.co.ke'
+                    );
+                } catch (Exception $smsEx) {
+                    error_log('Welcome SMS error for member ' . $memberNumber . ': ' . $smsEx->getMessage());
+                }
+            }
+
             unset($_SESSION['signup_password_setup']);
 
             $_SESSION['success'] = 'Password created successfully. Please login.';

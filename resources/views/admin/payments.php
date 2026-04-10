@@ -540,7 +540,7 @@ $successRate = $successRate ?? 0;
                     <td><?php echo date('M j, Y g:i A', strtotime($p['created_at'])); ?></td>
                     <td><span class="status-badge <?php echo $p['status'] === 'completed' ? 'success' : ($p['status'] === 'failed' ? 'danger' : 'pending'); ?>"><?php echo ucfirst($p['status']); ?></span></td>
                     <td>
-                        <a href="/admin/payment/<?php echo $p['id']; ?>" class="filter-btn" style="padding: 6px 12px; font-size: 12px;">
+                        <a href="/admin/payments/view/<?php echo $p['id']; ?>" class="filter-btn" style="padding: 6px 12px; font-size: 12px;">
                             <i class="fas fa-eye"></i> View
                         </a>
                     </td>

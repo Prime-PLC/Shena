@@ -1019,6 +1019,33 @@ main {
                 </form>
             </div>
 
+            <!-- Payment Recovery Helper -->
+            <div class="alert" style="background:#fff8e1; border:1px solid #f59e0b; border-radius:8px; padding:14px 18px; margin-bottom:16px; display:flex; align-items:flex-start; gap:12px;">
+                <i class="fas fa-exclamation-triangle" style="color:#f59e0b; font-size:18px; margin-top:2px; flex-shrink:0;"></i>
+                <div style="flex:1;">
+                    <strong style="color:#92400e;">Made a manual M-Pesa payment not showing here?</strong>
+                    <p style="margin:4px 0 8px; color:#78350f; font-size:13px;">If you paid via Paybill but it's not reflected below, tap the button to verify using your M-Pesa confirmation code.</p>
+                    <button type="button" class="btn btn-sm" style="background:#f59e0b; color:#fff; border:none; padding:6px 14px; border-radius:6px; font-size:13px; font-weight:600;" onclick="document.getElementById('paymentRecoveryForm').style.display = document.getElementById('paymentRecoveryForm').style.display === 'none' ? 'block' : 'none';">
+                        <i class="fas fa-search"></i> Verify My Payment
+                    </button>
+                    <div id="paymentRecoveryForm" style="display:none; margin-top:12px; padding:12px; background:#fffdf0; border-radius:6px; border:1px solid #fde68a;">
+                        <form method="POST" action="/payments/verify-transaction">
+                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token ?? ''); ?>">
+                            <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+                                <div>
+                                    <label style="font-size:12px; font-weight:600; color:#78350f; display:block; margin-bottom:4px;">M-Pesa Confirmation Code</label>
+                                    <input type="text" name="mpesa_code" class="form-control form-control-sm" placeholder="e.g. RGH3XK02AB" style="text-transform:uppercase; width:200px;" required>
+                                </div>
+                                <button type="submit" class="btn btn-sm btn-success" style="font-size:13px; padding:6px 16px; font-weight:600;">
+                                    <i class="fas fa-check"></i> Check &amp; Link
+                                </button>
+                            </div>
+                            <p style="font-size:11px; color:#92400e; margin-top:6px; margin-bottom:0;">The code is the 10-character code in your M-Pesa confirmation SMS (e.g. <em>RGH3XK02AB</em>).</p>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
             <!-- Payments Table -->
             <div class="payments-table">
                 <div class="payments-table-wrapper">
@@ -1094,8 +1121,8 @@ main {
                 </div>
 
                 <div class="account-ref">
-                    <p>Your Account Reference</p>
-                    <h3><?php echo htmlspecialchars($member['member_number'] ?? $member['member_id'] ?? ''); ?></h3>
+                    <p>Your Account Reference (National ID)</p>
+                    <h3><?php echo htmlspecialchars($member['id_number'] ?? $member['national_id'] ?? ''); ?></h3>
                 </div>
 
                 <button class="how-to-pay-btn" data-bs-toggle="modal" data-bs-target="#paymentModal">
@@ -1217,8 +1244,8 @@ main {
                             <div class="paybill-value paybill-number">4163987</div>
                         </div>
                         <div class="paybill-detail">
-                            <label>Account Number (Your Member ID)</label>
-                            <div class="paybill-value account-number"><?php echo htmlspecialchars($member['member_number'] ?? ''); ?></div>
+                            <label>Account Number (Your National ID)</label>
+                            <div class="paybill-value account-number"><?php echo htmlspecialchars($member['id_number'] ?? $member['national_id'] ?? ''); ?></div>
                         </div>
                         <div class="paybill-detail">
                             <label>Amount to Pay</label>
@@ -1233,7 +1260,7 @@ main {
                             <li>Select <strong>Lipa na M-Pesa</strong></li>
                             <li>Select <strong>Pay Bill</strong></li>
                             <li>Enter Business Number: <strong class="highlight-blue">4163987</strong></li>
-                            <li>Enter Account Number: <strong class="highlight-green"><?php echo htmlspecialchars($member['member_number'] ?? ''); ?></strong></li>
+                            <li>Enter Account Number: <strong class="highlight-green"><?php echo htmlspecialchars($member['id_number'] ?? $member['national_id'] ?? ''); ?></strong></li>
                             <li>Enter Amount: <strong class="highlight-orange">KES <?php echo number_format($member['monthly_contribution'] ?? 500, 2); ?></strong></li>
                             <li>Enter your M-Pesa PIN and confirm</li>
                             <li>You will receive an SMS confirmation from M-Pesa</li>
@@ -1247,7 +1274,7 @@ main {
                     
                     <div class="manual-payment-note">
                         <i class="fas fa-info-circle"></i>
-                        <p><strong>Important:</strong> Always use your correct Member ID (<strong><?php echo htmlspecialchars($member['member_number'] ?? ''); ?></strong>) as the account number to ensure your payment is credited to your account.</p>
+                        <p><strong>Important:</strong> Always use your <strong>National ID number</strong> (<strong><?php echo htmlspecialchars($member['id_number'] ?? $member['national_id'] ?? ''); ?></strong>) as the account number to ensure your payment is credited to your account.</p>
                     </div>
                 </div>
             </div>
