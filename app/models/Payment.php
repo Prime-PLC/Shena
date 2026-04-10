@@ -256,6 +256,10 @@ class Payment extends BaseModel
         
         if (!empty($conditions)) {
             foreach ($conditions as $field => $value) {
+                if ($field === 'member_id') {
+                    $where_clauses[] = "p.member_id = :member_id";
+                    $params['member_id'] = (int)$value;
+                }
                 if ($field === 'status' && $value !== 'all') {
                     $where_clauses[] = "p.status = :status";
                     $params['status'] = $value;

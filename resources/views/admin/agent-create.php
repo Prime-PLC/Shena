@@ -293,8 +293,8 @@
                     <label for="id_number" class="form-label">
                         National ID Number <span class="required">*</span>
                     </label>
-                    <input type="text" class="form-control" id="id_number" name="id_number" 
-                           placeholder="Enter ID number" pattern="[0-9]{7,8}" value="<?= htmlspecialchars($_SESSION['old_input']['id_number'] ?? '') ?>" required>
+                    <input type="text" class="form-control" id="id_number" name="national_id" 
+                           placeholder="Enter ID number" pattern="[0-9]{7,8}" value="<?= htmlspecialchars($_SESSION['old_input']['national_id'] ?? '') ?>" required>
                     <small class="form-text">7 or 8 digits</small>
                 </div>
                 <div class="col-md-6 mb-3">

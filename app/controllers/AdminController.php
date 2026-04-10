@@ -739,16 +739,21 @@ class AdminController extends BaseController
         $this->requireAdminAccess();
         
         $status = $_GET['status'] ?? 'all';
+        $memberId = isset($_GET['member_id']) ? (int)$_GET['member_id'] : null;
         
         $conditions = [];
         if ($status !== 'all') {
             $conditions['status'] = $status;
         }
+        if ($memberId) {
+            $conditions['member_id'] = $memberId;
+        }
         
         $data = [
             'title' => 'Payments - Admin',
             'payments' => $this->paymentModel->getAllPaymentsWithDetails($conditions),
-            'status' => $status
+            'status' => $status,
+            'member_id' => $memberId,
         ];
         
         $this->view('admin.payments', $data);
@@ -1745,18 +1750,17 @@ class AdminController extends BaseController
         $this->requireAdminAccess();
         
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $recipients = $_POST['recipients'] ?? '';
-            $subject = $_POST['subject'] ?? '';
-            $message = $_POST['message'] ?? '';
-            $sendCopy = isset($_POST['send_copy']);
+            $recipientType = $_POST['recipient_type'] ?? $_POST['recipients'] ?? '';
+            $subject = htmlspecialchars(strip_tags($_POST['subject'] ?? ''), ENT_QUOTES);
+            $message = htmlspecialchars(strip_tags($_POST['message'] ?? ''), ENT_QUOTES);
             
-            if ($subject && $message && $recipients) {
+            if ($subject && $message && $recipientType) {
                 // Get recipient list based on selection
-                $memberList = $this->getRecipientList($recipients);
+                $memberList = $this->getRecipientList($recipientType);
                 
                 if (!empty($memberList)) {
                     // Log communication attempt
-                    $this->logCommunication('email', $recipients, $subject, $message, count($memberList));
+                    $this->logCommunication('email', $recipientType, $subject, $message, count($memberList));
                     
                     $_SESSION['success'] = 'Email sent to ' . count($memberList) . ' members successfully!';
                 } else {
@@ -1777,29 +1781,32 @@ class AdminController extends BaseController
     public function sendSMS()
     {
         $this->requireAdminAccess();
-        
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $recipients = $_POST['recipients'] ?? '';
-            $message = $_POST['message'] ?? '';
-            
-            if ($message && $recipients && strlen($message) <= 160) {
-                // Get recipient list based on selection
-                $memberList = $this->getRecipientList($recipients);
-                
-                if (!empty($memberList)) {
-                    // Log communication attempt
-                    $this->logCommunication('sms', $recipients, 'SMS Message', $message, count($memberList));
-                    
-                    $_SESSION['success'] = 'SMS sent to ' . count($memberList) . ' members successfully!';
-                } else {
-                    $_SESSION['error'] = 'No recipients found for the selected criteria.';
-                }
-            } else {
-                $_SESSION['error'] = 'Please provide a valid message (max 160 characters).';
-            }
+
+        header('Content-Type: application/json');
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method.']);
+            exit();
         }
-        
-        header('Location: /admin/communications');
+
+        $recipients = $_POST['recipients'] ?? '';
+        $message = $_POST['message'] ?? '';
+
+        if (!$message || !$recipients || strlen($message) > 160) {
+            echo json_encode(['success' => false, 'message' => 'Please provide a valid message (max 160 characters).']);
+            exit();
+        }
+
+        $memberList = $this->getRecipientList($recipients);
+
+        if (empty($memberList)) {
+            echo json_encode(['success' => false, 'message' => 'No recipients found for the selected criteria.']);
+            exit();
+        }
+
+        $this->logCommunication('sms', $recipients, 'SMS Message', $message, count($memberList));
+
+        echo json_encode(['success' => true, 'message' => 'SMS sent to ' . count($memberList) . ' members successfully!']);
         exit();
     }
 

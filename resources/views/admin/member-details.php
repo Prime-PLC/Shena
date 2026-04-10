@@ -401,7 +401,7 @@ $beneficiaries = $beneficiaries ?? [];
                             <i class="fas fa-edit"></i> Edit Details
                         </a>
                         
-                        <a href="/admin/members/payments/<?= $member['id'] ?>" class="btn btn-secondary" style="width: 100%;">
+                        <a href="/admin/payments?member_id=<?= $member['id'] ?>" class="btn btn-secondary" style="width: 100%;">
                             <i class="fas fa-money-bill-wave"></i> View Payments
                         </a>
 

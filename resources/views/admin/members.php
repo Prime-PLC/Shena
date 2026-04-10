@@ -1000,7 +1000,7 @@ $pending_approvals = $pending_approvals ?? [];
     <!-- Active Members Tab -->
     <div id="tab-active" class="tab-content">
         <div class="tab-actions">
-            <a href="/admin/members/payments" class="tab-action-btn">
+            <a href="/admin/payments" class="tab-action-btn">
                 <i class="fas fa-money-bill-wave"></i>
                 Payment History
             </a>

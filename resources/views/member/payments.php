@@ -2,22 +2,10 @@
 $page = 'payments';
 include __DIR__ . '/../layouts/member-header.php';
 
-// Sample data
 $payments = $payments ?? [];
-$total_paid = array_sum(array_column($payments, 'amount'));
-$pending_count = count(array_filter($payments, fn($p) => $p['status'] === 'pending'));
-
-// Sample payment data if empty
-if (empty($payments)) {
-    $payments = [
-        ['payment_date' => '2023-10-02', 'amount' => 1200, 'period' => 'October 2023', 'transaction_id' => 'RK1R2L8W1P', 'status' => 'completed'],
-        ['payment_date' => '2023-09-05', 'amount' => 1200, 'period' => 'September 2023', 'transaction_id' => 'R132K1S5X4', 'status' => 'completed'],
-        ['payment_date' => '2023-08-03', 'amount' => 1200, 'period' => 'August 2023', 'transaction_id' => 'RH81M7N9V2', 'status' => 'completed'],
-        ['payment_date' => '2023-07-01', 'amount' => 1200, 'period' => 'July 2023', 'transaction_id' => 'RG84L2Q0A1', 'status' => 'completed'],
-        ['payment_date' => '2023-06-10', 'amount' => 1200, 'period' => 'June 2023', 'transaction_id' => 'RF118BN3Z9', 'status' => 'pending'],
-    ];
-    $total_paid = 12400;
-}
+// Recalculate totals from real data only
+$total_paid = array_sum(array_column(array_filter($payments, fn($p) => ($p['status'] ?? '') === 'completed'), 'amount'));
+$pending_count = count(array_filter($payments, fn($p) => ($p['status'] ?? '') !== 'completed'));
 ?>
 
 <style>
@@ -1045,12 +1033,18 @@ main {
                             </tr>
                         </thead>
                     <tbody>
+                        <?php if (!empty($payments)): ?>
                         <?php foreach ($payments as $payment): ?>
-                        <tr class="payment-row" data-payment='<?php echo json_encode($payment); ?>' style="cursor: pointer;">
-                            <td><?php echo date('M d, Y', strtotime($payment['payment_date'])); ?></td>
-                            <td><?php echo htmlspecialchars($payment['transaction_id'] ?? 'N/A'); ?></td>
+                        <?php
+                            $txnRef = $payment['mpesa_receipt_number'] ?? $payment['transaction_reference'] ?? $payment['transaction_id'] ?? '—';
+                            $payDate = $payment['created_at'] ?? $payment['payment_date'] ?? null;
+                            $period = $payment['period'] ?? ($payDate ? date('F Y', strtotime($payDate)) : '—');
+                        ?>
+                        <tr class="payment-row" data-payment='<?php echo htmlspecialchars(json_encode($payment), ENT_QUOTES); ?>' style="cursor: pointer;">
+                            <td><?php echo $payDate ? date('M d, Y', strtotime($payDate)) : '—'; ?></td>
+                            <td><?php echo htmlspecialchars($txnRef); ?></td>
                             <td>KES <?php echo number_format($payment['amount'], 2); ?></td>
-                            <td><?php echo htmlspecialchars($payment['period'] ?? 'N/A'); ?></td>
+                            <td><?php echo htmlspecialchars($period); ?></td>
                             <td>
                                 <span class="payment-status <?php echo $payment['status'] === 'completed' ? 'success' : ($payment['status'] === 'failed' ? 'failed' : 'pending'); ?>">
                                     <?php echo strtoupper($payment['status']); ?>
@@ -1058,6 +1052,9 @@ main {
                             </td>
                         </tr>
                         <?php endforeach; ?>
+                        <?php else: ?>
+                        <tr><td colspan="5" style="text-align:center; padding:32px; color:#6B7280;">No contribution records yet. Make your first payment to get started.</td></tr>
+                        <?php endif; ?>
                     </tbody>
                 </table>
                 </div>
@@ -1067,17 +1064,23 @@ main {
         <!-- Right Sidebar -->
         <div class="sidebar-right">
             <!-- Membership Standing -->
+            <?php
+                $mbrStatus = strtoupper($member['status'] ?? 'inactive');
+                $mbrStatusClass = ($member['status'] ?? '') === 'active' ? 'check-circle' : 'exclamation-circle';
+                $mbrStandingLabel = ($member['status'] ?? '') === 'active' ? 'Good Standing' : ucfirst($member['status'] ?? 'inactive');
+                $mbrStatusColor = ($member['status'] ?? '') === 'active' ? '' : 'color:#F59E0B;';
+            ?>
             <div class="membership-card">
                 <h4>MEMBERSHIP STANDING</h4>
                 <div class="membership-status">
-                    <h2>ACTIVE</h2>
+                    <h2 style="<?php echo $mbrStatusColor; ?>"><?php echo $mbrStatus; ?></h2>
                     <div class="verification-icon">
-                        <i class="fas fa-check-circle"></i>
+                        <i class="fas fa-<?php echo $mbrStatusClass; ?>" style="<?php echo $mbrStatusColor; ?>"></i>
                     </div>
                 </div>
                 <div class="status-badge">
                     <i></i>
-                    <span>Good Standing</span>
+                    <span><?php echo $mbrStandingLabel; ?></span>
                 </div>
             </div>
 
@@ -1092,7 +1095,7 @@ main {
 
                 <div class="account-ref">
                     <p>Your Account Reference</p>
-                    <h3><?php echo $member['member_id'] ?? 'SH-99238'; ?></h3>
+                    <h3><?php echo htmlspecialchars($member['member_number'] ?? $member['member_id'] ?? ''); ?></h3>
                 </div>
 
                 <button class="how-to-pay-btn" data-bs-toggle="modal" data-bs-target="#paymentModal">
@@ -1215,7 +1218,7 @@ main {
                         </div>
                         <div class="paybill-detail">
                             <label>Account Number (Your Member ID)</label>
-                            <div class="paybill-value account-number"><?php echo $member['member_id'] ?? 'SH-99238'; ?></div>
+                            <div class="paybill-value account-number"><?php echo htmlspecialchars($member['member_number'] ?? ''); ?></div>
                         </div>
                         <div class="paybill-detail">
                             <label>Amount to Pay</label>
@@ -1230,7 +1233,7 @@ main {
                             <li>Select <strong>Lipa na M-Pesa</strong></li>
                             <li>Select <strong>Pay Bill</strong></li>
                             <li>Enter Business Number: <strong class="highlight-blue">4163987</strong></li>
-                            <li>Enter Account Number: <strong class="highlight-green"><?php echo $member['member_id'] ?? 'SH-99238'; ?></strong></li>
+                            <li>Enter Account Number: <strong class="highlight-green"><?php echo htmlspecialchars($member['member_number'] ?? ''); ?></strong></li>
                             <li>Enter Amount: <strong class="highlight-orange">KES <?php echo number_format($member['monthly_contribution'] ?? 500, 2); ?></strong></li>
                             <li>Enter your M-Pesa PIN and confirm</li>
                             <li>You will receive an SMS confirmation from M-Pesa</li>
@@ -1244,7 +1247,7 @@ main {
                     
                     <div class="manual-payment-note">
                         <i class="fas fa-info-circle"></i>
-                        <p><strong>Important:</strong> Always use your correct Member ID (<strong><?php echo $member['member_id'] ?? 'SH-99238'; ?></strong>) as the account number to ensure your payment is credited to your account.</p>
+                        <p><strong>Important:</strong> Always use your correct Member ID (<strong><?php echo htmlspecialchars($member['member_number'] ?? ''); ?></strong>) as the account number to ensure your payment is credited to your account.</p>
                     </div>
                 </div>
             </div>
@@ -1310,7 +1313,7 @@ main {
                             <div class="member-info-card p-3 border rounded" style="background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                                 <h6 class="text-muted mb-2" style="font-size: 14px; font-weight: 600;">Member Information</h6>
                                 <p class="mb-1" style="font-weight: 600; color: #1F2937;"><?php echo htmlspecialchars($member['first_name'] . ' ' . $member['last_name']); ?></p>
-                                <p class="mb-1 text-muted" style="font-size: 13px;">ID: <?php echo htmlspecialchars($member['member_id'] ?? 'N/A'); ?></p>
+                                <p class="mb-1 text-muted" style="font-size: 13px;">ID: <?php echo htmlspecialchars($member['member_number'] ?? 'N/A'); ?></p>
                                 <p class="mb-0 text-muted" style="font-size: 13px;">Phone: <?php echo htmlspecialchars($member['phone'] ?? 'N/A'); ?></p>
                             </div>
                         </div>

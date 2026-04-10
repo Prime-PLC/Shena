@@ -544,7 +544,7 @@ include VIEWS_PATH . '/layouts/header.php';
                         </div>
                         
                         <div class="form-group">
-                            <a href="#" class="forgot-password">Forget Password?</a>
+                            <a href="/forgot-password" class="forgot-password">Forgot Password?</a>
                             <label class="form-label">Password</label>
                             <div class="password-wrapper">
                                 <input type="password" name="password" id="password" class="form-control" placeholder="Enter your password" required>
@@ -567,11 +567,17 @@ include VIEWS_PATH . '/layouts/header.php';
 
                         <div class="form-group">
                             <button type="button" id="sendOtpBtn" class="register-btn" style="margin-bottom:10px;">Send OTP Code</button>
-                            <label class="form-label">OTP Code</label>
-                            <input type="text" name="otp_code" id="otpCode" class="form-control" maxlength="6" inputmode="numeric" placeholder="Enter 6-digit OTP">
                         </div>
 
-                        <button type="button" id="verifyOtpBtn" class="login-btn">Login with OTP</button>
+                        <div class="form-group" id="otpCodeGroup" style="display:none;">
+                            <label class="form-label">OTP Code</label>
+                            <input type="text" name="otp_code" id="otpCode" class="form-control" maxlength="6" inputmode="numeric" placeholder="Enter 6-digit OTP">
+                            <div style="text-align:right; margin-top:6px;">
+                                <button type="button" id="resendOtpBtn" class="btn btn-link" style="font-size:.85rem; color:#6d28d9; padding:0; border:none; background:none; cursor:pointer;">Resend Code</button>
+                            </div>
+                        </div>
+
+                        <button type="button" id="verifyOtpBtn" class="login-btn" style="display:none;">Login with OTP</button>
                     </form>
                 </div>
 
@@ -661,8 +667,10 @@ include VIEWS_PATH . '/layouts/header.php';
 
             const otpForm = document.getElementById('otpLoginForm');
             const sendOtpBtn = document.getElementById('sendOtpBtn');
+            const resendOtpBtn = document.getElementById('resendOtpBtn');
             const verifyOtpBtn = document.getElementById('verifyOtpBtn');
             const otpResult = document.getElementById('otpResult');
+            const otpCodeGroup = document.getElementById('otpCodeGroup');
             const csrfToken = otpForm ? otpForm.querySelector('input[name="csrf_token"]').value : '';
 
             if (!otpForm || !sendOtpBtn || !verifyOtpBtn || !otpResult) {
@@ -673,13 +681,14 @@ include VIEWS_PATH . '/layouts/header.php';
                 otpResult.innerHTML = '<div class="alert alert-' + type + '">' + message + '</div>';
             }
 
-            sendOtpBtn.addEventListener('click', function () {
+            function doSendOtp() {
                 const formData = new FormData();
                 formData.append('csrf_token', csrfToken);
                 formData.append('phone', document.getElementById('otpPhone').value || '');
 
                 sendOtpBtn.disabled = true;
                 sendOtpBtn.textContent = 'Sending...';
+                if (resendOtpBtn) { resendOtpBtn.disabled = true; resendOtpBtn.textContent = 'Sending...'; }
 
                 fetch('/login/otp/send', {
                     method: 'POST',
@@ -689,6 +698,9 @@ include VIEWS_PATH . '/layouts/header.php';
                     .then(data => {
                         if (data.success) {
                             showOtpMessage(data.message || 'OTP sent.', 'success');
+                            // Show OTP input and verify button
+                            otpCodeGroup.style.display = '';
+                            verifyOtpBtn.style.display = '';
                         } else {
                             showOtpMessage(data.message || 'Failed to send OTP.', 'danger');
                         }
@@ -697,8 +709,12 @@ include VIEWS_PATH . '/layouts/header.php';
                     .finally(() => {
                         sendOtpBtn.disabled = false;
                         sendOtpBtn.textContent = 'Send OTP Code';
+                        if (resendOtpBtn) { resendOtpBtn.disabled = false; resendOtpBtn.textContent = 'Resend Code'; }
                     });
-            });
+            }
+
+            sendOtpBtn.addEventListener('click', doSendOtp);
+            if (resendOtpBtn) { resendOtpBtn.addEventListener('click', doSendOtp); }
 
             verifyOtpBtn.addEventListener('click', function () {
                 const formData = new FormData();

@@ -39,6 +39,12 @@ class Router
         $this->addRoute('POST', '/register/create-password', 'AuthController@storeCreatedPassword');
         $this->addRoute('GET', '/logout', 'AuthController@logout');
         
+        // Forgot Password Routes
+        $this->addRoute('GET', '/forgot-password', 'AuthController@showForgotPassword');
+        $this->addRoute('POST', '/forgot-password/send-otp', 'AuthController@sendForgotPasswordOtp');
+        $this->addRoute('POST', '/forgot-password/verify-otp', 'AuthController@verifyForgotPasswordOtp');
+        $this->addRoute('POST', '/forgot-password/reset', 'AuthController@resetPassword');
+        
         // Registration Complete & Payment Routes
         $this->addRoute('GET', '/registration/complete', 'AuthController@registrationComplete');
         $this->addRoute('POST', '/registration/pay', 'AuthController@initiateRegistrationPayment');

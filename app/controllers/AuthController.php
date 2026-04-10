@@ -572,7 +572,155 @@ class AuthController extends BaseController
             $this->redirect('/register');
         }
     }
-    
+
+    public function showForgotPassword()
+    {
+        if (isset($_SESSION['user_id'])) {
+            $this->redirect('/dashboard');
+            return;
+        }
+
+        $data = [
+            'title' => 'Forgot Password - Shena Companion',
+            'csrf_token' => $this->generateCsrfToken(),
+        ];
+        $this->view('auth.forgot-password', $data);
+    }
+
+    public function sendForgotPasswordOtp()
+    {
+        header('Content-Type: application/json');
+        try {
+            $this->validateCsrf();
+
+            $phoneInput = $this->sanitizeInput($_POST['phone'] ?? '');
+            if (empty($phoneInput) || !$this->validatePhone($phoneInput)) {
+                $this->json(['success' => false, 'message' => 'Enter a valid Kenyan phone number.'], 422);
+                return;
+            }
+
+            $phone = formatKenyanPhone($phoneInput);
+            $user = $this->userModel->findByPhone($phone);
+
+            if (!$user) {
+                // Return success to avoid phone enumeration
+                $this->json(['success' => true, 'message' => 'If that number is registered, you will receive a reset code shortly.']);
+                return;
+            }
+
+            $rateLimitKey = 'fp_otp_' . md5($phone);
+            $rl = $_SESSION[$rateLimitKey] ?? ['count' => 0, 'window_start' => time()];
+            if ((time() - $rl['window_start']) > 900) {
+                $rl = ['count' => 0, 'window_start' => time()];
+            }
+            if ($rl['count'] >= 5) {
+                $this->json(['success' => false, 'message' => 'Too many requests. Try again in 15 minutes.'], 429);
+                return;
+            }
+
+            $otpCode = $this->generateOtpCode();
+            $_SESSION['fp_otp'] = [
+                'user_id'    => (int) $user['id'],
+                'phone'      => $phone,
+                'code_hash'  => password_hash($otpCode, PASSWORD_DEFAULT),
+                'expires_at' => time() + 600,
+                'attempts'   => 0,
+                'verified'   => false,
+            ];
+            $rl['count']++;
+            $_SESSION[$rateLimitKey] = $rl;
+
+            $smsService = new SmsService();
+            $smsResult = $smsService->sendSms($phone, 'Your SHENA password reset code is ' . $otpCode . '. Valid for 10 minutes. Ignore if you did not request this.');
+
+            if (empty($smsResult['success'])) {
+                if ($this->isLocalOrDebugEnvironment()) {
+                    $this->json(['success' => true, 'message' => 'SMS unavailable locally. Reset code: ' . $otpCode]);
+                    return;
+                }
+                error_log('Forgot password OTP SMS error: ' . ($smsResult['error'] ?? 'unknown'));
+            }
+
+            $this->json(['success' => true, 'message' => 'Reset code sent. Check your phone.']);
+        } catch (Exception $e) {
+            error_log('Send forgot-password OTP error: ' . $e->getMessage());
+            $this->json(['success' => false, 'message' => 'Failed to send code. Please try again.'], 500);
+        }
+    }
+
+    public function verifyForgotPasswordOtp()
+    {
+        header('Content-Type: application/json');
+        try {
+            $this->validateCsrf();
+
+            $otpSession = $_SESSION['fp_otp'] ?? null;
+            if (empty($otpSession) || $otpSession['expires_at'] < time()) {
+                $this->json(['success' => false, 'message' => 'Code expired. Request a new one.'], 400);
+                return;
+            }
+
+            if ($otpSession['attempts'] >= 5) {
+                unset($_SESSION['fp_otp']);
+                $this->json(['success' => false, 'message' => 'Too many wrong attempts. Request a new code.'], 429);
+                return;
+            }
+
+            $enteredCode = trim($_POST['otp'] ?? '');
+            if (!password_verify($enteredCode, $otpSession['code_hash'])) {
+                $_SESSION['fp_otp']['attempts']++;
+                $this->json(['success' => false, 'message' => 'Incorrect code. Please try again.'], 422);
+                return;
+            }
+
+            $_SESSION['fp_otp']['verified'] = true;
+            $this->json(['success' => true, 'message' => 'Code verified. Set your new password.']);
+        } catch (Exception $e) {
+            error_log('Verify forgot-password OTP error: ' . $e->getMessage());
+            $this->json(['success' => false, 'message' => 'Verification failed. Please try again.'], 500);
+        }
+    }
+
+    public function resetPassword()
+    {
+        try {
+            $this->validateCsrf();
+
+            $otpSession = $_SESSION['fp_otp'] ?? null;
+            if (empty($otpSession) || empty($otpSession['verified']) || $otpSession['expires_at'] < time()) {
+                $_SESSION['error'] = 'Reset session expired. Please start again.';
+                $this->redirect('/forgot-password');
+                return;
+            }
+
+            $password = (string) ($_POST['password'] ?? '');
+            $confirmPassword = (string) ($_POST['confirm_password'] ?? '');
+
+            if (strlen($password) < 8) {
+                $_SESSION['error'] = 'Password must be at least 8 characters.';
+                $this->redirect('/forgot-password');
+                return;
+            }
+
+            if ($password !== $confirmPassword) {
+                $_SESSION['error'] = 'Passwords do not match.';
+                $this->redirect('/forgot-password');
+                return;
+            }
+
+            $userId = (int) $otpSession['user_id'];
+            $this->userModel->updatePassword($userId, $password);
+            unset($_SESSION['fp_otp']);
+
+            $_SESSION['success'] = 'Password reset successfully. Please log in with your new password.';
+            $this->redirect('/login');
+        } catch (Exception $e) {
+            error_log('Reset password error: ' . $e->getMessage());
+            $_SESSION['error'] = 'Failed to reset password. Please try again.';
+            $this->redirect('/forgot-password');
+        }
+    }
+
     public function logout()
     {
         session_destroy();
@@ -1346,6 +1494,22 @@ class AuthController extends BaseController
 
             $userId = (int) $otpSession['user_id'];
             $this->userModel->update($userId, ['email_verified_at' => date('Y-m-d H:i:s')]);
+
+            // Send welcome SMS with member number
+            $memberNumber = (string) ($otpSession['member_number'] ?? '');
+            $phone = (string) ($otpSession['phone'] ?? '');
+            if ($memberNumber && $phone) {
+                try {
+                    $smsService = new SmsService();
+                    $smsService->sendSms(
+                        $phone,
+                        'Welcome to SHENA Companion Welfare Association! Your member number is ' . $memberNumber
+                        . '. Log in at shenacompanion.co.ke to create your password and complete registration.'
+                    );
+                } catch (Exception $smsEx) {
+                    error_log('Welcome SMS error for member ' . $memberNumber . ': ' . $smsEx->getMessage());
+                }
+            }
 
             $_SESSION['signup_password_setup'] = ['user_id' => $userId];
             unset($_SESSION['signup_otp']);
