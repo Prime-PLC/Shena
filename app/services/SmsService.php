@@ -198,7 +198,8 @@ class SmsService
     {
         $formatted = $this->formatPhoneNumber($phone);
         
-        // Kenyan phone numbers should be 254 followed by 9 digits
-        return preg_match('/^254[17][0-9]{8}$/', $formatted);
+        // Accept any valid Kenyan number: 254 followed by exactly 9 digits
+        // Covers Safaricom (2547x), Airtel (2541x), Telkom (2540x) etc.
+        return preg_match('/^254[0-9]{9}$/', $formatted);
     }
 }

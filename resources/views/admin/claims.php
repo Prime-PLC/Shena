@@ -476,6 +476,24 @@ $actionNeededCount = count(array_filter($all_claims, fn($c) =>
         .tabs-nav {
             overflow-x: auto;
         }
+
+        /* Allow tables to scroll — override overflow:hidden on tabs-container */
+        .tabs-container {
+            overflow: visible !important;
+        }
+
+        .claims-table {
+            display: block;
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .claims-table thead,
+        .claims-table tbody,
+        .claims-table tr {
+            min-width: 520px;
+        }
     }
 
     /* Tabs Styles */

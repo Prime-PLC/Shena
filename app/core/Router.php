@@ -28,6 +28,7 @@ class Router
         // Authentication Routes
         $this->addRoute('GET', '/login', 'AuthController@showLogin');
         $this->addRoute('POST', '/login', 'AuthController@login');
+        $this->addRoute('POST', '/login/verify', 'AuthController@verifyPasswordAndSendOtp');
         $this->addRoute('POST', '/login/otp/send', 'AuthController@sendLoginOtp');
         $this->addRoute('POST', '/login/otp/verify', 'AuthController@verifyLoginOtp');
         $this->addRoute('GET', '/register', 'AuthController@showPublicRegistration');
@@ -39,6 +40,10 @@ class Router
         $this->addRoute('POST', '/register/create-password', 'AuthController@storeCreatedPassword');
         $this->addRoute('GET', '/logout', 'AuthController@logout');
         
+        // Set Password (invite link for admin/agent registered members)
+        $this->addRoute('GET', '/set-password', 'AuthController@showSetPassword');
+        $this->addRoute('POST', '/set-password', 'AuthController@processSetPassword');
+
         // Forgot Password Routes
         $this->addRoute('GET', '/forgot-password', 'AuthController@showForgotPassword');
         $this->addRoute('POST', '/forgot-password/send-otp', 'AuthController@sendForgotPasswordOtp');
@@ -69,6 +74,7 @@ class Router
         $this->addRoute('POST', '/member/profile/complete', 'MemberController@completeProfileFromPopup');
         $this->addRoute('POST', '/member/onboarding/package', 'MemberController@updatePackageFromOnboarding');
         $this->addRoute('POST', '/member/onboarding/dismiss', 'MemberController@dismissOnboarding');
+        $this->addRoute('GET',  '/member/onboarding/payment-status', 'MemberController@checkRegistrationPayment');
 
         // Agent Routes (Protected)
         $this->addRoute('GET', '/agent/dashboard', 'AgentDashboardController@dashboard');

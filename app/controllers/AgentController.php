@@ -215,10 +215,13 @@ class AgentController extends BaseController
         
         // Create user account
         $userData = [
-            'username' => $_POST['email'],
-            'email' => $_POST['email'],
-            'password' => password_hash($_POST['password'], PASSWORD_DEFAULT),
-            'role' => 'agent'
+            'first_name' => $_POST['first_name'],
+            'last_name'  => $_POST['last_name'],
+            'email'      => $_POST['email'],
+            'phone'      => formatKenyanPhone($_POST['phone']),
+            'password'   => password_hash($_POST['password'], PASSWORD_DEFAULT),
+            'role'       => 'agent',
+            'status'     => 'active',
         ];
         
         $userId = $this->userModel->create($userData);

@@ -409,6 +409,12 @@ include VIEWS_PATH . '/layouts/header.php';
                 min-height: auto;
             }
         }
+
+        @media (max-width: 576px) {
+            .left-panel { min-height: 200px; padding: 24px 20px; }
+            .hero-content h1 { font-size: 1.8rem; }
+            .login-card { padding: 24px 16px; border-radius: 16px; }
+        }
     </style>
     <div class="login-container">
         <!-- Left Panel -->
@@ -526,68 +532,70 @@ include VIEWS_PATH . '/layouts/header.php';
                     <div class="tab active">Sign In</div>
                     <div class="tab" onclick="window.location.href='/register'">Register</div>
                 </div>
-                
-                <div class="auth-methods">
-                    <button type="button" class="auth-method-btn active" data-auth-method="password">Password Login</button>
-                    <button type="button" class="auth-method-btn" data-auth-method="otp">OTP Login</button>
-                </div>
 
-                <div class="auth-panel active" id="passwordAuthPanel">
-                    <form method="POST" action="/login" novalidate>
+                <!-- ── Step 1: Credentials ───────────────────────────────── -->
+                <div id="credStep">
+                    <form id="loginForm" novalidate>
                         <input type="hidden" name="csrf_token" value="<?php echo $csrf_token ?? ''; ?>">
-                        
+
                         <div class="form-group">
-                            <label class="form-label">Phone / Member ID / Email / National ID</label>
-                            <input type="text" name="email" class="form-control" placeholder="Enter phone, member ID, email, or national ID" required
-                                value="<?php echo htmlspecialchars($email ?? $_POST['email'] ?? ($_SESSION['email'] ?? ''), ENT_QUOTES); ?>" aria-describedby="emailHelp">
+                            <label class="form-label">National ID or Member Number</label>
+                            <input type="text" name="credential" id="credInput" class="form-control"
+                                   placeholder="e.g. 12345678 or SWA-001" required autocomplete="username"
+                                   value="<?php echo htmlspecialchars($email ?? $_POST['email'] ?? ($_SESSION['email'] ?? ''), ENT_QUOTES); ?>">
+                            <small style="color:#9CA3AF; font-size:0.8rem;">You may also use your email address.</small>
                             <?php if (!empty($_SESSION['email'])) { unset($_SESSION['email']); } ?>
                         </div>
-                        
+
                         <div class="form-group">
                             <a href="/forgot-password" class="forgot-password">Forgot Password?</a>
                             <label class="form-label">Password</label>
                             <div class="password-wrapper">
-                                <input type="password" name="password" id="password" class="form-control" placeholder="Enter your password" required>
+                                <input type="password" name="password" id="passwordInput" class="form-control"
+                                       placeholder="Enter your password" required autocomplete="current-password">
                                 <i class="fas fa-eye password-toggle" onclick="togglePassword()"></i>
                             </div>
                         </div>
-                        
-                        <button type="submit" class="login-btn">Login to Dashboard</button>
+
+                        <div id="loginMsg" style="display:none;"></div>
+
+                        <button type="submit" class="login-btn" id="loginBtn">Login &rarr;</button>
                     </form>
                 </div>
 
-                <div class="auth-panel" id="otpAuthPanel">
-                    <form id="otpLoginForm" novalidate>
-                        <input type="hidden" name="csrf_token" value="<?php echo $csrf_token ?? ''; ?>">
-
-                        <div class="form-group">
-                            <label class="form-label">Phone Number</label>
-                            <input type="tel" name="phone" id="otpPhone" class="form-control" placeholder="0712345678" required>
+                <!-- ── Step 2: OTP (shown after password verified) ───────── -->
+                <div id="otpStep" style="display:none;">
+                    <div style="text-align:center; margin-bottom:20px;">
+                        <div style="width:60px; height:60px; background:#F3E8FF; border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 14px;">
+                            <i class="fas fa-shield-alt" style="color:#7F3D9E; font-size:1.4rem;"></i>
                         </div>
+                        <p id="otpHint" style="color:#6B7280; font-size:0.9rem; margin:0;">Enter the 6-digit code sent to your phone.</p>
+                    </div>
 
-                        <div class="form-group">
-                            <button type="button" id="sendOtpBtn" class="register-btn" style="margin-bottom:10px;">Send OTP Code</button>
-                        </div>
+                    <div class="form-group">
+                        <label class="form-label" style="text-align:center; display:block;">Verification Code</label>
+                        <input type="text" id="otpInput" class="form-control" maxlength="6" inputmode="numeric"
+                               placeholder="&mdash; &mdash; &mdash; &mdash; &mdash; &mdash;"
+                               style="text-align:center; font-size:1.6rem; letter-spacing:0.5rem; font-weight:700;">
+                    </div>
 
-                        <div class="form-group" id="otpCodeGroup" style="display:none;">
-                            <label class="form-label">OTP Code</label>
-                            <input type="text" name="otp_code" id="otpCode" class="form-control" maxlength="6" inputmode="numeric" placeholder="Enter 6-digit OTP">
-                            <div style="text-align:right; margin-top:6px;">
-                                <button type="button" id="resendOtpBtn" class="btn btn-link" style="font-size:.85rem; color:#6d28d9; padding:0; border:none; background:none; cursor:pointer;">Resend Code</button>
-                            </div>
-                        </div>
+                    <div id="otpMsg" style="display:none;"></div>
 
-                        <button type="button" id="verifyOtpBtn" class="login-btn" style="display:none;">Login with OTP</button>
-                    </form>
+                    <p style="text-align:center; font-size:0.84rem; color:#9CA3AF; margin-top:12px;">
+                        Didn&rsquo;t receive it?
+                        <button type="button" id="resendBtn" style="font-size:0.84rem; color:#7F3D9E; border:none; background:none; cursor:pointer; padding:0;">Resend Code</button>
+                        <span id="resendTimer" style="color:#9CA3AF;"></span>
+                    </p>
+                    <p style="text-align:center; margin-top:4px;">
+                        <button type="button" onclick="backToCreds()" style="font-size:0.84rem; color:#6B7280; border:none; background:none; cursor:pointer; padding:0;">&larr; Back</button>
+                    </p>
                 </div>
 
-                <div id="otpResult" class="mt-3"></div>
-                
                 <div class="register-section">
                     <p class="register-text">New to SHENA Companion? Join our welfare association today.</p>
                     <a href="/register" class="register-btn">Start Registration</a>
                 </div>
-                
+
                 <div class="footer-links">
                     <a href="/admin/login" class="footer-link">
                         <i class="fas fa-user-shield"></i>
@@ -598,153 +606,182 @@ include VIEWS_PATH . '/layouts/header.php';
                         Staff Portal
                     </a>
                 </div>
-                
+
                 <div class="copyright">
-                    © 2024 SHENA Companion. All Rights Reserved. 
-                    <a href="#">Privacy Policy</a> | 
+                    &copy; 2024 SHENA Companion. All Rights Reserved.
+                    <a href="#">Privacy Policy</a> |
                     <a href="#">Terms of Service</a>
                 </div>
             </div>
         </div>
     </div>
-    
-    <script>
-        // Auto-focus email input if present; focus password if email filled
-        (function(){
-            try {
-                var email = document.querySelector('input[name="email"]');
-                var password = document.getElementById('password');
-                var alertEl = document.querySelector('.alert');
-                if (alertEl) {
-                    // focus first input and make alert dismissible after 6s
-                    if (email) email.focus();
-                    setTimeout(function(){ alertEl.style.display = 'none'; }, 6000);
-                } else if (email && email.value) {
-                    if (password) password.focus(); else email.focus();
-                } else if (email) {
-                    email.focus();
-                }
-            } catch(e) {}
-        })();
 
+    <script>
         function togglePassword() {
-            const passwordInput = document.getElementById('password');
-            const toggleIcon = document.querySelector('.password-toggle');
-            
-            if (passwordInput.type === 'password') {
-                passwordInput.type = 'text';
-                toggleIcon.classList.remove('fa-eye');
-                toggleIcon.classList.add('fa-eye-slash');
+            var inp  = document.getElementById('passwordInput');
+            var icon = document.querySelector('.password-toggle');
+            if (inp.type === 'password') {
+                inp.type = 'text';
+                icon.classList.remove('fa-eye'); icon.classList.add('fa-eye-slash');
             } else {
-                passwordInput.type = 'password';
-                toggleIcon.classList.remove('fa-eye-slash');
-                toggleIcon.classList.add('fa-eye');
+                inp.type = 'password';
+                icon.classList.remove('fa-eye-slash'); icon.classList.add('fa-eye');
             }
         }
 
+        function backToCreds() {
+            document.getElementById('otpStep').style.display  = 'none';
+            document.getElementById('credStep').style.display = '';
+            clearMsg(document.getElementById('otpMsg'));
+        }
+
+        function showMsg(el, text, type) {
+            el.innerHTML = '<div class="alert alert-' + type + ' py-2 mb-0 small">' + text + '</div>';
+            el.style.display = '';
+        }
+        function clearMsg(el) { el.style.display = 'none'; el.innerHTML = ''; }
+
         (function () {
-            const methodButtons = document.querySelectorAll('[data-auth-method]');
-            const passwordPanel = document.getElementById('passwordAuthPanel');
-            const otpPanel = document.getElementById('otpAuthPanel');
+            var loginForm   = document.getElementById('loginForm');
+            var credStep    = document.getElementById('credStep');
+            var otpStep     = document.getElementById('otpStep');
+            var loginBtn    = document.getElementById('loginBtn');
+            var loginMsg    = document.getElementById('loginMsg');
+            var otpInput    = document.getElementById('otpInput');
+            var otpMsg      = document.getElementById('otpMsg');
+            var otpHint     = document.getElementById('otpHint');
+            var resendBtn   = document.getElementById('resendBtn');
+            var resendTimer = document.getElementById('resendTimer');
+            var csrfToken   = loginForm.querySelector('[name="csrf_token"]').value;
+            var lastCredential = '';
+            var resendCountdown = null;
 
-            methodButtons.forEach((button) => {
-                button.addEventListener('click', function () {
-                    const method = this.getAttribute('data-auth-method');
-                    methodButtons.forEach(btn => btn.classList.remove('active'));
-                    this.classList.add('active');
-
-                    if (method === 'otp') {
-                        passwordPanel?.classList.remove('active');
-                        otpPanel?.classList.add('active');
-                        document.getElementById('otpPhone')?.focus();
+            function startResendTimer(seconds) {
+                resendBtn.disabled = true;
+                clearInterval(resendCountdown);
+                var remaining = seconds;
+                resendTimer.textContent = ' (' + remaining + 's)';
+                resendCountdown = setInterval(function () {
+                    remaining--;
+                    if (remaining <= 0) {
+                        clearInterval(resendCountdown);
+                        resendBtn.disabled = false;
+                        resendTimer.textContent = '';
                     } else {
-                        otpPanel?.classList.remove('active');
-                        passwordPanel?.classList.add('active');
-                        document.querySelector('input[name="email"]')?.focus();
+                        resendTimer.textContent = ' (' + remaining + 's)';
                     }
-                });
-            });
-
-            const otpForm = document.getElementById('otpLoginForm');
-            const sendOtpBtn = document.getElementById('sendOtpBtn');
-            const resendOtpBtn = document.getElementById('resendOtpBtn');
-            const verifyOtpBtn = document.getElementById('verifyOtpBtn');
-            const otpResult = document.getElementById('otpResult');
-            const otpCodeGroup = document.getElementById('otpCodeGroup');
-            const csrfToken = otpForm ? otpForm.querySelector('input[name="csrf_token"]').value : '';
-
-            if (!otpForm || !sendOtpBtn || !verifyOtpBtn || !otpResult) {
-                return;
+                }, 1000);
             }
 
-            function showOtpMessage(message, type) {
-                otpResult.innerHTML = '<div class="alert alert-' + type + '">' + message + '</div>';
-            }
-
-            function doSendOtp() {
-                const formData = new FormData();
-                formData.append('csrf_token', csrfToken);
-                formData.append('phone', document.getElementById('otpPhone').value || '');
-
-                sendOtpBtn.disabled = true;
-                sendOtpBtn.textContent = 'Sending...';
-                if (resendOtpBtn) { resendOtpBtn.disabled = true; resendOtpBtn.textContent = 'Sending...'; }
-
-                fetch('/login/otp/send', {
-                    method: 'POST',
-                    body: formData
-                })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            showOtpMessage(data.message || 'OTP sent.', 'success');
-                            // Show OTP input and verify button
-                            otpCodeGroup.style.display = '';
-                            verifyOtpBtn.style.display = '';
+            // ── Step 1: verify credential + password ─────────────────
+            loginForm.addEventListener('submit', function (e) {
+                e.preventDefault();
+                clearMsg(loginMsg);
+                var credential = document.getElementById('credInput').value.trim();
+                var password   = document.getElementById('passwordInput').value;
+                if (!credential || !password) {
+                    showMsg(loginMsg, 'Please enter your ID / Member Number and password.', 'warning');
+                    return;
+                }
+                loginBtn.disabled = true;
+                loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Verifying...';
+                var fd = new FormData();
+                fd.append('csrf_token', csrfToken);
+                fd.append('credential', credential);
+                fd.append('password',   password);
+                fetch('/login/verify', { method: 'POST', body: fd })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        if (data.success && data.otp_required) {
+                            lastCredential = credential;
+                            otpHint.textContent = 'Enter the 6-digit code sent to ' + (data.masked_phone || 'your phone') + '.';
+                            credStep.style.display = 'none';
+                            otpStep.style.display  = '';
+                            otpInput.value = '';
+                            otpInput.disabled = false;
+                            clearMsg(otpMsg);
+                            startResendTimer(60);
+                            setTimeout(function () { otpInput.focus(); }, 80);
+                        } else if (data.success) {
+                            window.location.href = data.redirect || '/dashboard';
                         } else {
-                            showOtpMessage(data.message || 'Failed to send OTP.', 'danger');
+                            showMsg(loginMsg, data.message || 'Invalid credentials.', 'danger');
                         }
                     })
-                    .catch(() => showOtpMessage('Failed to send OTP.', 'danger'))
-                    .finally(() => {
-                        sendOtpBtn.disabled = false;
-                        sendOtpBtn.textContent = 'Send OTP Code';
-                        if (resendOtpBtn) { resendOtpBtn.disabled = false; resendOtpBtn.textContent = 'Resend Code'; }
+                    .catch(function () { showMsg(loginMsg, 'Network error. Please try again.', 'danger'); })
+                    .finally(function () {
+                        loginBtn.disabled = false;
+                        loginBtn.innerHTML = 'Login &rarr;';
+                    });
+            });
+
+            // ── Step 2: auto-verify OTP when 6 digits entered ────────
+            otpInput.addEventListener('input', function () {
+                var code = this.value.replace(/\D/g, '');
+                this.value = code;
+                if (code.length === 6) { verifyOtp(code); }
+            });
+
+            function verifyOtp(code) {
+                clearMsg(otpMsg);
+                otpInput.disabled = true;
+                var fd = new FormData();
+                fd.append('csrf_token', csrfToken);
+                fd.append('otp_code',   code);
+                fetch('/login/otp/verify', { method: 'POST', body: fd })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        if (data.success) {
+                            showMsg(otpMsg, '<i class="fas fa-check-circle me-1"></i>' + (data.message || 'Login successful!'), 'success');
+                            setTimeout(function () { window.location.href = data.redirect || '/dashboard'; }, 700);
+                        } else {
+                            showMsg(otpMsg, data.message || 'Invalid code. Try again.', 'danger');
+                            otpInput.disabled = false;
+                            otpInput.value = '';
+                            otpInput.focus();
+                        }
+                    })
+                    .catch(function () {
+                        showMsg(otpMsg, 'Network error. Please try again.', 'danger');
+                        otpInput.disabled = false;
                     });
             }
 
-            sendOtpBtn.addEventListener('click', doSendOtp);
-            if (resendOtpBtn) { resendOtpBtn.addEventListener('click', doSendOtp); }
-
-            verifyOtpBtn.addEventListener('click', function () {
-                const formData = new FormData();
-                formData.append('csrf_token', csrfToken);
-                formData.append('otp_code', document.getElementById('otpCode').value || '');
-
-                verifyOtpBtn.disabled = true;
-                verifyOtpBtn.textContent = 'Verifying...';
-
-                fetch('/login/otp/verify', {
-                    method: 'POST',
-                    body: formData
-                })
-                    .then(response => response.json())
-                    .then(data => {
+            // ── Resend OTP ────────────────────────────────────────────
+            resendBtn.addEventListener('click', function () {
+                clearMsg(otpMsg);
+                resendBtn.disabled = true;
+                var fd = new FormData();
+                fd.append('csrf_token', csrfToken);
+                fd.append('id_number',  lastCredential);
+                fetch('/login/otp/send', { method: 'POST', body: fd })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
                         if (data.success) {
-                            showOtpMessage(data.message || 'Login successful.', 'success');
-                            if (data.redirect) {
-                                window.location.href = data.redirect;
-                            }
+                            showMsg(otpMsg, data.message || 'New code sent.', 'success');
+                            startResendTimer(60);
                         } else {
-                            showOtpMessage(data.message || 'OTP verification failed.', 'danger');
+                            showMsg(otpMsg, data.message || 'Failed to resend.', 'warning');
+                            resendBtn.disabled = false;
                         }
                     })
-                    .catch(() => showOtpMessage('OTP verification failed.', 'danger'))
-                    .finally(() => {
-                        verifyOtpBtn.disabled = false;
-                        verifyOtpBtn.textContent = 'Login with OTP';
+                    .catch(function () {
+                        showMsg(otpMsg, 'Could not resend code.', 'danger');
+                        resendBtn.disabled = false;
                     });
             });
+
+            // Auto-focus on load
+            (function () {
+                try {
+                    var alertEl   = document.querySelector('.alert');
+                    var credInput = document.getElementById('credInput');
+                    var passInput = document.getElementById('passwordInput');
+                    if (alertEl) { setTimeout(function(){ alertEl.style.display='none'; }, 6000); }
+                    if (credInput && credInput.value && passInput) { passInput.focus(); }
+                    else if (credInput) { credInput.focus(); }
+                } catch(e) {}
+            })();
         })();
     </script>
 

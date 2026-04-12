@@ -323,6 +323,24 @@ $commissions = $commissions ?? [];
         border-radius: 6px;
         cursor: pointer;
     }
+
+    @media (max-width: 768px) {
+        .commissions-container { padding: 16px !important; }
+        .filter-bar, .filters { flex-direction: column !important; gap: 8px; }
+        .filter-bar > *, .filters > * { width: 100% !important; }
+
+        /* Table scrolling — override overflow:hidden on card */
+        .commissions-table-card { overflow: visible !important; }
+        .commissions-table {
+            display: block;
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .commissions-table thead,
+        .commissions-table tbody,
+        .commissions-table tr { min-width: 480px; }
+    }
 </style>
 
 <div class="commissions-container">

@@ -8,6 +8,15 @@ $planLimits = $coverageSummary['limits'] ?? ['spouse' => 0, 'children' => 0, 'pa
 $maxBeneficiaries = (int)($coverageSummary['total_slots'] ?? 0);
 $availableSlots = max(0, $maxBeneficiaries - count($beneficiaries));
 $planTierLabel = ucfirst((string)($coverageSummary['tier'] ?? 'individual'));
+$planTier = strtolower((string)($coverageSummary['tier'] ?? 'individual'));
+
+// Build allowed relationship options based on plan tier
+$relationOptions = [];
+if ((int)($planLimits['spouse'] ?? 0) > 0)   $relationOptions[] = 'Spouse';
+if ((int)($planLimits['children'] ?? 0) > 0)  $relationOptions[] = 'Child';
+if ((int)($planLimits['parents'] ?? 0) > 0)   { $relationOptions[] = 'Father'; $relationOptions[] = 'Mother'; }
+if ((int)($planLimits['inlaws'] ?? 0) > 0)    { $relationOptions[] = 'Father-in-Law'; $relationOptions[] = 'Mother-in-Law'; }
+if (empty($relationOptions))                    $relationOptions = ['Spouse', 'Child', 'Parent', 'Sibling', 'Other'];
 ?>
 
 <style>
@@ -428,9 +437,16 @@ main {
         <div class="content-area">
             <div class="section-header">
                 <h2>Your Covered Family</h2>
+                <?php if ($availableSlots > 0): ?>
                 <button class="add-dependent-btn" data-bs-toggle="modal" data-bs-target="#addBeneficiaryModal">
                     <i class="fas fa-user-plus"></i> Add New Dependent
                 </button>
+                <?php else: ?>
+                <button class="add-dependent-btn" style="opacity:0.5; cursor:not-allowed; background:#9CA3AF;" disabled
+                    title="No slots available. Upgrade your plan to cover more family members.">
+                    <i class="fas fa-lock"></i> No Slots Available
+                </button>
+                <?php endif; ?>
             </div>
             <p class="section-description">
                 Your <?php echo htmlspecialchars($planTierLabel); ?> plan allows spouse: <?php echo (int)($planLimits['spouse'] ?? 0); ?>,
@@ -479,6 +495,7 @@ main {
                     </div>
                 <?php endif; ?>
                 
+                <?php if ($availableSlots > 0): ?>
                 <div class="add-member-card" data-bs-toggle="modal" data-bs-target="#addBeneficiaryModal">
                     <div class="add-icon">
                         <i class="fas fa-plus"></i>
@@ -486,6 +503,15 @@ main {
                     <h4>Add Beneficiary</h4>
                     <p>Available slots: <?php echo $availableSlots; ?> / <?php echo $maxBeneficiaries; ?></p>
                 </div>
+                <?php else: ?>
+                <div class="add-member-card" style="border-color:#F87171; cursor:default;" onclick="window.location.href='/member/upgrade'">
+                    <div class="add-icon" style="background:#FEE2E2;">
+                        <i class="fas fa-crown" style="color:#DC2626;"></i>
+                    </div>
+                    <h4 style="color:#DC2626;">Plan Limit Reached</h4>
+                    <p><?php echo $maxBeneficiaries > 0 ? "All {$maxBeneficiaries} slot(s) used." : "Your current plan does not include dependents."; ?> Upgrade to add more family members.</p>
+                </div>
+                <?php endif; ?>
             </div>
         </div>
 
@@ -500,14 +526,35 @@ main {
                 </div>
                 
                 <div class="policy-section">
+                    <h4>COVERED MEMBERS</h4>
+                    <p>
+                        <?php if (in_array($planTier, ['individual', 'executive'])): ?>
+                            Principal member only. Full coverage applies after a 3-month waiting period.
+                        <?php elseif ($planTier === 'family'): ?>
+                            Principal member + spouse. Full coverage applies after a 3-month waiting period.
+                        <?php elseif ($planTier === 'extended_family_1'): ?>
+                            Principal member, spouse, up to 4 children (under 21), and parents. Full coverage after a 3-month waiting period. A 6-month waiting period applies to parents for natural causes.
+                        <?php elseif ($planTier === 'extended_family_2'): ?>
+                            Principal member, spouse, up to 4 children, parents, and in-laws. A 6-month waiting period applies to extended family members for natural causes.
+                        <?php else: ?>
+                            Includes all plan-covered members. Waiting periods apply for natural causes.
+                        <?php endif; ?>
+                    </p>
+                </div>
+                
+                <?php if (in_array($planTier, ['family', 'extended_family_1', 'extended_family_2'])): ?>
+                <div class="policy-section">
                     <h4>NUCLEAR FAMILY</h4>
                     <p>Includes spouse and up to 4 biological or legally adopted children under 21 years. Full coverage applies after a 3-month waiting period.</p>
                 </div>
+                <?php endif; ?>
                 
+                <?php if (in_array($planTier, ['extended_family_1', 'extended_family_2'])): ?>
                 <div class="policy-section">
                     <h4>EXTENDED FAMILY</h4>
-                    <p>Includes parents, siblings, or in-laws. Maximum of 2 extended members allowed per policy. A 6-month waiting period applies for natural causes.</p>
+                    <p>Includes parents<?php echo $planTier === 'extended_family_2' ? ' and in-laws' : ''; ?>. A 6-month waiting period applies for natural causes.</p>
                 </div>
+                <?php endif; ?>
                 
                 <div class="benefit-limit">
                     <h4>BENEFIT LIMIT</h4>
@@ -878,7 +925,12 @@ main {
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Relationship *</label>
-                        <input type="text" name="relationship" id="editRelationship" class="form-control" value="<?php echo getOldValue('relationship_edit') ?: ''; ?>" required>
+                        <select name="relationship" id="editRelationship" class="form-control" required>
+                            <option value="">Select relationship...</option>
+                            <?php foreach ($relationOptions as $rel): ?>
+                            <option value="<?php echo $rel; ?>"><?php echo htmlspecialchars($rel); ?></option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">ID Number *</label>
@@ -923,7 +975,12 @@ main {
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Relationship *</label>
-                        <input type="text" name="relationship" class="form-control" placeholder="e.g., Spouse, Child, Parent" value="<?php echo getOldValue('relationship'); ?>" required>
+                        <select name="relationship" class="form-control" required>
+                            <option value="">Select relationship...</option>
+                            <?php foreach ($relationOptions as $rel): ?>
+                            <option value="<?php echo $rel; ?>" <?php echo (getOldValue('relationship') === $rel) ? 'selected' : ''; ?>><?php echo htmlspecialchars($rel); ?></option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">ID Number *</label>
@@ -959,7 +1016,17 @@ function editBeneficiary(id) {
     
     document.getElementById('editBeneficiaryId').value = beneficiary.id;
     document.getElementById('editFullName').value = beneficiary.full_name;
-    document.getElementById('editRelationship').value = beneficiary.relationship;
+    const relSelect = document.getElementById('editRelationship');
+    const relVal = beneficiary.relationship || '';
+    let found = false;
+    for (let i = 0; i < relSelect.options.length; i++) {
+        if (relSelect.options[i].value === relVal) { relSelect.selectedIndex = i; found = true; break; }
+    }
+    if (!found) {
+        const opt = document.createElement('option');
+        opt.value = relVal; opt.textContent = relVal; opt.selected = true;
+        relSelect.appendChild(opt);
+    }
     document.getElementById('editIdNumber').value = beneficiary.id_number;
     document.getElementById('editDateOfBirth').value = beneficiary.date_of_birth || '';
     document.getElementById('editPhoneNumber').value = beneficiary.phone_number || '';

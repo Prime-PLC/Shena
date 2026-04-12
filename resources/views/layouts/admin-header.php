@@ -756,6 +756,91 @@ if ($notificationCount === null) {
                 padding: 0 16px;
             }
         }
+
+        /* ── Extra mobile polish (≤ 480 px) ───────────────────────── */
+        @media (max-width: 480px) {
+            .main-content {
+                padding: 16px 12px !important;
+                margin-left: 0 !important;
+            }
+            .top-header {
+                padding: 0 12px !important;
+                height: 58px !important;
+            }
+            /* Push content down for shorter header */
+            .main-content { margin-top: 58px !important; }
+
+            /* Make stat/info cards single-column */
+            .stats-grid,
+            .stat-cards,
+            [class*="stats-grid"],
+            [class*="stat-cards"] {
+                grid-template-columns: 1fr 1fr !important;
+                gap: 10px !important;
+            }
+
+            /* Tables: wrap for horizontal scroll */
+            .table-responsive,
+            table.table { display: block; width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+            /* Card/section padding */
+            .card, .content-card, .section-card { padding: 14px !important; }
+
+            /* Page heading */
+            .page-header h1,
+            .page-title { font-size: 1.2rem !important; }
+
+            /* Action buttons row: wrap & full width */
+            .header-actions-row,
+            .page-actions { flex-wrap: wrap; gap: 8px; }
+            .page-actions .btn,
+            .btn-new-registration { width: 100% !important; justify-content: center; }
+        }
+
+        /* Single-column on very narrow (< 360 px) */
+        @media (max-width: 360px) {
+            .stats-grid,
+            .stat-cards,
+            [class*="stats-grid"],
+            [class*="stat-cards"] {
+                grid-template-columns: 1fr !important;
+            }
+        }
+
+        /* ── Universal table & flex overflows (all breakpoints) ── */
+        @media (max-width: 992px) {
+            /* Every table scrolls horizontally instead of pushing layout */
+            .main-content table {
+                display: block;
+                width: 100%;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            /* Inline flex page-headers: stack vertically on mobile */
+            .page-header [style*="display: flex"],
+            .main-content > [style*="display: flex"],
+            .modern-card > [style*="display: flex"] {
+                flex-wrap: wrap !important;
+                gap: 8px !important;
+            }
+
+            /* Button rows: wrap and stretch */
+            [style*="display: flex"][style*="gap"] > .modern-btn,
+            [style*="display: flex"][style*="gap"] > .btn {
+                flex: 1 1 auto;
+                min-width: 0;
+            }
+
+            /* Page containers: never wider than viewport
+               NOTE: overflow-x:hidden is NOT set here because it would clip
+               nested table-scroll-wrap overflow-x:auto containers.
+               The body-level overflow-x:hidden already prevents page-level scroll. */
+            .main-content > div,
+            .main-content > section {
+                max-width: 100%;
+            }
+        }
     </style>
 </head>
 <body>

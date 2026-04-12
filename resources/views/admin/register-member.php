@@ -126,6 +126,15 @@
     .required {
         color: #EF4444;
     }
+
+    @media (max-width: 768px) {
+        .form-grid {
+            grid-template-columns: 1fr;
+        }
+        .registration-container {
+            padding: 16px;
+        }
+    }
 </style>
 
 <div class="registration-container">

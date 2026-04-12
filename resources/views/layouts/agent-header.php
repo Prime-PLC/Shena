@@ -731,6 +731,82 @@ if ($notificationCount === null) {
                 padding: 12px 16px !important;
             }
         }
+
+        /* ── Extra mobile polish (≤ 480 px) ───────────────────────── */
+        @media (max-width: 480px) {
+            .main-content {
+                padding: 16px 12px !important;
+                margin-left: 0 !important;
+            }
+            .top-bar {
+                padding: 10px 12px !important;
+                height: auto !important;
+                min-height: 56px;
+            }
+            /* Stat/KPI card grids */
+            .stats-grid,
+            .stat-grid,
+            .kpi-grid,
+            [class*="stats-grid"],
+            [class*="stat-grid"] {
+                grid-template-columns: 1fr 1fr !important;
+                gap: 10px !important;
+            }
+            /* Tables */
+            .table-responsive,
+            table.table { display: block; width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            /* Cards */
+            .card, .content-card, .info-card { padding: 14px !important; }
+            /* Hide right-side user avatar text on small screens */
+            .user-profile .user-info { display: none; }
+            /* Buttons */
+            .btn, .action-btn { min-width: 0 !important; }
+            .page-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+            .page-header .btn { width: 100%; justify-content: center; }
+        }
+
+        @media (max-width: 360px) {
+            .stats-grid,
+            .stat-grid,
+            .kpi-grid,
+            [class*="stats-grid"] {
+                grid-template-columns: 1fr !important;
+            }
+        }
+
+        /* ── Universal table & flex overflows (all breakpoints) ── */
+        @media (max-width: 1024px) {
+            /* Every table scrolls horizontally instead of pushing layout */
+            .main-content table {
+                display: block;
+                width: 100%;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            /* Inline flex page-headers: stack vertically on mobile */
+            .page-header [style*="display: flex"],
+            .main-content > [style*="display: flex"],
+            .modern-card > [style*="display: flex"],
+            .agent-dashboard-container > [style*="display: flex"] {
+                flex-wrap: wrap !important;
+                gap: 8px !important;
+            }
+
+            /* Button rows: wrap and stretch */
+            [style*="display: flex"][style*="gap"] > .modern-btn,
+            [style*="display: flex"][style*="gap"] > .btn {
+                flex: 1 1 auto;
+                min-width: 0;
+            }
+
+            /* Page containers: never wider than viewport */
+            .main-content > div,
+            .main-content > section {
+                max-width: 100%;
+                overflow-x: hidden;
+            }
+        }
     </style>
 </head>
 <body>

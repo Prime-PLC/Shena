@@ -834,6 +834,24 @@ $top_performers = $top_performers ?? [];
         .growth-metrics {
             grid-template-columns: 1fr;
         }
+
+        /* Allow tables to scroll — override overflow:hidden on tabs-container */
+        .tabs-container {
+            overflow: visible !important;
+        }
+
+        .agents-table {
+            display: block;
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .agents-table thead,
+        .agents-table tbody,
+        .agents-table tr {
+            min-width: 480px;
+        }
     }
 </style>
 

@@ -482,6 +482,15 @@
             grid-template-columns: 1fr;
         }
     }
+
+    @media (max-width: 768px) {
+        /* Inline grids inside tab panes */
+        div[style*="grid-template-columns: repeat(2, 1fr)"] {
+            grid-template-columns: 1fr !important;
+        }
+        .nav-tabs { overflow-x: auto; flex-wrap: nowrap; }
+        .nav-tabs .nav-link { white-space: nowrap; font-size: 13px; padding: 8px 12px; }
+    }
 </style>
 
 <!-- Page Header -->

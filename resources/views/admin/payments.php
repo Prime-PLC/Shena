@@ -405,6 +405,33 @@ $successRate = $successRate ?? 0;
         .filter-group {
             flex-wrap: wrap;
         }
+
+        /* Allow table to scroll — override overflow:hidden on tabs-container */
+        .tabs-container {
+            overflow: visible !important;
+        }
+
+        .custom-table {
+            display: block;
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            min-width: 0;
+        }
+
+        .custom-table thead,
+        .custom-table tbody,
+        .custom-table tr {
+            min-width: 560px;
+        }
+
+        .quick-actions {
+            flex-wrap: wrap;
+        }
+
+        .btn-action {
+            flex: 1 1 auto;
+        }
     }
 </style>
 

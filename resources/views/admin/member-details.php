@@ -264,6 +264,20 @@ $beneficiaries = $beneficiaries ?? [];
         margin-bottom: 12px;
         opacity: 0.3;
     }
+
+    @media (max-width: 768px) {
+        .content-grid {
+            grid-template-columns: 1fr !important;
+        }
+
+        /* Force min-width so .table-container overflow-x:auto triggers scrolling */
+        .data-table {
+            min-width: 480px;
+        }
+    }
+    @media (max-width: 480px) {
+        .stats-grid { grid-template-columns: 1fr 1fr; }
+    }
 </style>
 
 <div class="member-details-container">

@@ -264,6 +264,62 @@ footer a:hover {
     }
 }
 
+/* ── Global mobile baseline (≤ 576 px) ─────────────────────────────── */
+@media (max-width: 576px) {
+    /* Prevent horizontal scroll everywhere */
+    html, body { overflow-x: hidden; max-width: 100vw; }
+
+    /* Containers: no wide gutters */
+    .container, .container-fluid { padding-left: 12px; padding-right: 12px; }
+
+    /* Public auth cards (login, register, set-password) */
+    .card { border-radius: 10px !important; }
+    .card-body, .card .p-4, .card .p-5 { padding: 20px 16px !important; }
+
+    /* Bootstrap grid: force single column on xs */
+    .row > [class*="col-md-"],
+    .row > [class*="col-lg-"],
+    .row > [class*="col-xl-"] {
+        width: 100% !important;
+        flex: 0 0 100% !important;
+        max-width: 100% !important;
+    }
+
+    /* Tables always scrollable */
+    table { min-width: 480px; }
+    .table-wrapper, .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; width: 100%; }
+
+    /* Typography scale-down */
+    h1 { font-size: 1.5rem !important; }
+    h2 { font-size: 1.25rem !important; }
+    h3 { font-size: 1.1rem !important; }
+
+    /* Navbar public site */
+    .navbar-brand img { height: 36px; }
+    .navbar-nav .nav-link { font-size: 14px; padding: 8px 10px; }
+
+    /* Hero */
+    .hero-section { min-height: auto; padding: 2rem 0; }
+    .hero-section h1 { font-size: 1.8rem !important; }
+
+    /* Buttons full-width within action rows */
+    .btn-group-mobile > .btn { width: 100%; margin-bottom: 8px; }
+
+    /* Modals full-screen on mobile */
+    .modal-dialog { margin: 0; max-width: 100%; }
+    .modal-content { border-radius: 0; min-height: 100vh; }
+    .modal-dialog-centered { align-items: flex-end; }
+    .modal-dialog-centered .modal-content { border-radius: 16px 16px 0 0; min-height: auto; }
+}
+
+/* ── Very narrow phones (≤ 360 px) ─────────────────────────────────── */
+@media (max-width: 360px) {
+    html, body { font-size: 14px; }
+    .container, .container-fluid { padding-left: 8px; padding-right: 8px; }
+    .card-body, .card .p-4, .card .p-5 { padding: 14px 10px !important; }
+    .btn { font-size: 13px; padding: 8px 12px; }
+}
+
 /* Print styles */
 @media print {
     .btn, .navbar, footer, .alert {

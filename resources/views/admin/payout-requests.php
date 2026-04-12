@@ -225,6 +225,11 @@ $statusFilter = $status_filter ?? 'all';
         font-weight: 700;
         color: #1F2937;
     }
+
+    @media (max-width: 768px) {
+        .filters-bar, .filters-form { flex-direction: column !important; gap: 8px; }
+        .filters-form > * { width: 100% !important; }
+    }
 </style>
 
 <div class="payouts-container">

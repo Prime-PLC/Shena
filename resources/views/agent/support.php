@@ -165,6 +165,13 @@ include __DIR__ . '/../layouts/agent-header.php';
     line-height: 1.6;
     padding-left: 0;
 }
+
+@media (max-width: 768px) {
+    .support-grid, .faq-grid, .contact-grid {
+        grid-template-columns: 1fr !important;
+    }
+    .support-container { padding: 16px !important; }
+}
 </style>
 
 <div class="support-container">

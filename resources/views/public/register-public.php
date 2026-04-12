@@ -127,6 +127,14 @@
                             </div>
                         </div>
 
+                        <div class="row">
+                            <div class="col-md-8 mb-3">
+                                <label for="national_id" class="form-label">National ID Number <span class="required-star">*</span></label>
+                                <input type="text" class="form-control" id="national_id" name="national_id" placeholder="e.g. 12345678" pattern="[0-9]{7,8}" required autocomplete="off">
+                                <small class="text-muted" style="font-size:0.82rem;">Your 7 or 8-digit Kenyan National ID. Used as your account identifier.</small>
+                            </div>
+                        </div>
+
                         <div class="actions">
                             <button type="submit" class="btn-register" id="submitBtn">Create Account &rarr;</button>
                             <span class="support-text">Need help? Call +254 748 585 067</span>

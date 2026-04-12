@@ -213,7 +213,8 @@ class BulkSmsController extends BaseController
         // Queue recipients
         $this->bulkSmsService->queueRecipients($campaignId, $recipients);
         
-        $this->setFlashMessage("Campaign created with {count($recipients)} recipients", 'success');
+        $recipientCount = count($recipients);
+        $this->setFlashMessage("Campaign created with {$recipientCount} recipients", 'success');
         redirect('/admin/bulk-sms/view/' . $campaignId);
     }
     

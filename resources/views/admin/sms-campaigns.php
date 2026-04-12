@@ -433,15 +433,22 @@ if (empty($_SESSION['csrf_token'])) {
         background: linear-gradient(90deg, #7F3D9E 0%, #7F3D9E 100%);
         transition: width 0.3s ease;
     }
+
+    @media (max-width: 768px) {
+        .campaigns-container { padding: 16px !important; }
+        .modern-card { padding: 16px !important; }
+        .modern-card > div[style] { flex-wrap: wrap !important; gap: 8px !important; }
+        .modern-btn { font-size: 13px; padding: 8px 14px; }
+    }
 </style>
 
 <div class="page-header">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
         <div>
             <h1><i class="fas fa-sms"></i> SMS Campaigns</h1>
             <p>Create and manage bulk SMS campaigns for members</p>
         </div>
-        <div style="display: flex; gap: 1rem;">
+        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
             <button class="modern-btn primary" onclick="openModal('createCampaignModal')">
                 <i class="fas fa-plus"></i> Create Campaign
             </button>

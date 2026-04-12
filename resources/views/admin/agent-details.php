@@ -249,6 +249,18 @@ align-items: center;
         margin-bottom: 12px;
         opacity: 0.3;
     }
+
+    @media (max-width: 768px) {
+        .content-grid {
+            grid-template-columns: 1fr !important;
+        }
+        .stats-grid {
+            grid-template-columns: 1fr 1fr;
+        }
+    }
+    @media (max-width: 480px) {
+        .stats-grid { grid-template-columns: 1fr; }
+    }
 </style>
 
 <div class="agent-details-container">

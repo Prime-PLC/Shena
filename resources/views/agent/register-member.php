@@ -573,7 +573,7 @@ $getOldValue = function($field) {
                 </div>
             </div>
 
-            <!-- Password Section -->
+            <!-- Account Security Notice -->
             <div class="form-section">
                 <div class="section-header">
                     <div class="section-icon">
@@ -581,20 +581,13 @@ $getOldValue = function($field) {
                     </div>
                     <div class="section-title">
                         <h3>Account Security</h3>
-                        <p>Login credentials for the member</p>
+                        <p>How the member will access the portal</p>
                     </div>
                 </div>
-                
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label for="password" class="form-label">Password <span class="required">*</span></label>
-                        <input type="password" class="form-input" id="password" name="password" required minlength="8" placeholder="Minimum 8 characters">
-                        <small class="form-hint">Must be at least 8 characters long</small>
-                    </div>
-                    <div class="form-group">
-                        <label for="confirm_password" class="form-label">Confirm Password <span class="required">*</span></label>
-                        <input type="password" class="form-input" id="confirm_password" name="confirm_password" required placeholder="Re-enter password">
-                    </div>
+                <div class="alert alert-info" style="border-radius:8px;">
+                    <i class="fas fa-sms me-2"></i>
+                    <strong>Activation link will be sent automatically.</strong><br>
+                    After registration, the member will receive an SMS with a secure link to set their own password. The link expires in 48 hours.
                 </div>
             </div>
 
@@ -626,16 +619,6 @@ $getOldValue = function($field) {
 <script>
 // Form validation
 document.getElementById('memberRegistrationForm').addEventListener('submit', function(e) {
-    const password = document.getElementById('password').value;
-    const confirmPassword = document.getElementById('confirm_password').value;
-    
-    if (password !== confirmPassword) {
-        e.preventDefault();
-        ShenaApp.showNotification('Passwords do not match! Please ensure both password fields are identical.', 'warning');
-        document.getElementById('confirm_password').focus();
-        return false;
-    }
-    
     // Show loading state
     const submitBtn = this.querySelector('.btn-submit');
     submitBtn.disabled = true;

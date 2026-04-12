@@ -488,6 +488,21 @@ class AdminController extends BaseController
                 error_log('Admin register email failed: ' . $e->getMessage());
             }
 
+            // Send invite SMS with set-password link
+            try {
+                require_once __DIR__ . '/../services/SmsService.php';
+                require_once __DIR__ . '/../controllers/AuthController.php';
+                $inviteToken = AuthController::generateInviteToken($userId);
+                $inviteLink  = APP_URL . '/set-password?token=' . urlencode($inviteToken);
+                $smsMsg = "Hi {$firstName}! You've been registered with SHENA Companion. Member No: {$memberNumber}. "
+                        . "Set your account password here: {$inviteLink}  (valid 48 hrs). "
+                        . "Monthly contribution: KES {$monthlyContribution} via Paybill 4163987, Acct: {$idNumber}.";
+                $smsService = new SmsService();
+                $smsService->sendSms($phone, $smsMsg);
+            } catch (Exception $e) {
+                error_log('Admin register invite SMS failed: ' . $e->getMessage());
+            }
+
             $_SESSION['success'] = 'Member registered successfully.';
             $this->redirect('/admin/members');
 

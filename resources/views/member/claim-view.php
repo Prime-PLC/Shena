@@ -296,6 +296,13 @@ main {
     font-size: 0.875rem;
     color: #6B7280;
 }
+
+@media (max-width: 768px) {
+    .claim-info-grid, .claim-detail-grid {
+        grid-template-columns: 1fr !important;
+    }
+    .claim-view-container { padding: 16px !important; }
+}
 </style>
 
 <div class="claim-view-container">

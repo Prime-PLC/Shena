@@ -590,7 +590,11 @@ $pending_approvals = $pending_approvals ?? [];
 
     @media (max-width: 1200px) {
         .content-layout {
-            grid-template-columns: 1fr;
+            grid-template-columns: minmax(0, 1fr);
+        }
+        /* CSS Grid golden rule: prevent items from forcing track wider than available */
+        .content-layout > * {
+            min-width: 0;
         }
     }
 
@@ -831,7 +835,27 @@ $pending_approvals = $pending_approvals ?? [];
         }
 
         .content-layout {
-            grid-template-columns: 1fr;
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+        /* CSS Grid golden rule: prevent items from forcing track wider than available */
+        .content-layout > * {
+            min-width: 0;
+        }
+
+        /* Properly contain the table scroll within its card */
+        .directory-card {
+            overflow: hidden;
+        }
+
+        .directory-header {
+            flex-wrap: wrap;
+            gap: 8px 12px;
+        }
+
+        .directory-actions {
+            flex-wrap: wrap;
+            gap: 8px;
         }
 
         .pagination {
@@ -846,6 +870,23 @@ $pending_approvals = $pending_approvals ?? [];
         .members-table th,
         .members-table td {
             padding: 10px 8px;
+        }
+
+        /* Allow the table to scroll — override the clipping overflow:hidden */
+        .tabs-container {
+            overflow: visible !important;
+            border-radius: 12px;
+        }
+
+        /* Wrap table area */
+        .table-scroll-wrap {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            width: 100%;
+        }
+
+        .members-table {
+            min-width: 520px;
         }
     }
 </style>
@@ -1089,6 +1130,7 @@ $pending_approvals = $pending_approvals ?? [];
                 </div>
             </div>
 
+            <div class="table-scroll-wrap">
             <table class="members-table">
                 <thead>
                     <tr>
@@ -1149,6 +1191,7 @@ $pending_approvals = $pending_approvals ?? [];
                     <?php endif; ?>
                 </tbody>
             </table>
+            </div><!-- /.table-scroll-wrap -->
 
             <div class="table-pagination">
                 <div>VIEWING <?php echo count($members); ?> OF <?php echo $stats['total_members'] ?? 0; ?> MEMBERS</div>

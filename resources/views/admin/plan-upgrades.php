@@ -460,6 +460,11 @@
     .alert button:hover {
         opacity: 1;
     }
+
+    @media (max-width: 768px) {
+        .filters-form, .filter-row { flex-direction: column !important; gap: 8px; }
+        .filters-form > *, .filter-row > * { width: 100% !important; }
+    }
 </style>
 
 <?php if (isset($_SESSION['success']) || isset($_SESSION['error'])): ?>

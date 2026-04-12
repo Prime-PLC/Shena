@@ -480,6 +480,12 @@ $missingFields = $missing_profile_fields ?? [];
         grid-template-columns: 1fr;
     }
 }
+
+@media (max-width: 576px) {
+    .dashboard-container { padding: 16px !important; }
+    .hero-card { padding: 16px !important; }
+    .stat-card { padding: 20px !important; }
+}
 </style>
 
 <div class="dashboard-container">
@@ -906,6 +912,62 @@ $missingFields = $missing_profile_fields ?? [];
         }
         currentStep = n;
         clearMsg();
+
+        // Auto-select plan by age when entering Step 2
+        if (n === 2) {
+            autoSelectPlanByAge();
+        }
+    }
+
+    function autoSelectPlanByAge() {
+        var dobVal = document.getElementById('onb-dob').value;
+        if (!dobVal) return;
+        var dob = new Date(dobVal);
+        var today = new Date();
+        var age = today.getFullYear() - dob.getFullYear();
+        var m = today.getMonth() - dob.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
+        if (age < 18) return; // shouldn't happen but guard anyway
+
+        // Determine the individual bracket key based on age
+        var bracketKey, bracketLabel, bracketPrice;
+        if (age < 70) {
+            bracketKey = 'individual_below_70'; bracketLabel = 'Below 70 years'; bracketPrice = 100;
+        } else if (age <= 80) {
+            bracketKey = 'individual_71_80'; bracketLabel = '71–80 years'; bracketPrice = 350;
+        } else if (age <= 90) {
+            bracketKey = 'individual_81_90'; bracketLabel = '81–90 years'; bracketPrice = 450;
+        } else {
+            bracketKey = 'individual_91_100'; bracketLabel = '91–100 years'; bracketPrice = 650;
+        }
+
+        // If plan is already selected (user changed it), don't override
+        if (selectedPackageId) return;
+
+        // Set plan type select to "individual" and trigger bracket render
+        planSelect.value = 'individual';
+        clearPlan();
+        var tier = tierMap.individual;
+        bracketHint.textContent = tier.hint;
+        tier.brackets.forEach(function (b) {
+            var el = document.createElement('div');
+            el.className = 'onb-bracket-opt';
+            el.dataset.key = b.key;
+            el.innerHTML = '<div class="onb-bracket-label">' + b.label + '</div>' +
+                           '<div class="onb-bracket-price">KES ' + b.price.toLocaleString() + '/month</div>';
+            el.addEventListener('click', function () {
+                bracketGrid.querySelectorAll('.onb-bracket-opt').forEach(function (o) { o.classList.remove('selected'); });
+                el.classList.add('selected');
+                selectedPackageId = b.key;
+                setPlanSummary('Individual · ' + b.label, b.price);
+            });
+            bracketGrid.appendChild(el);
+        });
+        bracketRow.style.display = '';
+
+        // Auto-click the matching bracket
+        var matchEl = bracketGrid.querySelector('[data-key="' + bracketKey + '"]');
+        if (matchEl) matchEl.click();
     }
 
     function showMsg(text, type) {
@@ -1047,13 +1109,42 @@ $missingFields = $missing_profile_fields ?? [];
     btnNext.addEventListener('click', async function () {
         clearMsg();
         if (!validateStep(currentStep)) return;
+
+        // Step 4 "Finish" — verify payment before closing
+        if (currentStep === 4) {
+            btnNext.disabled = true;
+            btnNext.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Verifying...';
+            try {
+                var pr = await fetch('/member/onboarding/payment-status', {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                });
+                var pd = await pr.json();
+                if (!pd.paid) {
+                    showMsg(
+                        '<i class="fas fa-exclamation-triangle me-1"></i>' +
+                        '<strong>Payment required.</strong> Please complete the KES ' +
+                        REG_FEE.toLocaleString() +
+                        ' registration fee payment above before finishing. ' +
+                        'Tap <em>Pay with M-Pesa</em> and approve the prompt on your phone.',
+                        'warning'
+                    );
+                    btnNext.disabled = false;
+                    btnNext.innerHTML = 'Finish <i class="fas fa-check ms-1"></i>';
+                    return;
+                }
+            } catch (e) {
+                showMsg('Could not verify payment. Please check your connection and try again.', 'danger');
+                btnNext.disabled = false;
+                btnNext.innerHTML = 'Finish <i class="fas fa-check ms-1"></i>';
+                return;
+            }
+            dismissAndReload();
+            return;
+        }
+
         var submitted = await submitStep(currentStep);
         if (!submitted) return;
-        if (currentStep < 4) {
-            showStep(currentStep + 1);
-        } else {
-            dismissAndReload();
-        }
+        showStep(currentStep + 1);
     });
 
     btnBack.addEventListener('click', function () { clearMsg(); if (currentStep > 1) showStep(currentStep - 1); });

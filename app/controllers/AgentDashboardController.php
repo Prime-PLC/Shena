@@ -333,13 +333,6 @@ class AgentDashboardController extends BaseController
                 'corporate_couple_count' => $_POST['corporate_couple_count'] ?? 0
             ];
 
-            // Validate passwords match
-            if ($_POST['password'] !== $_POST['confirm_password']) {
-                $_SESSION['error'] = 'Passwords do not match.';
-                $this->redirect('/agent/register-member');
-                return;
-            }
-
             // Validate email if provided
             $emailInput = $this->sanitizeInput($_POST['email'] ?? '');
             if (!empty($emailInput)) {
@@ -388,7 +381,7 @@ class AgentDashboardController extends BaseController
                 ':last_name' => $lastName,
                 ':email' => $emailInput ?: null,
                 ':phone' => $phoneInput,
-                ':password' => password_hash($_POST['password'], PASSWORD_DEFAULT),
+                ':password' => password_hash(bin2hex(random_bytes(16)), PASSWORD_DEFAULT),
                 ':role' => 'member',
                 ':status' => 'pending'
             ]);
@@ -462,6 +455,26 @@ class AgentDashboardController extends BaseController
             $_SESSION['success'] = 'Member registered successfully! Commission will be processed upon payment.';
             // Clear form data on success
             unset($_SESSION['form_data']);
+
+            // Send invite SMS with set-password link
+            try {
+                require_once __DIR__ . '/../services/SmsService.php';
+                require_once __DIR__ . '/../controllers/AuthController.php';
+                $inviteToken    = AuthController::generateInviteToken($userId);
+                $inviteLink     = APP_URL . '/set-password?token=' . urlencode($inviteToken);
+                $inviteFirstName = $firstName ?? 'Member';
+                $inviteMemberNo  = $memberNumber ?? '';
+                $invitePhone     = $phoneInput ?? '';
+                $inviteAmount    = $monthlyContribution ?? '0';
+                $inviteId        = $this->sanitizeInput($_POST['id_number'] ?? '');
+                $smsMsg = "Hi {$inviteFirstName}! You've been registered with SHENA Companion. Member No: {$inviteMemberNo}. "
+                        . "Set your account password here: {$inviteLink}  (valid 48 hrs). "
+                        . "Monthly contribution: KES {$inviteAmount} via Paybill 4163987, Acct: {$inviteId}.";
+                $smsService = new SmsService();
+                $smsService->sendSms($invitePhone, $smsMsg);
+            } catch (Exception $e) {
+                error_log('Agent register invite SMS failed: ' . $e->getMessage());
+            }
 
             // Show a brief confirmation page then redirect back to members list
             $data = [

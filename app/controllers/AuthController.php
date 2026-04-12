@@ -132,26 +132,43 @@ class AuthController extends BaseController
     }
 
     /**
-     * Send login OTP to a registered phone number.
+     * Step 1 of unified login: verify credential + password, then send OTP.
+     * POST /login/verify
      */
-    public function sendLoginOtp()
+    public function verifyPasswordAndSendOtp()
     {
         header('Content-Type: application/json');
-
         try {
             $this->validateCsrf();
 
-            $phoneInput = $this->sanitizeInput($_POST['phone'] ?? '');
-            if (empty($phoneInput) || !$this->validatePhone($phoneInput)) {
-                $this->json(['success' => false, 'message' => 'Enter a valid phone number.'], 422);
+            $credential = $this->sanitizeInput($_POST['credential'] ?? '');
+            $password   = $_POST['password'] ?? '';
+
+            // Rate limiting
+            $ipAddress    = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+            $rlKey        = 'login_attempts_' . md5($ipAddress . $credential);
+            if (!isset($_SESSION[$rlKey])) {
+                $_SESSION[$rlKey] = ['count' => 0, 'time' => time()];
+            }
+            if (time() - $_SESSION[$rlKey]['time'] > 900) {
+                $_SESSION[$rlKey] = ['count' => 0, 'time' => time()];
+            }
+            if ((int)$_SESSION[$rlKey]['count'] >= 5) {
+                $wait = ceil((900 - (time() - $_SESSION[$rlKey]['time'])) / 60);
+                $this->json(['success' => false, 'message' => 'Too many attempts. Try again in ' . $wait . ' minutes.'], 429);
                 return;
             }
 
-            $phone = formatKenyanPhone($phoneInput);
-            $user = $this->userModel->findByPhone($phone);
+            if (empty($credential) || empty($password)) {
+                $this->json(['success' => false, 'message' => 'Please enter your ID/Member Number and password.'], 422);
+                return;
+            }
 
-            if (!$user) {
-                $this->json(['success' => false, 'message' => 'No account found for that phone number.'], 404);
+            $user = $this->userModel->findByAnyCredential($credential);
+
+            if (!$user || !$this->userModel->verifyPassword($password, $user['password'])) {
+                $_SESSION[$rlKey]['count']++;
+                $this->json(['success' => false, 'message' => 'Invalid credentials. Please check and try again.'], 422);
                 return;
             }
 
@@ -160,8 +177,100 @@ class AuthController extends BaseController
                 return;
             }
 
+            unset($_SESSION[$rlKey]);
+
+            $phone = $user['phone'] ?? null;
+            if (empty($phone)) {
+                // No phone on file — log in directly
+                $this->establishUserSession($user);
+                $this->json(['success' => true, 'otp_required' => false, 'redirect' => $this->resolveUserRedirect($user['role'] ?? 'member')]);
+                return;
+            }
+
+            // Generate OTP and store session
+            $otpCode = $this->generateOtpCode();
+            $_SESSION['login_otp'] = [
+                'user_id'      => (int) $user['id'],
+                'code_hash'    => password_hash($otpCode, PASSWORD_DEFAULT),
+                'phone'        => $phone,
+                'expires_at'   => time() + 300,
+                'attempts'     => 0,
+                'last_sent_at' => time()
+            ];
+
+            $maskedPhone = strlen((string)$phone) >= 4
+                ? str_repeat('*', max(0, strlen((string)$phone) - 4)) . substr((string)$phone, -4)
+                : '****';
+
+            $smsService = new SmsService();
+            $smsResult  = $smsService->sendSms($phone, 'Your SHENA login code is ' . $otpCode . '. It expires in 5 minutes.');
+
+            if (empty($smsResult['success']) && $this->isLocalOrDebugEnvironment()) {
+                $this->json(['success' => true, 'otp_required' => true, 'masked_phone' => $maskedPhone,
+                    'message' => 'SMS unavailable locally. Test OTP: ' . $otpCode]);
+                return;
+            }
+
+            $this->json(['success' => true, 'otp_required' => true, 'masked_phone' => $maskedPhone,
+                'message' => 'Code sent to ' . $maskedPhone . '.']);
+
+        } catch (Exception $e) {
+            error_log('verifyPasswordAndSendOtp error: ' . $e->getMessage());
+            $this->json(['success' => false, 'message' => 'An error occurred. Please try again.'], 500);
+        }
+    }
+
+    /**
+     * Send login OTP to a registered phone number.
+     * Accepts either a phone number (legacy) or a National ID / Member Number.
+     */
+    public function sendLoginOtp()
+    {
+        header('Content-Type: application/json');
+
+        try {
+            $this->validateCsrf();
+
+            // Support lookup by National ID / Member Number (primary) or phone (legacy)
+            $idInput    = $this->sanitizeInput($_POST['id_number'] ?? '');
+            $phoneInput = $this->sanitizeInput($_POST['phone'] ?? '');
+            $user = null;
+            $phone = null;
+
+            if (!empty($idInput)) {
+                // Look up member by national ID or member number, then get their user record
+                $member = $this->memberModel->findByNationalId($idInput);
+                if (!$member) {
+                    $member = $this->memberModel->findByMemberNumber($idInput);
+                }
+                if ($member) {
+                    $user  = $this->userModel->find((int)$member['user_id']);
+                    $phone = $user['phone'] ?? null;
+                }
+                if (!$user || !$phone) {
+                    $this->json(['success' => false, 'message' => 'No account found for that ID. Please check and try again.'], 404);
+                    return;
+                }
+            } else {
+                if (empty($phoneInput) || !$this->validatePhone($phoneInput)) {
+                    $this->json(['success' => false, 'message' => 'Enter your National ID, Member Number, or a valid phone number.'], 422);
+                    return;
+                }
+                $phone = formatKenyanPhone($phoneInput);
+                $user  = $this->userModel->findByPhone($phone);
+                if (!$user) {
+                    $this->json(['success' => false, 'message' => 'No account found for that identifier.'], 404);
+                    return;
+                }
+            }
+
+            if (($user['status'] ?? '') !== 'active' && ($user['role'] ?? '') !== 'member') {
+                $this->json(['success' => false, 'message' => 'Your account is not active. Please contact support.'], 403);
+                return;
+            }
+
             // Rate limiting: 60 s cooldown + max 5 sends per 15-min window
-            $rateLimitKey = 'otp_login_' . md5($phone);
+            $rateLimitKey = 'otp_login_' . md5((string)$user['id']);
             if (!isset($_SESSION[$rateLimitKey])) {
                 $_SESSION[$rateLimitKey] = ['count' => 0, 'window_start' => time(), 'last_sent' => 0];
             }
@@ -180,6 +289,11 @@ class AuthController extends BaseController
 
             $otpCode = $this->generateOtpCode();
             $otpMessage = 'Your SHENA login verification code is ' . $otpCode . '. It expires in 5 minutes.';
+
+            // Mask phone for display — never expose digits beyond last 4
+            $maskedPhone = strlen((string)$phone) >= 4
+                ? str_repeat('*', max(0, strlen((string)$phone) - 4)) . substr((string)$phone, -4)
+                : '****';
 
             // Store session BEFORE sending SMS so verification works even if SMS
             // delivery reporting has a transient error but the SMS was actually sent.
@@ -201,14 +315,14 @@ class AuthController extends BaseController
                 if ($this->isLocalOrDebugEnvironment()) {
                     $this->json(['success' => true, 'message' => 'SMS unavailable in this environment. Use test OTP: ' . $otpCode]);
                 } else {
-                    error_log('Login OTP SMS error for ' . $phone . ': ' . ($smsResult['error'] ?? 'unknown'));
+                    error_log('Login OTP SMS error for user ' . $user['id'] . ': ' . ($smsResult['error'] ?? 'unknown'));
                     // Session is already set — user may still receive the SMS.
-                    $this->json(['success' => true, 'message' => 'Verification code sent. Check your phone and enter the code below.']);
+                    $this->json(['success' => true, 'message' => 'Verification code sent to ' . $maskedPhone . '. Enter the code below.']);
                 }
                 return;
             }
 
-            $this->json(['success' => true, 'message' => 'Verification code sent to your phone. Enter the code below.']);
+            $this->json(['success' => true, 'message' => 'Verification code sent to ' . $maskedPhone . '. Enter the code below.']);
         } catch (Exception $e) {
             error_log('Send login OTP error: ' . $e->getMessage());
             $this->json(['success' => false, 'message' => 'Failed to send OTP. Please try again.'], 500);
@@ -571,6 +685,135 @@ class AuthController extends BaseController
             }
             $this->redirect('/register');
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Set-Password (invite link for admin/agent-registered members)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Generate a signed invite token for a newly-registered user.
+     * Token = base64url(userId|expiresUnix) + '.' + HMAC-SHA256 signature
+     */
+    public static function generateInviteToken(int $userId): string
+    {
+        $expiresAt = time() + 48 * 3600; // 48 hours
+        $payload   = base64_encode($userId . '|' . $expiresAt);
+        $secret    = hash('sha256', DB_PASS . '|shena-invite-v1');
+        $sig       = hash_hmac('sha256', $payload, $secret);
+        return $payload . '.' . $sig;
+    }
+
+    /**
+     * Verify invite token. Returns user_id on success, false on failure.
+     */
+    private function verifyInviteToken(string $token)
+    {
+        $parts = explode('.', $token, 2);
+        if (count($parts) !== 2) return false;
+        [$payload, $sig] = $parts;
+        $secret   = hash('sha256', DB_PASS . '|shena-invite-v1');
+        $expected = hash_hmac('sha256', $payload, $secret);
+        if (!hash_equals($expected, $sig)) return false;
+        $decoded = base64_decode($payload, true);
+        if (!$decoded || substr_count($decoded, '|') < 1) return false;
+        [$userId, $expiresAt] = explode('|', $decoded, 2);
+        if (time() > (int)$expiresAt) return false;
+        return (int)$userId;
+    }
+
+    public function showSetPassword()
+    {
+        $token  = $_GET['token'] ?? '';
+        $userId = $this->verifyInviteToken($token);
+        $error  = null;
+
+        if (!$userId) {
+            $error = 'This activation link is invalid or has expired. Please contact support.';
+            $this->render('auth/set-password', ['error' => $error, 'csrf_token' => null, 'token' => null]);
+            return;
+        }
+
+        $user = $this->userModel->getUserById($userId);
+        if (!$user || $user['status'] !== 'pending') {
+            $error = 'This link has already been used or is no longer valid.';
+            $this->render('auth/set-password', ['error' => $error, 'csrf_token' => null, 'token' => null]);
+            return;
+        }
+
+        $this->render('auth/set-password', [
+            'title'      => 'Set Your Password - Shena Companion',
+            'csrf_token' => $this->generateCsrfToken(),
+            'token'      => htmlspecialchars($token, ENT_QUOTES),
+            'memberName' => trim($user['first_name'] . ' ' . $user['last_name']),
+        ]);
+    }
+
+    public function processSetPassword()
+    {
+        try {
+            $this->validateCsrf();
+        } catch (Exception $e) {
+            $this->render('auth/set-password', ['error' => 'Invalid request. Please use the link from your SMS.', 'csrf_token' => null, 'token' => null]);
+            return;
+        }
+
+        $token    = $_POST['token'] ?? '';
+        $userId   = $this->verifyInviteToken($token);
+
+        if (!$userId) {
+            $this->render('auth/set-password', [
+                'error'      => 'This activation link is invalid or has expired.',
+                'csrf_token' => $this->generateCsrfToken(),
+                'token'      => $token,
+            ]);
+            return;
+        }
+
+        $user = $this->userModel->getUserById($userId);
+        if (!$user || $user['status'] !== 'pending') {
+            $this->render('auth/set-password', [
+                'error'      => 'This link has already been used. Please log in or use Forgot Password.',
+                'csrf_token' => $this->generateCsrfToken(),
+                'token'      => $token,
+            ]);
+            return;
+        }
+
+        $password = $_POST['password'] ?? '';
+        $confirm  = $_POST['confirm_password'] ?? '';
+
+        if (strlen($password) < 8) {
+            $this->render('auth/set-password', [
+                'error'      => 'Password must be at least 8 characters.',
+                'csrf_token' => $this->generateCsrfToken(),
+                'token'      => $token,
+                'memberName' => trim($user['first_name'] . ' ' . $user['last_name']),
+            ]);
+            return;
+        }
+
+        if ($password !== $confirm) {
+            $this->render('auth/set-password', [
+                'error'      => 'Passwords do not match. Please try again.',
+                'csrf_token' => $this->generateCsrfToken(),
+                'token'      => $token,
+                'memberName' => trim($user['first_name'] . ' ' . $user['last_name']),
+            ]);
+            return;
+        }
+
+        // Set password and activate account
+        $this->userModel->update($userId, [
+            'password' => password_hash($password, PASSWORD_DEFAULT),
+            'status'   => 'active',
+        ]);
+
+        $this->render('auth/set-password', [
+            'success'    => 'Your password has been set and your account is now active. You can now log in.',
+            'csrf_token' => null,
+            'token'      => null,
+        ]);
     }
 
     public function showForgotPassword()

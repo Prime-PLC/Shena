@@ -256,6 +256,16 @@ include __DIR__ . '/../layouts/agent-header.php';
     .claims-stats-grid {
         grid-template-columns: 1fr;
     }
+
+    .claims-table {
+        display: block;
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .claims-table thead,
+    .claims-table tbody,
+    .claims-table tr { min-width: 480px; }
 }
 </style>
 

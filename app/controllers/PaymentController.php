@@ -243,10 +243,14 @@ class PaymentController extends BaseController
             "SELECT SUM(amount) as total FROM payments WHERE DATE(created_at)=CURDATE() AND status='completed'"
         );
 
-        // Defaulters: members with no payment in last 60 days and status not active
+        // Defaulters: members with no completed payment in last 60 days and status not active
         $defaultersRow = $db->fetch(
-            "SELECT COUNT(*) as cnt FROM members WHERE status IN ('inactive','grace_period','defaulted') 
-             AND (last_payment_date IS NULL OR last_payment_date < DATE_SUB(CURDATE(), INTERVAL 60 DAY))"
+            "SELECT COUNT(*) as cnt FROM members m WHERE m.status IN ('inactive','grace_period','defaulted')
+             AND NOT EXISTS (
+                 SELECT 1 FROM payments p
+                 WHERE p.member_id = m.id AND p.status = 'completed'
+                 AND p.created_at >= DATE_SUB(CURDATE(), INTERVAL 60 DAY)
+             )"
         );
 
         $this->view('admin/payments-reconciliation', [

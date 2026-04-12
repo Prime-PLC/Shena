@@ -110,7 +110,19 @@ class MemberController extends BaseController
             $missingProfileFields[] = 'next_of_kin_phone';
         }
 
-        $showProfileCompletionPopup = !empty($_SESSION['is_first_login']);
+        // Show onboarding wizard whenever registration fee has NOT been paid yet,
+        // not just on first login — so returning users who skipped payment are caught.
+        $regFee = defined('REGISTRATION_FEE') ? (float) REGISTRATION_FEE : 200.0;
+        $registrationPaid = ($member['status'] ?? '') === 'active';
+        if (!$registrationPaid) {
+            $regPayments = $this->paymentModel->findAll([
+                'member_id'    => $member['id'],
+                'payment_type' => 'registration',
+                'status'       => 'completed',
+            ]);
+            $registrationPaid = array_sum(array_column($regPayments ?: [], 'amount')) >= $regFee;
+        }
+        $showProfileCompletionPopup = !$registrationPaid || !empty($_SESSION['is_first_login']);
 
         $profileCompletionFormData = [
             'national_id' => (strpos($memberIdNumber, 'TMP') === 0) ? '' : $memberIdNumber,
@@ -505,11 +517,65 @@ class MemberController extends BaseController
         header('Content-Type: application/json');
         try {
             $this->validateCsrf();
+
+            // Send personalised welcome SMS only once, when the wizard is first dismissed
+            if (!empty($_SESSION['is_first_login'])) {
+                try {
+                    $userId = (int) ($_SESSION['user_id'] ?? 0);
+                    $member = $this->memberModel->getMemberByUserId($userId);
+                    if ($member && !empty($member['phone'])) {
+                        $firstName   = $member['first_name'] ?? 'Member';
+                        $memberNo    = $member['member_number'] ?? '';
+                        $nationalId  = $member['id_number'] ?? '';
+                        $contribution = number_format((float)($member['monthly_contribution'] ?? 0), 0);
+                        $phone        = $member['phone'];
+
+                        $smsMsg = "Hi {$firstName}! Welcome to SHENA. Your monthly contribution is KES {$contribution} to be paid by the 7th of every month via Paybill 4163987, Acct: {$nationalId}. {$memberNo} is your member number.";
+                        $smsService = new SmsService();
+                        $smsService->sendSms($phone, $smsMsg);
+
+                        $_SESSION['success'] = "Welcome, {$firstName}! Your SHENA membership is active. "
+                            . "Your monthly contribution of KES {$contribution} is due by the 7th of every month.";
+                    }
+                } catch (Exception $smsEx) {
+                    error_log('Welcome SMS error: ' . $smsEx->getMessage());
+                }
+            }
+
             unset($_SESSION['is_first_login']);
             echo json_encode(['success' => true]);
         } catch (Exception $e) {
             error_log('dismissOnboarding error: ' . $e->getMessage());
             echo json_encode(['success' => false]);
+        }
+    }
+
+    public function checkRegistrationPayment()
+    {
+        header('Content-Type: application/json');
+        try {
+            $member = $this->memberModel->findByUserId($_SESSION['user_id'] ?? 0);
+            if (!$member) {
+                echo json_encode(['paid' => false]);
+                return;
+            }
+            // Member is active = registration fee confirmed
+            if (($member['status'] ?? '') === 'active') {
+                echo json_encode(['paid' => true]);
+                return;
+            }
+            // Also check for a completed registration payment record
+            $regFee = defined('REGISTRATION_FEE') ? (float) REGISTRATION_FEE : 200.0;
+            $payments = $this->paymentModel->findAll([
+                'member_id'    => $member['id'],
+                'payment_type' => 'registration',
+                'status'       => 'completed',
+            ]);
+            $totalPaid = array_sum(array_column($payments ?: [], 'amount'));
+            echo json_encode(['paid' => $totalPaid >= $regFee]);
+        } catch (Exception $e) {
+            error_log('checkRegistrationPayment error: ' . $e->getMessage());
+            echo json_encode(['paid' => false]);
         }
     }
     
