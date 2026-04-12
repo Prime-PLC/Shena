@@ -484,7 +484,7 @@ class AdminController extends BaseController
                         'monthly_contribution' => $monthlyContribution
                     ]);
                 }
-            } catch (Exception $e) {
+            } catch (Throwable $e) {
                 error_log('Admin register email failed: ' . $e->getMessage());
             }
 
@@ -493,21 +493,24 @@ class AdminController extends BaseController
                 require_once __DIR__ . '/../services/SmsService.php';
                 require_once __DIR__ . '/../controllers/AuthController.php';
                 $inviteToken = AuthController::generateInviteToken($userId);
-                $inviteLink  = APP_URL . '/set-password?token=' . urlencode($inviteToken);
+                $appUrl = defined('APP_URL') ? APP_URL : '';
+                $inviteLink  = $appUrl . '/set-password?token=' . urlencode($inviteToken);
                 $smsMsg = "Hi {$firstName}! You've been registered with SHENA Companion. Member No: {$memberNumber}. "
                         . "Set your account password here: {$inviteLink}  (valid 48 hrs). "
                         . "Monthly contribution: KES {$monthlyContribution} via Paybill 4163987, Acct: {$idNumber}.";
                 $smsService = new SmsService();
                 $smsService->sendSms($phone, $smsMsg);
-            } catch (Exception $e) {
+            } catch (Throwable $e) {
                 error_log('Admin register invite SMS failed: ' . $e->getMessage());
             }
 
             $_SESSION['success'] = 'Member registered successfully.';
             $this->redirect('/admin/members');
 
-        } catch (Exception $e) {
-            $this->db->getConnection()->rollBack();
+        } catch (Throwable $e) {
+            if ($this->db->getConnection()->inTransaction()) {
+                $this->db->getConnection()->rollBack();
+            }
             error_log('Admin register error: ' . $e->getMessage());
             $_SESSION['error'] = 'Failed to register member: ' . $e->getMessage();
             $this->redirect('/admin/members/register');

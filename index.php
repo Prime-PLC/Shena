@@ -63,7 +63,7 @@ if (file_exists(APP_PATH . '/helpers/functions.php')) {
 try {
     $router = new Router();
     $router->dispatch();
-} catch (Exception $e) {
+} catch (Throwable $e) {
     error_log('Application error: ' . $e->getMessage());
     error_log('Stack trace: ' . $e->getTraceAsString());
     
