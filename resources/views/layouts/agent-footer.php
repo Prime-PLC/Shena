@@ -242,6 +242,12 @@
         }
     }
 
+    @media (max-width: 1024px) {
+        .agent-footer {
+            margin-left: 0;
+        }
+    }
+
     @media (max-width: 768px) {
         .footer-container {
             padding: 0 20px;

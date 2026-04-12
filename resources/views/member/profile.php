@@ -284,6 +284,10 @@ $getOldValue = function($field) {
     .btn-save-changes {
         width: 100%;
     }
+
+    .form-grid {
+        grid-template-columns: 1fr !important;
+    }
 }
 </style>
 

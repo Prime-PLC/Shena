@@ -246,6 +246,12 @@
 	}
 }
 
+@media (max-width: 1024px) {
+	.member-footer {
+		margin-left: 0;
+	}
+}
+
 @media (max-width: 768px) {
 	.footer-container {
 		padding: 0 20px;
@@ -260,10 +266,6 @@
 		flex-direction: column;
 		gap: 16px;
 		text-align: center;
-	}
-	
-	.member-footer {
-		margin-left: 0;
 	}
 }
 </style>

@@ -481,10 +481,39 @@ $missingFields = $missing_profile_fields ?? [];
     }
 }
 
+@media (max-width: 768px) {
+    /* Stack hero profile + float pay-btn below on small screens */
+    .hero-card {
+        padding-top: 56px !important;
+    }
+    .pay-btn {
+        top: 16px !important;
+        right: 16px !important;
+        padding: 8px 14px !important;
+        font-size: 0.82rem !important;
+    }
+    .hero-profile {
+        flex-wrap: wrap;
+    }
+    .contribution-overview {
+        flex-wrap: wrap;
+        gap: 16px !important;
+    }
+    .contribution-item {
+        flex: 1 1 calc(50% - 8px);
+        min-width: 0;
+    }
+    .next-due-card {
+        flex: 1 1 calc(50% - 8px);
+        min-width: 0;
+    }
+}
+
 @media (max-width: 576px) {
     .dashboard-container { padding: 16px !important; }
-    .hero-card { padding: 16px !important; }
+    .hero-card { padding: 16px !important; padding-top: 56px !important; }
     .stat-card { padding: 20px !important; }
+    .hero-info h2 { font-size: 1.3rem !important; }
 }
 </style>
 
@@ -941,12 +970,10 @@ $missingFields = $missing_profile_fields ?? [];
             bracketKey = 'individual_91_100'; bracketLabel = '91–100 years'; bracketPrice = 650;
         }
 
-        // If plan is already selected (user changed it), don't override
-        if (selectedPackageId) return;
-
         // Set plan type select to "individual" and trigger bracket render
+        // (always re-render so the correct bracket is highlighted on re-entry)
         planSelect.value = 'individual';
-        clearPlan();
+        clearPlan(); // resets selectedPackageId to ''
         var tier = tierMap.individual;
         bracketHint.textContent = tier.hint;
         tier.brackets.forEach(function (b) {

@@ -35,6 +35,11 @@ if ($notificationCount === null) {
 			padding: 0;
 			box-sizing: border-box;
 		}
+
+		html, body {
+			overflow-x: hidden;
+			max-width: 100%;
+		}
 		
 		body { 
 			background: #F8F9FC; 
@@ -322,6 +327,8 @@ if ($notificationCount === null) {
 			margin-left: 280px;
 			flex: 1;
 			padding: 0;
+			min-width: 0;
+			overflow-x: hidden;
 			transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 		}
 

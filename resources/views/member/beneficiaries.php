@@ -419,6 +419,15 @@ main {
     .beneficiaries-grid {
         grid-template-columns: 1fr;
     }
+
+    .page-header {
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    .search-bar {
+        width: 100%;
+    }
 }
 </style>
 
