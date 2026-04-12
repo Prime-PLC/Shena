@@ -256,6 +256,7 @@ $member = $member ?? [];
 
     <!-- Edit Form -->
     <form method="POST" action="/admin/members/update/<?= $member['id'] ?>" class="form-card">
+        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
         <div class="card-header">
             <h2 class="card-title">
                 <i class="fas fa-user-edit"></i> Member Information

@@ -36,6 +36,7 @@
                 </div>
                 <div class="card-body">
                     <form method="POST" action="/admin/bulk-sms/store" id="campaignForm">
+                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
                         <!-- Campaign Title -->
                         <div class="mb-3">
                             <label for="title" class="form-label">Campaign Title *</label>

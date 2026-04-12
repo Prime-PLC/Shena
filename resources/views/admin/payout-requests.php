@@ -332,6 +332,7 @@ $statusFilter = $status_filter ?? 'all';
                                     </button>
                                 <?php elseif ($request['status'] === 'processing'): ?>
                                     <form method="POST" action="/admin/payouts/<?= $request['id'] ?>/process" style="display: inline;" id="mark-paid-form-<?= $request['id'] ?>">
+                                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
                                         <input type="hidden" name="action" value="mark_paid">
                                         <button type="button" class="btn btn-success" onclick="confirmMarkPaid(<?= $request['id'] ?>, <?= $request['amount'] ?>, '<?= htmlspecialchars(($request['first_name'] ?? '') . ' ' . ($request['last_name'] ?? '')) ?>')">
                                             <i class="fas fa-check"></i> Mark Paid
@@ -366,6 +367,7 @@ function showProcessModal(payoutId, amount, agentName) {
                     Amount: <strong style="color: #1F2937; font-size: 16px;">KES ${amount.toLocaleString('en-US', {minimumFractionDigits: 2})}</strong>
                 </p>
                 <form method="POST" action="/admin/payouts/${payoutId}/process" id="process-payout-form">
+                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
                     <div style="margin-bottom: 16px;">
                         <label style="display: block; font-size: 12px; font-weight: 600; color: #6B7280; margin-bottom: 6px; text-transform: uppercase;">Action</label>
                         <select name="action" id="payout-action" style="width: 100%; padding: 10px; border: 1px solid #D1D5DB; border-radius: 6px; font-size: 14px;" onchange="togglePayoutFields()">

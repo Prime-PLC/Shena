@@ -50,6 +50,7 @@
                         </div>
                         <div class="card-body">
                             <form id="testFallbackForm">
+                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
                                 <div class="form-group">
                                     <label for="testPhone">Phone Number</label>
                                     <input type="text" class="form-control" id="testPhone" 

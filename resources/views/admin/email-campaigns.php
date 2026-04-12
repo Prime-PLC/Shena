@@ -533,6 +533,7 @@
         </div>
         <div class="modal-body-modern">
             <form action="/admin/email-campaigns/create" method="POST" id="createCampaignForm">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
                 <div class="form-group">
                     <label for="campaign-title">Campaign Title</label>
                     <input type="text" class="form-control" id="campaign-title" name="title" required placeholder="e.g., Monthly Newsletter - January 2026">

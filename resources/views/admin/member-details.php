@@ -399,12 +399,14 @@ $beneficiaries = $beneficiaries ?? [];
                     <div class="action-buttons">
                         <?php if (($member['status'] ?? 'active') === 'active'): ?>
                             <form method="POST" action="/admin/members/suspend/<?= $member['id'] ?>" id="suspend-form">
+                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
                                 <button type="button" onclick="confirmSuspend()" class="btn btn-warning" style="width: 100%;">
                                     <i class="fas fa-ban"></i> Suspend Member
                                 </button>
                             </form>
                         <?php elseif (($member['status'] ?? '') === 'suspended'): ?>
                             <form method="POST" action="/admin/members/activate/<?= $member['id'] ?>" id="activate-form">
+                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
                                 <button type="button" onclick="confirmActivate()" class="btn btn-primary" style="width: 100%;">
                                     <i class="fas fa-check"></i> Activate Member
                                 </button>

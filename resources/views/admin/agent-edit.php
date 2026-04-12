@@ -256,6 +256,7 @@ $agent = $agent ?? [];
 
     <!-- Edit Form -->
     <form method="POST" action="/admin/agents/update/<?= $agent['id'] ?>" class="form-card">
+        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
         <div class="card-header">
             <h2 class="card-title">
                 <i class="fas fa-user-edit"></i> Agent Information

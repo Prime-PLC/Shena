@@ -846,6 +846,7 @@ main {
                 </div>
 
                 <form class="upgrade-form" id="upgradeFormSubmit">
+                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
                     <input type="hidden" name="to_package" id="to_package" value="<?php echo htmlspecialchars($defaultTargetPackage); ?>">
                     <div class="form-group">
                         <label class="form-label">M-Pesa Phone Number</label>

@@ -57,6 +57,7 @@ include VIEWS_PATH . '/layouts/header.php';
                         </p>
                         
                         <form id="stkPushForm">
+                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token ?? ''); ?>">
                             <div class="mb-3">
                                 <label class="form-label">Phone Number</label>
                                 <input type="tel" class="form-control" id="phoneNumber" 

@@ -137,6 +137,7 @@
                                             <form method="POST" action="/admin/bulk-sms/send/<?= $campaign['id'] ?>" 
                                                   style="display: inline;" 
                                                   onsubmit="return handleConfirmSubmit(event, 'Send this campaign now?', 'primary', 'Send Campaign', 'Send Now')">
+                                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
                                                 <button type="submit" class="btn btn-sm btn-success" title="Send Now">
                                                     <i class="fas fa-paper-plane"></i>
                                                 </button>
@@ -144,6 +145,7 @@
                                             <form method="POST" action="/admin/bulk-sms/delete/<?= $campaign['id'] ?>" 
                                                   style="display: inline;" 
                                                   onsubmit="return handleConfirmSubmit(event, 'Delete this campaign?', 'danger', 'Delete Campaign', 'Delete')">
+                                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
                                                 <button type="submit" class="btn btn-sm btn-danger" title="Delete">
                                                     <i class="fas fa-trash"></i>
                                                 </button>

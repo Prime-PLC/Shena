@@ -365,6 +365,7 @@ align-items: center;
                     <div class="action-buttons">
                         <?php if (($agent['status'] ?? 'active') === 'active'): ?>
                             <form method="POST" action="/admin/agents/status/<?= $agent['id'] ?>" id="agent-suspend-form">
+                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
                                 <input type="hidden" name="status" value="suspended">
                                 <button type="button" onclick="confirmAgentSuspend()" class="btn btn-warning" style="width: 100%;">
                                     <i class="fas fa-ban"></i> Suspend Agent
@@ -372,6 +373,7 @@ align-items: center;
                             </form>
                         <?php elseif (($agent['status'] ?? '') === 'suspended'): ?>
                             <form method="POST" action="/admin/agents/status/<?= $agent['id'] ?>" id="agent-activate-form">
+                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
                                 <input type="hidden" name="status" value="active">
                                 <button type="button" onclick="confirmAgentActivate()" class="btn btn-primary" style="width: 100%;">
                                     <i class="fas fa-check"></i> Activate Agent
@@ -487,6 +489,7 @@ align-items: center;
                                             </button>
                                         <?php elseif ($request['status'] === 'processing'): ?>
                                             <form method="POST" action="/admin/payouts/<?= $request['id'] ?>/process" style="display: inline;">
+                                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
                                                 <input type="hidden" name="action" value="mark_paid">
                                                 <input type="hidden" name="redirect_to_agent" value="1">
                                                 <button type="submit" class="btn btn-success" style="padding: 6px 12px; font-size: 12px;" onclick="return confirm('Mark this payout as paid?')">
@@ -652,6 +655,7 @@ function showProcessModal(payoutId, amount) {
                     Amount: <strong style="color: #1F2937; font-size: 16px;">KES ${amount.toLocaleString('en-US', {minimumFractionDigits: 2})}</strong>
                 </p>
                 <form method="POST" action="/admin/payouts/${payoutId}/process" id="process-payout-form">
+                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
                     <input type="hidden" name="redirect_to_agent" value="1">
                     <div style="margin-bottom: 16px;">
                         <label style="display: block; font-size: 12px; font-weight: 600; color: #6B7280; margin-bottom: 6px; text-transform: uppercase;">Action</label>

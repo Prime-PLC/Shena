@@ -582,6 +582,7 @@ $claimId = (int)($claim['id'] ?? 0);
     <div class="modal-dialog">
         <div class="modal-content">
             <form method="POST" action="/admin/claims/<?= $claimId ?>/approve">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
                 <div class="modal-header">
                     <h5 class="modal-title">Approve Claim for Services</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -610,6 +611,7 @@ $claimId = (int)($claim['id'] ?? 0);
     <div class="modal-dialog">
         <div class="modal-content">
             <form method="POST" action="/admin/claims/<?= $claimId ?>/approve-cash">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
                 <div class="modal-header">
                     <h5 class="modal-title">Approve Cash Alternative</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -641,6 +643,7 @@ $claimId = (int)($claim['id'] ?? 0);
     <div class="modal-dialog">
         <div class="modal-content">
             <form method="POST" action="/admin/claims/<?= $claimId ?>/reject">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
                 <div class="modal-header">
                     <h5 class="modal-title">Reject Claim</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>

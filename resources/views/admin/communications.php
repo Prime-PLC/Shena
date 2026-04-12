@@ -593,6 +593,7 @@
         </div>
         <div class="modal-body-modern">
             <form action="/admin/communications/send-email" method="POST" id="emailForm">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
                 <div class="form-group">
                     <label for="email-recipient-type">Recipients</label>
                     <select class="form-control" id="email-recipient-type" name="recipient_type" required>
@@ -649,6 +650,7 @@
         </div>
         <div class="modal-body-modern">
             <form action="/admin/communications/send-sms" method="POST" id="smsForm">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
                 <div class="form-group">
                     <label for="sms-recipient-type">Recipients</label>
                     <select class="form-control" id="sms-recipient-type" name="recipient_type" required>

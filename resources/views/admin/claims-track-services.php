@@ -636,6 +636,7 @@ require_once __DIR__ . '/../layouts/admin-header.php';
                         All services completed!
                     </div>
                     <form method="POST" action="/admin/claims/complete" id="complete-claim-form">
+                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
                         <input type="hidden" name="claim_id" value="<?= $claim['id'] ?>">
                         <button type="button" onclick="confirmCompleteClaim()" class="btn-complete-claim">
                             <i class="fas fa-check-double"></i>
@@ -753,6 +754,7 @@ require_once __DIR__ . '/../layouts/admin-header.php';
     <div class="modal-dialog">
         <div class="modal-content">
             <form method="POST" action="/admin/claims/track/<?= htmlspecialchars($claim['id'] ?? '') ?>">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
                 <div class="modal-header">
                     <h5 class="modal-title">
                         <i class="fas fa-check-circle"></i>

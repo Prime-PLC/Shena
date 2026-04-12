@@ -265,6 +265,7 @@
 <!-- Registration Form -->
 <div class="form-card">
     <form method="POST" action="/admin/agents/store" id="agentForm">
+        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
         <!-- Personal Information Section -->
         <div class="form-section">
             <div class="section-header">

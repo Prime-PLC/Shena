@@ -179,6 +179,7 @@
             
             <!-- Verification Form -->
             <form id="verificationForm">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token ?? ''); ?>">
                 <div class="mb-3">
                     <label class="form-label">
                         <i class="fas fa-receipt"></i> M-Pesa Transaction Code *
