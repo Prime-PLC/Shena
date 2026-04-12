@@ -607,6 +607,7 @@ if (empty($_SESSION['csrf_token'])) {
         </div>
         <div class="modal-body-modern">
             <form action="/admin/communications/create-campaign" method="POST" id="createCampaignForm">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
                 <div class="form-group">
                     <label for="campaign-title">Campaign Title</label>
                     <input type="text" class="form-control" id="campaign-title" name="title" required placeholder="e.g., Payment Reminder - January 2026">
@@ -622,6 +623,43 @@ if (empty($_SESSION['csrf_token'])) {
                         <option value="defaulters">Payment Defaulters</option>
                         <option value="custom">Custom Selection</option>
                     </select>
+                </div>
+
+                <!-- Custom filters — shown only when "Custom Selection" is chosen -->
+                <div id="custom-filters-panel" style="display:none; background:#F9FAFB; border:1px solid #E5E7EB; border-radius:10px; padding:16px 18px; margin-bottom:16px;">
+                    <p style="font-size:0.82rem; font-weight:600; color:#7F3D9E; margin:0 0 12px;">Custom Filters <span style="font-weight:400; color:#6B7280;">(leave blank to skip a filter)</span></p>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label style="font-size:0.82rem;">Membership Status</label>
+                            <select class="form-control form-control-sm" name="filter_status">
+                                <option value="">Any status</option>
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                                <option value="grace_period">Grace Period</option>
+                                <option value="suspended">Suspended</option>
+                                <option value="defaulted">Defaulted</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label style="font-size:0.82rem;">Package Type</label>
+                            <select class="form-control form-control-sm" name="filter_package">
+                                <option value="">Any package</option>
+                                <option value="individual">Individual</option>
+                                <option value="family">Family / Couple</option>
+                                <option value="extended_family_1">Extended Family 1</option>
+                                <option value="extended_family_2">Extended Family 2</option>
+                                <option value="executive">Executive</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label style="font-size:0.82rem;">Joined After</label>
+                            <input type="date" class="form-control form-control-sm" name="filter_joined_after">
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label style="font-size:0.82rem;">Joined Before</label>
+                            <input type="date" class="form-control form-control-sm" name="filter_joined_before">
+                        </div>
+                    </div>
                 </div>
 
                 <div class="form-group">
@@ -956,6 +994,11 @@ function resumeCampaign(id) {
         proceed();
     }
 }
+
+// Show/hide custom filters panel
+document.getElementById('target-audience')?.addEventListener('change', function () {
+    document.getElementById('custom-filters-panel').style.display = this.value === 'custom' ? '' : 'none';
+});
 
 // Form submissions
 document.getElementById('createCampaignForm')?.addEventListener('submit', function(e) {

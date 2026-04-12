@@ -29,7 +29,7 @@ INSERT INTO users (
   'Admin',
   'test.superadmin@shena.local',
   '254700000101',
-  '$2y$12$Xt4oBkw.heetq8zEJV0DzukNIn1QpuIAMUjHAGGZKEXa39LjOJUWi',
+  '$2y$12$K1UaOZHrAkI9.cvLO9lWk.wIu8nXsuVnbXKz/uc17oTOIuXunSNeW',
   'super_admin',
   'active',
   NOW(),

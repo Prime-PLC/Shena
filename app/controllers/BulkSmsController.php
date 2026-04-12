@@ -583,7 +583,7 @@ class BulkSmsController extends BaseController
     public function quickSms()
     {
         $this->requireRole(['admin', 'super_admin', 'manager']);
-        
+
         try {
             if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
                 throw new Exception('Invalid request method');
@@ -591,33 +591,97 @@ class BulkSmsController extends BaseController
 
             $this->validateCsrf();
 
-            $phone = $this->sanitizeInput($_POST['phone'] ?? '');
-            $message = $this->sanitizeInput($_POST['message'] ?? '');
-            $priority = $_POST['priority'] ?? 'normal';
-
-            require_once __DIR__ . '/../services/SmsService.php';
-            $smsService = new SmsService();
-
-            // Normalize and validate phone number using SmsService
-            $formattedPhone = $smsService->formatPhoneNumber($phone);
-            if (!$smsService->validatePhoneNumber($formattedPhone)) {
-                throw new Exception('Invalid phone number format. Use 254XXXXXXXXX');
-            }
+            $recipientType  = $this->sanitizeInput($_POST['recipient_type'] ?? '');
+            $recipientGroup = $this->sanitizeInput($_POST['recipient_group'] ?? '');
+            $recipientId    = (int) ($_POST['recipient_id'] ?? 0);
+            $message        = $this->sanitizeInput($_POST['message'] ?? '');
 
             if (empty($message) || strlen($message) > 160) {
                 throw new Exception('Message must be between 1 and 160 characters');
             }
 
-            // Send SMS
-            $result = $smsService->sendSms($formattedPhone, $message);
+            require_once __DIR__ . '/../services/SmsService.php';
+            $smsService = new SmsService();
 
-            if ($result['success']) {
-                header('Content-Type: application/json');
-                echo json_encode(['success' => true, 'message' => 'SMS sent successfully to ' . $formattedPhone]);
-                exit();
+            // Resolve phone number(s) based on recipient type
+            $phones = [];
+
+            if ($recipientType === 'individual') {
+                // Single member by member_id (recipient_id holds member id)
+                $member = $this->memberModel->findById($recipientId);
+                if (!$member || empty($member['phone'])) {
+                    throw new Exception('Member not found or has no phone number.');
+                }
+                $phones[] = $member['phone'];
+
+            } elseif ($recipientType === 'group') {
+                // Group: active / inactive / pending
+                $statusMap = [
+                    'active'   => 'active',
+                    'inactive' => 'inactive',
+                    'pending'  => 'inactive', // pending members are stored as inactive+pending
+                ];
+                $sql = "SELECT u.phone FROM members m
+                        JOIN users u ON m.user_id = u.id
+                        WHERE m.status = :status AND u.phone IS NOT NULL AND u.phone != ''";
+                $status = $statusMap[$recipientGroup] ?? 'active';
+                // For 'pending' group also include status='pending'
+                if ($recipientGroup === 'pending') {
+                    $sql = "SELECT u.phone FROM members m
+                            JOIN users u ON m.user_id = u.id
+                            WHERE m.status IN ('inactive','pending') AND u.phone IS NOT NULL AND u.phone != ''";
+                    $rows = $this->db->fetchAll($sql);
+                } else {
+                    $rows = $this->db->fetchAll($sql, ['status' => $status]);
+                }
+                foreach ($rows as $row) {
+                    $phones[] = $row['phone'];
+                }
+
+            } elseif ($recipientType === 'all') {
+                $sql = "SELECT u.phone FROM members m
+                        JOIN users u ON m.user_id = u.id
+                        WHERE u.phone IS NOT NULL AND u.phone != ''";
+                $rows = $this->db->fetchAll($sql);
+                foreach ($rows as $row) {
+                    $phones[] = $row['phone'];
+                }
             } else {
-                throw new Exception($result['error'] ?? 'Failed to send SMS');
+                throw new Exception('Please select a recipient type.');
             }
+
+            if (empty($phones)) {
+                throw new Exception('No recipients found for the selected group.');
+            }
+
+            // Normalize phones and send
+            $sent = 0;
+            $failed = 0;
+            $lastError = '';
+            foreach ($phones as $rawPhone) {
+                $formatted = $smsService->formatPhoneNumber($rawPhone);
+                if (!$smsService->validatePhoneNumber($formatted)) {
+                    $failed++;
+                    continue;
+                }
+                $result = $smsService->sendSms($formatted, $message);
+                if ($result['success']) {
+                    $sent++;
+                } else {
+                    $failed++;
+                    $lastError = $result['error'] ?? 'Send failed';
+                }
+            }
+
+            if ($sent === 0) {
+                throw new Exception($lastError ?: 'Failed to send SMS to any recipient.');
+            }
+
+            header('Content-Type: application/json');
+            $msg = "SMS sent to {$sent} recipient(s)";
+            if ($failed > 0) $msg .= " ({$failed} skipped)";
+            echo json_encode(['success' => true, 'message' => $msg]);
+            exit();
 
         } catch (Exception $e) {
             error_log('Quick SMS error: ' . $e->getMessage());
