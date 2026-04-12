@@ -10,6 +10,8 @@ $commissions = $commissions ?? [];
         padding: 20px;
         max-width: 1400px;
         margin: 0 auto;
+        min-width: 0;
+        overflow-x: hidden;
     }
 
     .page-header {
@@ -250,16 +252,30 @@ align-items: center;
         opacity: 0.3;
     }
 
-    @media (max-width: 768px) {
+    @media (max-width: 1024px) {
         .content-grid {
             grid-template-columns: 1fr !important;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .page-header {
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .header-actions {
+            flex-wrap: wrap;
+            width: 100%;
         }
         .stats-grid {
             grid-template-columns: 1fr 1fr;
         }
     }
+
     @media (max-width: 480px) {
         .stats-grid { grid-template-columns: 1fr; }
+        .page-title { font-size: 20px; }
+        .header-actions .btn { flex: 1 1 auto; justify-content: center; }
     }
 </style>
 

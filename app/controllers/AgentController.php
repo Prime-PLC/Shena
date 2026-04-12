@@ -212,13 +212,21 @@ class AgentController extends BaseController
             redirect('/admin/agents/create');
             return;
         }
-        
+
+        // Check if phone already exists in users table
+        $formattedPhone = formatKenyanPhone($_POST['phone']);
+        if ($this->userModel->findByPhone($formattedPhone)) {
+            $_SESSION['error'] = 'A user with this phone number already exists in the system.';
+            redirect('/admin/agents/create');
+            return;
+        }
+
         // Create user account
         $userData = [
             'first_name' => $_POST['first_name'],
             'last_name'  => $_POST['last_name'],
             'email'      => $_POST['email'],
-            'phone'      => formatKenyanPhone($_POST['phone']),
+            'phone'      => $formattedPhone,
             'password'   => password_hash($_POST['password'], PASSWORD_DEFAULT),
             'role'       => 'agent',
             'status'     => 'active',

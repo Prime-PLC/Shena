@@ -476,6 +476,7 @@ if ($notificationCount === null) {
             padding: 30px;
             min-height: calc(100vh - 70px);
             transition: margin-left 0.3s ease;
+            min-width: 0;
         }
 
         .sidebar.collapsed ~ .main-content {
