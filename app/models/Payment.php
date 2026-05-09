@@ -89,10 +89,14 @@ class Payment extends BaseModel
     {
         $data = [
             'status' => 'completed',
+            'payment_date' => date('Y-m-d H:i:s'),
             'updated_at' => date('Y-m-d H:i:s')
         ];
         
         if ($transactionId) {
+            // BUGFIX: Store to mpesa_receipt_number for proper STK callback handling
+            // Also keep transaction_id for backward compatibility
+            $data['mpesa_receipt_number'] = $transactionId;
             $data['transaction_id'] = $transactionId;
         }
         
@@ -100,7 +104,11 @@ class Payment extends BaseModel
 
         // Apply membership-side effects for monthly contributions (coverage, status, grace period)
         $payment = $this->find($paymentId);
-        if ($payment && isset($payment['payment_type']) && $payment['payment_type'] === 'monthly') {
+        if (!$payment || empty($payment['member_id'])) {
+            return true;
+        }
+
+        if (isset($payment['payment_type']) && $payment['payment_type'] === 'monthly') {
             $memberModel = new Member();
             $memberModel->applySuccessfulMonthlyPayment(
                 $payment['member_id'],
@@ -108,7 +116,79 @@ class Payment extends BaseModel
             );
         }
 
+        if (isset($payment['payment_type']) && $payment['payment_type'] === 'registration') {
+            $this->activateMemberAfterRegistrationPayment((int)$payment['member_id']);
+        }
+
+        if (isset($payment['payment_type']) && $payment['payment_type'] === 'reactivation') {
+            $memberModel = new Member();
+            $memberModel->reactivateMember((int)$payment['member_id']);
+        }
+
         return true;
+    }
+
+    /**
+     * Check if registration fee has been paid
+     * 
+     * @param int $memberId
+     * @return bool
+     */
+    public function hasPaidRegistrationFee($memberId)
+    {
+        $registrationFeeRequired = defined('REGISTRATION_FEE') ? REGISTRATION_FEE : 200;
+        
+        $sql = "SELECT COALESCE(SUM(amount), 0) as total_paid 
+                FROM {$this->table} 
+                WHERE member_id = :member_id 
+                AND payment_type = 'registration' 
+                AND status = 'completed'";
+        
+        $result = $this->db->fetch($sql, ['member_id' => $memberId]);
+        
+        return ($result['total_paid'] ?? 0) >= $registrationFeeRequired;
+    }
+
+    public function activateMemberAfterRegistrationPayment($memberId)
+    {
+        if (!$this->hasPaidRegistrationFee($memberId)) {
+            return false;
+        }
+
+        $memberModel = new Member();
+        $member = $memberModel->find($memberId);
+        if (!$member) {
+            return false;
+        }
+
+        if (($member['status'] ?? '') !== 'active') {
+            $memberModel->update($memberId, [
+                'status' => 'active',
+                'coverage_ends' => date('Y-m-d', strtotime('+1 year'))
+            ]);
+        }
+
+        if (!empty($member['user_id'])) {
+            $userModel = new User();
+            $userModel->update($member['user_id'], ['status' => 'active']);
+        }
+
+        return true;
+    }
+
+    /**
+     * Find payment by M-Pesa receipt number
+     * 
+     * @param string $receiptNumber
+     * @return array|null
+     */
+    public function findByReceiptNumber($receiptNumber)
+    {
+        $sql = "SELECT * FROM {$this->table} 
+                WHERE mpesa_receipt_number = :receipt OR transaction_id = :receipt
+                LIMIT 1";
+        
+        return $this->db->fetch($sql, ['receipt' => $receiptNumber]);
     }
     
     public function failPayment($paymentId, $reason = null)

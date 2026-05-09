@@ -121,8 +121,19 @@ class PaymentReconciliationService
      */
     public function autoReconcilePayment($paymentData)
     {
-        $billRefNumber = $paymentData['bill_ref_number'] ?? '';
+        $billRefNumber = self::normalizeAccountReference($paymentData['bill_ref_number'] ?? '');
         $senderPhone = $paymentData['sender_phone'] ?? '';
+
+        $existingPayment = $this->paymentModel->findByReceiptNumber($paymentData['trans_id'] ?? '');
+        if ($existingPayment) {
+            return [
+                'success' => true,
+                'matched' => !empty($existingPayment['member_id']),
+                'payment_id' => $existingPayment['id'],
+                'duplicate' => true,
+                'message' => 'Payment receipt already recorded'
+            ];
+        }
         
         // Strategy 1: Match by ID number (highest confidence)
         $member = $this->memberModel->findByIdNumber($billRefNumber);
@@ -158,6 +169,7 @@ class PaymentReconciliationService
             }
 
             // Create payment record with correct type
+            $paymentData['bill_ref_number'] = $billRefNumber;
             $paymentId = $this->createReconciledPayment($member['id'], $paymentData, true, $paymentType);
 
             // Apply membership side-effects (coverage extension, grace period clearance)
@@ -228,6 +240,7 @@ class PaymentReconciliationService
             ];
         } else {
             // No match found - create unmatched payment
+            $paymentData['bill_ref_number'] = $billRefNumber;
             $paymentId = $this->createUnmatchedPayment($paymentData);
             
             return [
@@ -237,6 +250,13 @@ class PaymentReconciliationService
                 'message' => 'Payment recorded as unmatched - requires manual reconciliation'
             ];
         }
+    }
+
+    public static function normalizeAccountReference($reference)
+    {
+        $reference = strtoupper(trim((string)$reference));
+        $reference = preg_replace('/^(ID|NATIONALID|NATIONAL ID|NO|NUMBER)[:#\-\s]*/i', '', $reference);
+        return preg_replace('/[^A-Z0-9]/', '', $reference);
     }
     
     /**
@@ -321,10 +341,30 @@ class PaymentReconciliationService
     public function manualReconciliation($paymentId, $memberId, $userId, $notes = '')
     {
         try {
+            $member = $this->memberModel->find($memberId);
+            if (!$member) {
+                return false;
+            }
+
+            $payment = $this->paymentModel->find($paymentId);
+            if (!$payment) {
+                return false;
+            }
+
+            $paymentType = $payment['payment_type'] ?? 'monthly';
+            if (($payment['reconciliation_status'] ?? '') === 'unmatched' || empty($payment['member_id'])) {
+                if (($member['status'] ?? '') === 'inactive') {
+                    $paymentType = 'registration';
+                } elseif (($member['status'] ?? '') === 'defaulted') {
+                    $paymentType = 'reactivation';
+                }
+            }
+
             // Assign the member if not already set
             $this->db->execute(
                 "UPDATE payments SET
                     member_id            = :member_id,
+                    payment_type         = :payment_type,
                     reconciliation_status = 'manual',
                     reconciled_at        = NOW(),
                     reconciled_by        = :reconciled_by,
@@ -332,6 +372,7 @@ class PaymentReconciliationService
                  WHERE id = :payment_id",
                 [
                     'member_id'    => $memberId,
+                    'payment_type'  => $paymentType,
                     'reconciled_by'=> $userId,
                     'notes'        => $notes,
                     'payment_id'   => $paymentId,
@@ -524,6 +565,7 @@ class PaymentReconciliationService
         
         // Search by paybill account (ID number or member number)
         if (!empty($payment['paybill_account'])) {
+            $normalizedAccount = self::normalizeAccountReference($payment['paybill_account']);
             $query = "SELECT *, 'id_number' as match_type, 95 as confidence 
                       FROM members 
                       WHERE id_number = :id_number
@@ -533,8 +575,8 @@ class PaymentReconciliationService
                       WHERE member_number = :member_number";
             
             $results = $this->db->fetchAll($query, [
-                'id_number' => $payment['paybill_account'],
-                'member_number' => $payment['paybill_account']
+                'id_number' => $normalizedAccount,
+                'member_number' => $normalizedAccount
             ]);
             $matches = array_merge($matches, $results);
         }

@@ -122,7 +122,7 @@ class MemberController extends BaseController
             ]);
             $registrationPaid = array_sum(array_column($regPayments ?: [], 'amount')) >= $regFee;
         }
-        $showProfileCompletionPopup = !$registrationPaid || !empty($_SESSION['is_first_login']);
+        $showProfileCompletionPopup = (!$registrationPaid && empty($_SESSION['onboarding_skipped'])) || (!empty($_SESSION['is_first_login']) && $registrationPaid);
 
         $profileCompletionFormData = [
             'national_id' => (strpos($memberIdNumber, 'TMP') === 0) ? '' : $memberIdNumber,
@@ -460,7 +460,6 @@ class MemberController extends BaseController
 
     /**
      * AJAX: Update member package during onboarding wizard (Step 3).
-     * Clears is_first_login so the wizard does not reappear.
      */
     public function updatePackageFromOnboarding()
     {
@@ -497,9 +496,6 @@ class MemberController extends BaseController
                 'monthly_contribution' => $monthlyContribution,
             ]);
 
-            // Package is selected — clear the onboarding flag
-            unset($_SESSION['is_first_login']);
-
             echo json_encode(['success' => true, 'message' => 'Membership plan updated successfully.']);
 
         } catch (Exception $e) {
@@ -518,7 +514,19 @@ class MemberController extends BaseController
         try {
             $this->validateCsrf();
 
-            // Send personalised welcome SMS only once, when the wizard is first dismissed
+            $member = $this->memberModel->findByUserId($_SESSION['user_id'] ?? 0);
+            $registrationPaid = $member && $this->paymentModel->hasPaidRegistrationFee((int)$member['id']);
+
+            if (!$registrationPaid) {
+                $_SESSION['onboarding_skipped'] = true;
+                $_SESSION['info'] = 'You are in limited access mode. Pay the KES ' . number_format(defined('REGISTRATION_FEE') ? REGISTRATION_FEE : 200) . ' registration fee to become an active SHENA member and access member services.';
+                echo json_encode(['success' => true, 'limited' => true]);
+                return;
+            }
+
+            $this->paymentModel->activateMemberAfterRegistrationPayment((int)$member['id']);
+
+            // Send personalised welcome SMS only once after confirmed registration payment
             if (!empty($_SESSION['is_first_login'])) {
                 try {
                     $userId = (int) ($_SESSION['user_id'] ?? 0);
@@ -543,6 +551,7 @@ class MemberController extends BaseController
             }
 
             unset($_SESSION['is_first_login']);
+            unset($_SESSION['onboarding_skipped']);
             echo json_encode(['success' => true]);
         } catch (Exception $e) {
             error_log('dismissOnboarding error: ' . $e->getMessage());
@@ -559,9 +568,13 @@ class MemberController extends BaseController
                 echo json_encode(['paid' => false]);
                 return;
             }
-            // Member is active = registration fee confirmed
             if (($member['status'] ?? '') === 'active') {
-                echo json_encode(['paid' => true]);
+                echo json_encode([
+                    'paid' => true,
+                    'message' => 'Welcome to SHENA. Your membership is active.',
+                    'monthly_contribution' => (float)($member['monthly_contribution'] ?? 0),
+                    'member_number' => $member['member_number'] ?? ''
+                ]);
                 return;
             }
             // Also check for a completed registration payment record
@@ -572,7 +585,17 @@ class MemberController extends BaseController
                 'status'       => 'completed',
             ]);
             $totalPaid = array_sum(array_column($payments ?: [], 'amount'));
-            echo json_encode(['paid' => $totalPaid >= $regFee]);
+            $paid = $totalPaid >= $regFee;
+            if ($paid) {
+                $this->paymentModel->activateMemberAfterRegistrationPayment((int)$member['id']);
+                unset($_SESSION['onboarding_skipped']);
+            }
+            echo json_encode([
+                'paid' => $paid,
+                'message' => $paid ? 'Welcome to SHENA. Your membership is active.' : 'Registration fee not yet confirmed.',
+                'monthly_contribution' => (float)($member['monthly_contribution'] ?? 0),
+                'member_number' => $member['member_number'] ?? ''
+            ]);
         } catch (Exception $e) {
             error_log('checkRegistrationPayment error: ' . $e->getMessage());
             echo json_encode(['paid' => false]);
@@ -1068,6 +1091,10 @@ class MemberController extends BaseController
                 $this->redirect('/beneficiaries');
                 return;
             }
+
+            if (!$this->ensureActiveMembership($member, '/beneficiaries')) {
+                return;
+            }
             
             error_log('Member found: ' . $member['id']);
             
@@ -1288,6 +1315,10 @@ class MemberController extends BaseController
                 error_log('Claim submission failed: Member not found for user_id=' . $_SESSION['user_id']);
                 $_SESSION['error'] = 'Member profile not found.';
                 $this->redirect('/claims');
+                return;
+            }
+
+            if (!$this->ensureActiveMembership($member, '/claims')) {
                 return;
             }
             
@@ -1548,6 +1579,10 @@ class MemberController extends BaseController
                 $this->redirect('/beneficiaries');
                 return;
             }
+
+            if (!$this->ensureActiveMembership($member, '/beneficiaries')) {
+                return;
+            }
             
             $beneficiaryId = (int)($_POST['beneficiary_id'] ?? 0);
             
@@ -1594,6 +1629,10 @@ class MemberController extends BaseController
             if (!$member) {
                 $_SESSION['error'] = 'Member profile not found.';
                 $this->redirect('/beneficiaries');
+                return;
+            }
+
+            if (!$this->ensureActiveMembership($member, '/beneficiaries')) {
                 return;
             }
             
@@ -1714,6 +1753,13 @@ class MemberController extends BaseController
         
         if (!$member) {
             $this->json(['error' => 'Member not found'], 404);
+            return;
+        }
+
+        if (!$this->isActiveMember($member)) {
+            $this->json([
+                'error' => 'Please pay the KES ' . number_format(defined('REGISTRATION_FEE') ? REGISTRATION_FEE : 200) . ' registration fee first to become an active SHENA member before using this service.'
+            ], 403);
             return;
         }
         
@@ -2339,5 +2385,30 @@ class MemberController extends BaseController
 
         $_SESSION['success'] = 'Your support request has been submitted successfully. Our team will get back to you soon.';
         $this->redirect('/member/support');
+    }
+
+    private function isActiveMember(array $member): bool
+    {
+        if (($member['status'] ?? '') === 'active') {
+            return true;
+        }
+
+        if (!empty($member['id']) && $this->paymentModel->hasPaidRegistrationFee((int)$member['id'])) {
+            $this->paymentModel->activateMemberAfterRegistrationPayment((int)$member['id']);
+            return true;
+        }
+
+        return false;
+    }
+
+    private function ensureActiveMembership(array $member, string $redirectTo): bool
+    {
+        if ($this->isActiveMember($member)) {
+            return true;
+        }
+
+        $_SESSION['error'] = 'Please pay the KES ' . number_format(defined('REGISTRATION_FEE') ? REGISTRATION_FEE : 200) . ' registration fee first to become an active SHENA member before using this service.';
+        $this->redirect($redirectTo);
+        return false;
     }
 }

@@ -1162,7 +1162,7 @@ $pending_approvals = $pending_approvals ?? [];
                                     </div>
                                 </div>
                             </td>
-                            <td><?php echo htmlspecialchars($member['national_id'] ?? 'N/A'); ?></td>
+                            <td><?php echo htmlspecialchars($member['id_number'] ?? $member['national_id'] ?? 'N/A'); ?></td>
                             <td>
                                 <span class="package-badge"><?php echo htmlspecialchars($member['package'] ?? 'Standard'); ?></span>
                             </td>
@@ -1328,24 +1328,62 @@ function resetFilters() {
     window.location.href = '/admin/members';
 }
 
-// Bulk approve
+// Bulk approve - IMPLEMENTED
 function bulkApprove() {
     ShenaApp.confirmAction(
         'Approve all pending members in this view?',
-        function() {
-            ShenaApp.showNotification('Bulk approval feature coming soon', 'info');
+        async function() {
+            try {
+                const response = await fetch('/admin-api/members/bulk-approve', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    ShenaApp.showNotification(data.message || `Successfully approved ${data.approved_count || 0} members`, 'success');
+                    setTimeout(() => window.location.reload(), 1500);
+                } else {
+                    ShenaApp.showNotification(data.message || 'Failed to approve members', 'error');
+                }
+            } catch (e) {
+                ShenaApp.showNotification('Error: ' + e.message, 'error');
+            }
         },
         null,
         { type: 'primary', title: 'Bulk Approval' }
     );
 }
 
-// Bulk reactivate
+// Bulk reactivate - IMPLEMENTED
 function bulkReactivate() {
     ShenaApp.confirmAction(
         'Reactivate selected suspended members?',
-        function() {
-            ShenaApp.showNotification('Bulk reactivation feature coming soon', 'info');
+        async function() {
+            try {
+                const response = await fetch('/admin-api/members/bulk-reactivate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    ShenaApp.showNotification(data.message || `Successfully reactivated ${data.reactivated_count || 0} members`, 'success');
+                    setTimeout(() => window.location.reload(), 1500);
+                } else {
+                    ShenaApp.showNotification(data.message || 'Failed to reactivate members', 'error');
+                }
+            } catch (e) {
+                ShenaApp.showNotification('Error: ' + e.message, 'error');
+            }
         },
         null,
         { type: 'warning', title: 'Reactivate Members' }

@@ -82,6 +82,12 @@ class Database
         $stmt = $this->query($sql, $params);
         return $stmt->fetchAll();
     }
+
+    public function fetchColumn($sql, $params = [], $column = 0)
+    {
+        $stmt = $this->query($sql, $params);
+        return $stmt->fetchColumn($column);
+    }
     
     public function insert($table, $data)
     {

@@ -163,19 +163,17 @@ try {
         if ($payment) {
             $processLog .= "  Payment Record Found: ID {$payment['id']}\n";
             
-            // Update payment record
+            $paymentModel->confirmPayment($payment['id'], $mpesaReceiptNumber);
             $updated = $db->execute(
-                "UPDATE payments SET 
-                    status = 'completed',
-                    mpesa_receipt_number = :receipt,
+                "UPDATE payments SET
                     transaction_date = :trans_date,
+                    payment_date = :trans_date,
                     sender_phone = :phone,
                     reconciliation_status = 'matched',
                     auto_matched = 1,
                     reconciled_at = NOW()
-                WHERE id = :id",
+                 WHERE id = :id",
                 [
-                    'receipt' => $mpesaReceiptNumber,
                     'trans_date' => $transactionDate,
                     'phone' => $phoneNumber,
                     'id' => $payment['id']

@@ -61,7 +61,11 @@ document.getElementById('setPasswordForm')?.addEventListener('submit', function(
     var cpw = document.getElementById('confirm_password').value;
     if (pw !== cpw) {
         e.preventDefault();
-        alert('Passwords do not match. Please try again.');
+        if (window.ShenaApp && typeof ShenaApp.alert === 'function') {
+            ShenaApp.alert('Passwords do not match. Please try again.', 'warning');
+        } else {
+            console.warn('Passwords do not match. Please try again.');
+        }
         document.getElementById('confirm_password').focus();
     }
 });

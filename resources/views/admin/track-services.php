@@ -274,11 +274,15 @@
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const message = <?php echo json_encode($_SESSION['success']); ?>;
+            if (window.ShenaApp && typeof ShenaApp.alert === 'function') {
+                ShenaApp.alert(message, 'success');
+                return;
+            }
             if (window.ShenaApp && typeof ShenaApp.showNotification === 'function') {
                 ShenaApp.showNotification(message, 'success', 5000);
-            } else {
-                alert(message);
+                return;
             }
+            console.warn(message);
         });
     </script>
     <?php unset($_SESSION['success']); ?>

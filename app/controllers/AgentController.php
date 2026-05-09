@@ -195,65 +195,116 @@ class AgentController extends BaseController
         if (!empty($errors)) {
             $_SESSION['old_input'] = $_POST;
             $_SESSION['error'] = 'Please correct the following errors: ' . implode(', ', $errors);
+            if (isset($errors['national_id']) || isset($errors['first_name']) || isset($errors['last_name'])) {
+                $_SESSION['error_step'] = 1;
+            } elseif (isset($errors['phone']) || isset($errors['email'])) {
+                $_SESSION['error_step'] = 2;
+            } elseif (isset($errors['password'])) {
+                $_SESSION['error_step'] = 3;
+            } elseif (isset($errors['commission_rate'])) {
+                $_SESSION['error_step'] = 4;
+            }
             redirect('/admin/agents/create');
             return;
         }
         
+        $nationalId = $this->sanitizeInput($_POST['national_id'] ?? '');
+        $email = $this->sanitizeInput($_POST['email'] ?? '');
+        $phoneRaw = $this->sanitizeInput($_POST['phone'] ?? '');
+
         // Check if agent already exists
-        if ($this->agentModel->existsByNationalId($_POST['national_id'])) {
+        if ($this->agentModel->existsByNationalId($nationalId)) {
             $_SESSION['error'] = 'An agent with this National ID already exists in the system.';
+            $_SESSION['old_input'] = $_POST;
+            $_SESSION['error_step'] = 1;
             redirect('/admin/agents/create');
             return;
         }
         
         // Check if email already exists
-        if ($this->agentModel->existsByEmail($_POST['email'])) {
+        if ($this->agentModel->existsByEmail($email)) {
             $_SESSION['error'] = 'An agent with this email address already exists in the system.';
+            $_SESSION['old_input'] = $_POST;
+            $_SESSION['error_step'] = 2;
             redirect('/admin/agents/create');
             return;
         }
 
         // Check if phone already exists in users table
-        $formattedPhone = formatKenyanPhone($_POST['phone']);
+        $formattedPhone = formatKenyanPhone($phoneRaw);
         if ($this->userModel->findByPhone($formattedPhone)) {
             $_SESSION['error'] = 'A user with this phone number already exists in the system.';
+            $_SESSION['old_input'] = $_POST;
+            $_SESSION['error_step'] = 2;
             redirect('/admin/agents/create');
             return;
         }
 
-        // Create user account
-        $userData = [
-            'first_name' => $_POST['first_name'],
-            'last_name'  => $_POST['last_name'],
-            'email'      => $_POST['email'],
-            'phone'      => $formattedPhone,
-            'password'   => password_hash($_POST['password'], PASSWORD_DEFAULT),
-            'role'       => 'agent',
-            'status'     => 'active',
-        ];
-        
-        $userId = $this->userModel->create($userData);
-        
-        if (!$userId) {
-            $_SESSION['error'] = 'Failed to create user account. Please try again or contact support.';
+        try {
+            $this->db->getConnection()->beginTransaction();
+
+            // Create user account
+            $userData = [
+                'first_name' => $this->sanitizeInput($_POST['first_name'] ?? ''),
+                'last_name'  => $this->sanitizeInput($_POST['last_name'] ?? ''),
+                'email'      => $email,
+                'phone'      => $formattedPhone,
+                'password'   => password_hash($_POST['password'], PASSWORD_DEFAULT),
+                'role'       => 'agent',
+                'status'     => 'active',
+            ];
+            
+            $userId = $this->userModel->create($userData);
+            
+            if (!$userId) {
+                throw new Exception('Failed to create user account.');
+            }
+            
+            // Create agent profile
+            $agentData = [
+                'user_id' => $userId,
+                'first_name' => $userData['first_name'],
+                'last_name' => $userData['last_name'],
+                'national_id' => $nationalId,
+                'phone' => $formattedPhone,
+                'email' => $email,
+                'address' => $this->sanitizeInput($_POST['address'] ?? ''),
+                'county' => $this->sanitizeInput($_POST['county'] ?? ''),
+                'commission_rate' => $_POST['commission_rate'] ?? 10.00
+            ];
+            
+            $agentId = $this->agentModel->createAgent($agentData);
+            if (!$agentId) {
+                throw new Exception('Failed to create agent profile.');
+            }
+
+            $this->db->getConnection()->commit();
+        } catch (Exception $e) {
+            if ($this->db->getConnection()->inTransaction()) {
+                $this->db->getConnection()->rollBack();
+            }
+            error_log('Agent registration error: ' . $e->getMessage());
+            $_SESSION['old_input'] = $_POST;
+            $message = $e->getMessage();
+            if (stripos($message, 'Duplicate entry') !== false || stripos($message, 'SQLSTATE[23000]') !== false) {
+                if (stripos($message, 'national_id') !== false) {
+                    $_SESSION['error'] = 'An agent with this National ID already exists in the system.';
+                    $_SESSION['error_step'] = 1;
+                } elseif (stripos($message, 'phone') !== false) {
+                    $_SESSION['error'] = 'A user or agent with this phone number already exists in the system.';
+                    $_SESSION['error_step'] = 2;
+                } elseif (stripos($message, 'email') !== false) {
+                    $_SESSION['error'] = 'An agent or user with this email address already exists in the system.';
+                    $_SESSION['error_step'] = 2;
+                } else {
+                    $_SESSION['error'] = 'A unique field already exists. Please check National ID, phone, and email.';
+                }
+            } else {
+                $_SESSION['error'] = 'Failed to create agent account. Please try again.';
+            }
             redirect('/admin/agents/create');
             return;
         }
-        
-        // Create agent profile
-        $agentData = [
-            'user_id' => $userId,
-            'first_name' => $_POST['first_name'],
-            'last_name' => $_POST['last_name'],
-            'national_id' => $_POST['national_id'],
-            'phone' => $_POST['phone'],
-            'email' => $_POST['email'],
-            'address' => $_POST['address'] ?? '',
-            'county' => $_POST['county'] ?? '',
-            'commission_rate' => $_POST['commission_rate'] ?? 10.00
-        ];
-        
-        $agentId = $this->agentModel->createAgent($agentData);
         
         if ($agentId) {
             // Get the complete agent details
@@ -274,9 +325,10 @@ class AgentController extends BaseController
                 $_SESSION['success'] = 'Agent registered successfully! However, the welcome email could not be sent. Please provide login credentials manually.';
             }
             
-            redirect('/admin/agents/view/' . $agentId);
+            redirect('/admin/agents');
         } else {
             $_SESSION['error'] = 'Failed to create agent profile. Please try again.';
+            $_SESSION['old_input'] = $_POST;
             redirect('/admin/agents/create');
         }
     }

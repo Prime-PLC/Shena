@@ -135,6 +135,8 @@ class Router
         $this->addRoute('POST', '/admin/member/deactivate', 'AdminController@deactivateMember');
         $this->addRoute('POST', '/admin/member/{id}/activate', 'AdminController@activateMember');
         $this->addRoute('POST', '/admin/member/{id}/deactivate', 'AdminController@deactivateMember');
+        $this->addRoute('POST', '/admin-api/members/bulk-approve', 'AdminController@bulkApproveMembers');
+        $this->addRoute('POST', '/admin-api/members/bulk-reactivate', 'AdminController@bulkReactivateMembers');
         $this->addRoute('GET', '/admin/payments', 'AdminController@payments');
         $this->addRoute('GET', '/admin/payments/view/{id}', 'AdminController@viewPayment');
         $this->addRoute('POST', '/admin/payments/verify', 'PaymentController@verifyAdminPayment');

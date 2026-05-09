@@ -630,6 +630,7 @@ class Member extends BaseModel
      */
     public function findByNationalId($nationalId)
     {
+        $nationalId = preg_replace('/[^A-Za-z0-9]/', '', (string)$nationalId);
         $sql = "SELECT m.*, u.email, u.phone, u.first_name, u.last_name
                 FROM {$this->table} m
                 JOIN users u ON m.user_id = u.id
@@ -963,6 +964,7 @@ class Member extends BaseModel
      */
     public function findByIdNumber($idNumber)
     {
+        $idNumber = preg_replace('/[^A-Za-z0-9]/', '', (string)$idNumber);
         $sql = "SELECT * FROM {$this->table} WHERE id_number = :id_number LIMIT 1";
         return $this->db->fetch($sql, ['id_number' => $idNumber]);
     }

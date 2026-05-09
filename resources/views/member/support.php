@@ -327,11 +327,15 @@ textarea.form-control {
                 ];
 
                 flashMessages.forEach(function(flash) {
+                    if (window.ShenaApp && typeof ShenaApp.alert === 'function') {
+                        ShenaApp.alert(flash.message, flash.type);
+                        return;
+                    }
                     if (window.ShenaApp && typeof ShenaApp.showNotification === 'function') {
                         ShenaApp.showNotification(flash.message, flash.type, 5000);
                         return;
                     }
-                    alert(flash.message);
+                    console.warn(flash.message);
                 });
             });
         </script>

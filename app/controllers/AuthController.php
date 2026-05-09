@@ -623,6 +623,7 @@ class AuthController extends BaseController
                     'user_id' => $userId,
                     'member_number' => $memberNumber,
                     'id_number' => $memberData['id_number'] ?? '',
+                    'id_number' => $memberData['id_number'] ?? '',
                     'date_of_birth' => $memberData['date_of_birth'] ?? null,
                     'gender' => $memberData['gender'] ?? 'male',
                     'address' => $memberData['address'] ?? '',
@@ -1023,7 +1024,7 @@ class AuthController extends BaseController
                 $response = $paymentService->initiateSTKPush(
                     $phoneNumber,
                     $registrationData['amount'],
-                    $registrationData['member_number'],
+                    $registrationData['id_number'] ?? $registrationData['member_number'],
                     'Registration Fee'
                 );
                 
@@ -1055,7 +1056,7 @@ class AuthController extends BaseController
                     'success' => true,
                     'message' => 'Please complete payment via M-Pesa paybill.',
                     'paybill' => MPESA_BUSINESS_SHORTCODE,
-                    'account' => $registrationData['member_number']
+                    'account' => $registrationData['id_number'] ?? $registrationData['member_number']
                 ]);
             }
             

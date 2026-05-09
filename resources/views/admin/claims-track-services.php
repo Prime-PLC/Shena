@@ -483,18 +483,22 @@ require_once __DIR__ . '/../layouts/admin-header.php';
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             <?php if (isset($_SESSION['success'])): ?>
-                if (window.ShenaApp && typeof ShenaApp.showNotification === 'function') {
+                if (window.ShenaApp && typeof ShenaApp.alert === 'function') {
+                    ShenaApp.alert(<?php echo json_encode($_SESSION['success']); ?>, 'success');
+                } else if (window.ShenaApp && typeof ShenaApp.showNotification === 'function') {
                     ShenaApp.showNotification(<?php echo json_encode($_SESSION['success']); ?>, 'success', 5000);
                 } else {
-                    alert(<?php echo json_encode($_SESSION['success']); ?>);
+                    console.warn(<?php echo json_encode($_SESSION['success']); ?>);
                 }
                 <?php unset($_SESSION['success']); ?>
             <?php endif; ?>
             <?php if (isset($_SESSION['error'])): ?>
-                if (window.ShenaApp && typeof ShenaApp.showNotification === 'function') {
+                if (window.ShenaApp && typeof ShenaApp.alert === 'function') {
+                    ShenaApp.alert(<?php echo json_encode($_SESSION['error']); ?>, 'error');
+                } else if (window.ShenaApp && typeof ShenaApp.showNotification === 'function') {
                     ShenaApp.showNotification(<?php echo json_encode($_SESSION['error']); ?>, 'error', 5000);
                 } else {
-                    alert(<?php echo json_encode($_SESSION['error']); ?>);
+                    console.warn(<?php echo json_encode($_SESSION['error']); ?>);
                 }
                 <?php unset($_SESSION['error']); ?>
             <?php endif; ?>

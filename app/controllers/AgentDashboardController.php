@@ -338,7 +338,8 @@ class AgentDashboardController extends BaseController
             if (!empty($emailInput)) {
                 $emailCheck = $this->db->fetch('SELECT id FROM users WHERE email = :email', ['email' => $emailInput]);
                 if ($emailCheck) {
-                    $_SESSION['error'] = 'Email already registered.';
+                    $_SESSION['error'] = 'This email address is already registered. Use a different email or leave it blank if the member has no email.';
+                    $_SESSION['error_step'] = 2;
                     $this->redirect('/agent/register-member');
                     return;
                 }
@@ -348,7 +349,8 @@ class AgentDashboardController extends BaseController
             $phoneInput = formatKenyanPhone($this->sanitizeInput($_POST['phone'] ?? ''));
             $phoneCheck = $this->db->fetch('SELECT id FROM users WHERE phone = :phone', ['phone' => $phoneInput]);
             if ($phoneCheck) {
-                $_SESSION['error'] = 'Phone number already registered.';
+                $_SESSION['error'] = 'This phone number is already registered. Use a different phone number or update the existing member.';
+                $_SESSION['error_step'] = 2;
                 $this->redirect('/agent/register-member');
                 return;
             }
@@ -358,13 +360,16 @@ class AgentDashboardController extends BaseController
             if (!empty($idNumberInput)) {
                 $existingMember = $this->db->fetch('SELECT id FROM members WHERE id_number = :id_number', ['id_number' => $idNumberInput]);
                 if ($existingMember) {
-                    $_SESSION['error'] = 'National ID number is already registered.';
+                    $_SESSION['error'] = 'This National ID is already registered. Search your members list before creating a new record.';
+                    $_SESSION['error_step'] = 1;
                     // Keep form data for repopulation
                     $_SESSION['form_data'] = $_SESSION['form_data'] ?? [];
                     $this->redirect('/agent/register-member');
                     return;
                 }
             }
+
+            $this->db->getConnection()->beginTransaction();
 
             // Create user record
             $firstName = $this->sanitizeInput($_POST['first_name']);
@@ -436,6 +441,8 @@ class AgentDashboardController extends BaseController
             // Grab member id for linking and notifications
             $memberId = (int)$this->db->getConnection()->lastInsertId();
 
+            $this->db->getConnection()->commit();
+
             // Send in-app notification to admins about the new member
             try {
                 if (class_exists('InAppNotificationService')) {
@@ -452,7 +459,8 @@ class AgentDashboardController extends BaseController
                 error_log('Failed to send in-app notification: ' . $e->getMessage());
             }
 
-            $_SESSION['success'] = 'Member registered successfully! Commission will be processed upon payment.';
+            $_SESSION['flash_message'] = 'Member registered successfully! Commission will be processed upon payment.';
+            $_SESSION['flash_type'] = 'success';
             // Clear form data on success
             unset($_SESSION['form_data']);
 
@@ -476,24 +484,30 @@ class AgentDashboardController extends BaseController
                 error_log('Agent register invite SMS failed: ' . $e->getMessage());
             }
 
-            // Show a brief confirmation page then redirect back to members list
-            $data = [
-                'title' => 'Member Registered',
-                'message' => $_SESSION['success'],
-                'redirect_url' => '/agent/members',
-                'redirect_delay' => 3
-            ];
-
-            $this->view('agent.registration-success', $data);
+            $this->redirect('/agent/members');
             return;
 
         } catch (Exception $e) {
+            if ($this->db->getConnection()->inTransaction()) {
+                $this->db->getConnection()->rollBack();
+            }
             error_log('Member registration error: ' . $e->getMessage());
             $msg = 'Failed to register member. Please try again.';
             // If this was a duplicate key error, give a clearer message
             $errText = $e->getMessage();
             if (stripos($errText, 'Duplicate entry') !== false || stripos($errText, 'SQLSTATE[23000]') !== false) {
-                $msg = 'National ID number already exists. Please verify the ID.';
+                if (stripos($errText, 'id_number') !== false) {
+                    $msg = 'This National ID is already registered. Search your members list before creating a new record.';
+                    $_SESSION['error_step'] = 1;
+                } elseif (stripos($errText, 'phone') !== false) {
+                    $msg = 'This phone number is already registered. Use a different phone number or update the existing member.';
+                    $_SESSION['error_step'] = 2;
+                } elseif (stripos($errText, 'email') !== false) {
+                    $msg = 'This email address is already registered. Use a different email or leave it blank.';
+                    $_SESSION['error_step'] = 2;
+                } else {
+                    $msg = 'A unique field already exists. Please check National ID, phone, and email.';
+                }
             }
             $_SESSION['error'] = $msg;
             // Keep form data for repopulation

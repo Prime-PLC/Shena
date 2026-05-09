@@ -357,6 +357,7 @@ class AdminController extends BaseController
         // Handle POST - process registration
         try {
             $this->validateCsrf();
+            $_SESSION['form_data'] = $_POST;
 
             // Collect and sanitize inputs
             $firstName = $this->sanitizeInput($_POST['first_name'] ?? '');
@@ -367,6 +368,9 @@ class AdminController extends BaseController
             $dateOfBirth = $this->sanitizeInput($_POST['date_of_birth'] ?? '');
             $gender = $this->sanitizeInput($_POST['gender'] ?? 'male');
             $address = $this->sanitizeInput($_POST['address'] ?? '');
+            $nextOfKin = $this->sanitizeInput($_POST['next_of_kin_name'] ?? '');
+            $nextOfKinRelationship = $this->sanitizeInput($_POST['next_of_kin_relationship'] ?? '');
+            $nextOfKinPhoneRaw = $this->sanitizeInput($_POST['next_of_kin_phone'] ?? '');
             $packageKey = $this->sanitizeInput($_POST['package'] ?? 'individual_below_70');
             $corporateCoupleCount = max(0, (int)($_POST['corporate_couple_count'] ?? 0));
             $password = $_POST['password'] ?? null;
@@ -374,6 +378,7 @@ class AdminController extends BaseController
             // Basic validation
             if (empty($firstName) || empty($lastName) || empty($phoneRaw) || empty($idNumber) || empty($dateOfBirth)) {
                 $_SESSION['error'] = 'Please fill in all required fields.';
+                $_SESSION['error_step'] = 1;
                 $this->redirect('/admin/members/register');
                 return;
             }
@@ -382,6 +387,7 @@ class AdminController extends BaseController
             $phone = formatKenyanPhone($phoneRaw);
             if (!$phone) {
                 $_SESSION['error'] = 'Invalid phone number format.';
+                $_SESSION['error_step'] = 2;
                 $this->redirect('/admin/members/register');
                 return;
             }
@@ -389,13 +395,15 @@ class AdminController extends BaseController
             // Check uniqueness: phone and ID
             $exists = $this->userModel->findByPhone($phone);
             if ($exists) {
-                $_SESSION['error'] = 'Phone number already registered.';
+                $_SESSION['error'] = 'This phone number is already registered. Use a different phone number or search the members table to update the existing record.';
+                $_SESSION['error_step'] = 2;
                 $this->redirect('/admin/members/register');
                 return;
             }
 
             if (!empty($email) && $this->userModel->findByEmail($email)) {
-                $_SESSION['error'] = 'Email already registered.';
+                $_SESSION['error'] = 'This email address is already registered. Use a different email or leave it blank if the member has no email.';
+                $_SESSION['error_step'] = 2;
                 $this->redirect('/admin/members/register');
                 return;
             }
@@ -403,7 +411,8 @@ class AdminController extends BaseController
             if (!empty($idNumber)) {
                 $existing = $this->memberModel->findByNationalId($idNumber);
                 if ($existing) {
-                    $_SESSION['error'] = 'National ID already registered.';
+                    $_SESSION['error'] = 'This National ID is already registered. Search the members table before creating a new record.';
+                    $_SESSION['error_step'] = 1;
                     $this->redirect('/admin/members/register');
                     return;
                 }
@@ -415,6 +424,7 @@ class AdminController extends BaseController
             } else {
                 if (strlen($password) < 8) {
                     $_SESSION['error'] = 'Password must be at least 8 characters.';
+                    $_SESSION['error_step'] = 1;
                     $this->redirect('/admin/members/register');
                     return;
                 }
@@ -441,6 +451,7 @@ class AdminController extends BaseController
             global $membership_packages;
             if (empty($membership_packages[$packageKey])) {
                 $_SESSION['error'] = 'Invalid package selected.';
+                $_SESSION['error_step'] = 3;
                 $this->db->getConnection()->rollBack();
                 $this->redirect('/admin/members/register');
                 return;
@@ -463,6 +474,9 @@ class AdminController extends BaseController
                 'date_of_birth' => $dateOfBirth,
                 'gender' => $gender,
                 'address' => $address,
+                'next_of_kin' => $nextOfKin ?: null,
+                'next_of_kin_relationship' => $nextOfKinRelationship ?: null,
+                'next_of_kin_phone' => $nextOfKinPhoneRaw ? formatKenyanPhone($nextOfKinPhoneRaw) : null,
                 'package' => $normalizedPackage,
                 'package_key' => $packageKey,
                 'corporate_couple_count' => $corporateCoupleCount,
@@ -505,6 +519,7 @@ class AdminController extends BaseController
             }
 
             $_SESSION['success'] = 'Member registered successfully.';
+            unset($_SESSION['form_data']);
             $this->redirect('/admin/members');
 
         } catch (Throwable $e) {
@@ -512,7 +527,23 @@ class AdminController extends BaseController
                 $this->db->getConnection()->rollBack();
             }
             error_log('Admin register error: ' . $e->getMessage());
-            $_SESSION['error'] = 'Failed to register member: ' . $e->getMessage();
+            $message = $e->getMessage();
+            if (stripos($message, 'Duplicate entry') !== false || stripos($message, 'SQLSTATE[23000]') !== false) {
+                if (stripos($message, 'id_number') !== false) {
+                    $_SESSION['error'] = 'This National ID is already registered. Search the members table before creating a new record.';
+                    $_SESSION['error_step'] = 1;
+                } elseif (stripos($message, 'phone') !== false) {
+                    $_SESSION['error'] = 'This phone number is already registered. Use a different phone number or update the existing record.';
+                    $_SESSION['error_step'] = 2;
+                } elseif (stripos($message, 'email') !== false) {
+                    $_SESSION['error'] = 'This email address is already registered. Use a different email or leave it blank.';
+                    $_SESSION['error_step'] = 2;
+                } else {
+                    $_SESSION['error'] = 'A unique field already exists in the database. Please check National ID, phone, and email.';
+                }
+            } else {
+                $_SESSION['error'] = 'Failed to register member: ' . $message;
+            }
             $this->redirect('/admin/members/register');
         }
     }
@@ -579,7 +610,7 @@ class AdminController extends BaseController
         $this->redirect('/admin/members');
     }
 
-    /**
+/**
      * Deactivate Member
      */
     public function deactivateMember($id = null)
@@ -606,6 +637,200 @@ class AdminController extends BaseController
         }
         
         $this->redirect('/admin/members');
+    }
+
+    /**
+     * Bulk Approve Members - Activate multiple pending members at once
+     * FIXED: Implemented previously unimplemented bulk approval feature
+     */
+    public function bulkApproveMembers()
+    {
+        $this->requireAdminAccess();
+        
+        header('Content-Type: application/json');
+        
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method']);
+            exit();
+        }
+        
+        try {
+            $input = json_decode(file_get_contents('php://input'), true);
+            $memberIds = $input['member_ids'] ?? [];
+            
+            if (empty($memberIds)) {
+                $pendingMembers = $this->memberModel->getPendingMembers();
+                $memberIds = array_column($pendingMembers ?: [], 'id');
+                if (empty($memberIds)) {
+                    echo json_encode(['success' => false, 'message' => 'No pending members found']);
+                    exit();
+                }
+            }
+            
+            $paymentModel = new Payment();
+            $registrationFeeRequired = defined('REGISTRATION_FEE') ? REGISTRATION_FEE : 200;
+            $activatedCount = 0;
+            $skippedCount = 0;
+            $errors = [];
+            
+            $db = Database::getInstance()->getConnection();
+            $db->beginTransaction();
+            
+            foreach ($memberIds as $memberId) {
+                try {
+                    $member = $this->memberModel->find($memberId);
+                    
+                    if (!$member) {
+                        $errors[] = "Member ID {$memberId} not found";
+                        $skippedCount++;
+                        continue;
+                    }
+                    
+                    // Check if registration fee has been paid
+                    $registrationPayments = $paymentModel->findAll([
+                        'member_id' => $memberId,
+                        'payment_type' => 'registration',
+                        'status' => 'completed'
+                    ]);
+                    
+                    $totalRegistrationPaid = 0;
+                    foreach ($registrationPayments as $payment) {
+                        $totalRegistrationPaid += $payment['amount'];
+                    }
+                    
+                    if ($totalRegistrationPaid < $registrationFeeRequired) {
+                        $errors[] = "Member {$member['member_number']}: Registration fee not paid";
+                        $skippedCount++;
+                        continue;
+                    }
+                    
+                    // Activate member
+                    $this->memberModel->update($memberId, [
+                        'status' => 'active',
+                        'coverage_ends' => date('Y-m-d', strtotime('+1 year'))
+                    ]);
+                    
+                    // Update user status
+                    $this->userModel->update($member['user_id'], ['status' => 'active']);
+                    
+                    $activatedCount++;
+                    
+                } catch (Exception $e) {
+                    $errors[] = "Member ID {$memberId}: " . $e->getMessage();
+                    $skippedCount++;
+                }
+            }
+            
+            $db->commit();
+            
+            echo json_encode([
+                'success' => true,
+                'message' => "{$activatedCount} members activated, {$skippedCount} skipped",
+                'activated_count' => $activatedCount,
+                'skipped_count' => $skippedCount,
+                'errors' => $errors
+            ]);
+            exit();
+            
+        } catch (Exception $e) {
+            $db = Database::getInstance()->getConnection();
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            error_log('Bulk approve error: ' . $e->getMessage());
+            echo json_encode(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
+            exit();
+        }
+    }
+
+    /**
+     * Bulk Reactivate Members - Restore suspended members
+     * FIXED: Implemented previously unimplemented bulk reactivation feature
+     */
+    public function bulkReactivateMembers()
+    {
+        $this->requireAdminAccess();
+        
+        header('Content-Type: application/json');
+        
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method']);
+            exit();
+        }
+        
+        try {
+            $input = json_decode(file_get_contents('php://input'), true);
+            $memberIds = $input['member_ids'] ?? [];
+            
+            if (empty($memberIds)) {
+                $memberIds = array_column($this->memberModel->getInactiveMembersList() ?: [], 'id');
+                if (empty($memberIds)) {
+                    echo json_encode(['success' => false, 'message' => 'No inactive members found']);
+                    exit();
+                }
+            }
+            
+            $reactivatedCount = 0;
+            $skippedCount = 0;
+            $errors = [];
+            $paymentModel = new Payment();
+            
+            $db = Database::getInstance()->getConnection();
+            $db->beginTransaction();
+            
+            foreach ($memberIds as $memberId) {
+                try {
+                    $member = $this->memberModel->find($memberId);
+                    
+                    if (!$member) {
+                        $errors[] = "Member ID {$memberId} not found";
+                        $skippedCount++;
+                        continue;
+                    }
+
+                    if (!$paymentModel->hasPaidRegistrationFee($memberId)) {
+                        $errors[] = "Member {$member['member_number']}: Registration fee not paid";
+                        $skippedCount++;
+                        continue;
+                    }
+                    
+                    // Reactivate member
+                    $this->memberModel->update($memberId, [
+                        'status' => 'active',
+                        'coverage_ends' => date('Y-m-d', strtotime('+1 year'))
+                    ]);
+                    
+                    // Update user status
+                    $this->userModel->update($member['user_id'], ['status' => 'active']);
+                    
+                    $reactivatedCount++;
+                    
+                } catch (Exception $e) {
+                    $errors[] = "Member ID {$memberId}: " . $e->getMessage();
+                    $skippedCount++;
+                }
+            }
+            
+            $db->commit();
+            
+            echo json_encode([
+                'success' => true,
+                'message' => "{$reactivatedCount} members reactivated, {$skippedCount} skipped",
+                'reactivated_count' => $reactivatedCount,
+                'skipped_count' => $skippedCount,
+                'errors' => $errors
+            ]);
+            exit();
+            
+        } catch (Exception $e) {
+            $db = Database::getInstance()->getConnection();
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            error_log('Bulk reactivate error: ' . $e->getMessage());
+            echo json_encode(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
+            exit();
+        }
     }
 
     /**

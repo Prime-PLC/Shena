@@ -865,6 +865,7 @@ $missingFields = $missing_profile_fields ?? [];
     const MEMBER_PHONE = <?php echo json_encode((string)($member['phone'] ?? '')); ?>;
     const REG_FEE    = <?php echo json_encode(defined('REGISTRATION_FEE') ? (float)REGISTRATION_FEE : 200.0); ?>;
     const HAS_PAID_REGISTRATION = <?php echo json_encode(($member['status'] ?? 'inactive') === 'active'); ?>;
+    let paymentPollTimer = null;
 
     const tierMap = {
         individual: {
@@ -1165,6 +1166,11 @@ $missingFields = $missing_profile_fields ?? [];
                 btnNext.innerHTML = 'Finish <i class="fas fa-check ms-1"></i>';
                 return;
             }
+            showMsg(
+                '<strong>' + (pd.message || 'Welcome to SHENA. Your membership is active.') + '</strong><br>' +
+                'Monthly contribution: KES ' + Number(pd.monthly_contribution || 0).toLocaleString() + '. Member No: ' + (pd.member_number || ''),
+                'success'
+            );
             dismissAndReload();
             return;
         }
@@ -1176,11 +1182,6 @@ $missingFields = $missing_profile_fields ?? [];
 
     btnBack.addEventListener('click', function () { clearMsg(); if (currentStep > 1) showStep(currentStep - 1); });
     btnSkip.addEventListener('click', function () {
-        if (!HAS_PAID_REGISTRATION) {
-            showMsg('Please complete your registration payment before skipping. Go to Step 4 to pay.', 'warning');
-            showStep(4);
-            return;
-        }
         dismissAndReload();
     });
 
@@ -1221,6 +1222,7 @@ $missingFields = $missing_profile_fields ?? [];
             if (data.success) {
                 payStatus.innerHTML = '<span class="text-success"><i class="fas fa-check-circle me-1"></i>' + (data.message || 'STK Push sent! Check your phone for the M-Pesa prompt.') + '</span>';
                 payBtn.innerHTML = '<i class="fas fa-check me-1"></i> Prompt Sent';
+                startPaymentPolling();
             } else {
                 payStatus.innerHTML = '<span class="text-danger">' + (data.error || data.message || 'Payment failed. Please try again.') + '</span>';
                 payBtn.disabled = false;
@@ -1232,6 +1234,29 @@ $missingFields = $missing_profile_fields ?? [];
             payBtn.innerHTML = '<i class="fas fa-mobile-alt"></i> Pay with M-Pesa';
         }
     });
+
+    function startPaymentPolling() {
+        if (paymentPollTimer) clearInterval(paymentPollTimer);
+        paymentPollTimer = setInterval(async function () {
+            try {
+                var pr = await fetch('/member/onboarding/payment-status', {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                });
+                var pd = await pr.json();
+                if (pd.paid) {
+                    clearInterval(paymentPollTimer);
+                    paymentPollTimer = null;
+                    payStatus.innerHTML = '<span class="text-success"><i class="fas fa-check-circle me-1"></i> Payment confirmed. Welcome to SHENA.</span>';
+                    showMsg(
+                        '<strong>' + (pd.message || 'Welcome to SHENA. Your membership is active.') + '</strong><br>' +
+                        'Monthly contribution: KES ' + Number(pd.monthly_contribution || 0).toLocaleString() + '. Member No: ' + (pd.member_number || ''),
+                        'success'
+                    );
+                    setTimeout(dismissAndReload, 1600);
+                }
+            } catch (_) {}
+        }, 5000);
+    }
 
     /* ── Init ────────────────────────────────────────────────────────── */
     document.addEventListener('DOMContentLoaded', function () {

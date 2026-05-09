@@ -1,4 +1,9 @@
-<?php include_once __DIR__ . '/../layouts/admin-header.php'; ?>
+<?php
+$flashError = $_SESSION['error'] ?? '';
+$initialStep = (int)($_SESSION['error_step'] ?? 1);
+unset($_SESSION['error'], $_SESSION['error_step']);
+include_once __DIR__ . '/../layouts/admin-header.php';
+?>
 
 <style>
     /* Page Header */
@@ -53,6 +58,35 @@
         border: 1px solid #E5E7EB;
         margin: 0 auto;
         max-width: 1000px;
+    }
+
+    .form-stepper {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 10px;
+        margin-bottom: 28px;
+    }
+
+    .step-pill {
+        border: 1px solid #E5E7EB;
+        background: #F9FAFB;
+        color: #6B7280;
+        border-radius: 8px;
+        padding: 10px 12px;
+        font-size: 12px;
+        font-weight: 700;
+    }
+
+    .step-pill.active {
+        background: #F5F0FB;
+        border-color: #7F3D9E;
+        color: #4C1D95;
+    }
+
+    .step-pill.done {
+        background: #ECFDF5;
+        border-color: #10B981;
+        color: #065F46;
     }
 
     /* Section Headers */
@@ -223,6 +257,14 @@
         margin-bottom: 32px;
     }
 
+    .form-section[data-step] {
+        display: none;
+    }
+
+    .form-section[data-step].active {
+        display: block;
+    }
+
     .form-section:last-of-type {
         margin-bottom: 0;
     }
@@ -247,6 +289,10 @@
         .btn-submit {
             flex: 1;
         }
+
+        .form-stepper {
+            grid-template-columns: 1fr;
+        }
     }
 </style>
 
@@ -266,8 +312,16 @@
 <div class="form-card">
     <form method="POST" action="/admin/agents/store" id="agentForm">
         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
+        <div class="form-stepper" aria-label="Agent registration progress">
+            <div class="step-pill active" data-step-indicator="1">1. Personal</div>
+            <div class="step-pill" data-step-indicator="2">2. Contact</div>
+            <div class="step-pill" data-step-indicator="3">3. Account</div>
+            <div class="step-pill" data-step-indicator="4">4. Commission</div>
+            <div class="step-pill" data-step-indicator="5">5. Status</div>
+            <div class="step-pill" data-step-indicator="6">6. Notes</div>
+        </div>
         <!-- Personal Information Section -->
-        <div class="form-section">
+        <div class="form-section active" data-step="1">
             <div class="section-header">
                 <i class="fas fa-user"></i>
                 Personal Information
@@ -324,7 +378,7 @@
         </div>
 
         <!-- Contact Information Section -->
-        <div class="form-section">
+        <div class="form-section" data-step="2">
             <div class="section-header">
                 <i class="fas fa-address-card"></i>
                 Contact Information
@@ -374,7 +428,7 @@
         </div>
 
         <!-- Account Information Section -->
-        <div class="form-section">
+        <div class="form-section" data-step="3">
             <div class="section-header">
                 <i class="fas fa-key"></i>
                 Account Information
@@ -405,7 +459,7 @@
         </div>
 
         <!-- Commission Information Section -->
-        <div class="form-section">
+        <div class="form-section" data-step="4">
             <div class="section-header">
                 <i class="fas fa-percentage"></i>
                 Commission Information
@@ -448,7 +502,7 @@
         </div>
 
         <!-- Status Section -->
-        <div class="form-section">
+        <div class="form-section" data-step="5">
             <div class="section-header">
                 <i class="fas fa-toggle-on"></i>
                 Account Status
@@ -469,7 +523,7 @@
         </div>
 
         <!-- Additional Notes -->
-        <div class="form-section">
+        <div class="form-section" data-step="6">
             <div class="section-header">
                 <i class="fas fa-sticky-note"></i>
                 Additional Information
@@ -493,7 +547,13 @@
                 <button type="reset" class="btn-reset">
                     <i class="fas fa-undo"></i> Reset Form
                 </button>
-                <button type="submit" class="btn-submit">
+                <button type="button" class="btn-reset step-back" style="display:none;">
+                    <i class="fas fa-arrow-left"></i> Back
+                </button>
+                <button type="button" class="btn-submit step-next">
+                    Continue <i class="fas fa-arrow-right"></i>
+                </button>
+                <button type="submit" class="btn-submit step-submit" style="display:none;">
                     <i class="fas fa-save"></i> Register Agent
                 </button>
             </div>
@@ -506,6 +566,76 @@
 </div>
 
 <script>
+const agentForm = document.getElementById('agentForm');
+const agentSections = Array.from(agentForm.querySelectorAll('.form-section[data-step]'));
+const agentIndicators = Array.from(agentForm.querySelectorAll('[data-step-indicator]'));
+const agentBackBtn = agentForm.querySelector('.step-back');
+const agentNextBtn = agentForm.querySelector('.step-next');
+const agentSubmitBtn = agentForm.querySelector('.step-submit');
+let agentCurrentStep = 1;
+const agentInitialStep = <?php echo json_encode(max(1, min(6, $initialStep))); ?>;
+const agentFlashError = <?php echo json_encode($flashError); ?>;
+
+function showAgentFlash(message, type) {
+    if (!message) return;
+    const show = function () {
+        if (window.ShenaApp && typeof ShenaApp.alert === 'function') {
+            ShenaApp.alert(message, type);
+            return;
+        }
+        if (window.ShenaApp && typeof ShenaApp.showNotification === 'function') {
+            ShenaApp.showNotification(message, type, 7000);
+            return;
+        }
+        console.warn(message);
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', show, { once: true });
+    } else {
+        show();
+    }
+}
+
+function showAgentStep(step) {
+    agentCurrentStep = step;
+    agentSections.forEach(function (section) {
+        const isActive = Number(section.dataset.step) === step;
+        section.classList.toggle('active', isActive);
+        section.querySelectorAll('input, select, textarea').forEach(function (field) {
+            field.disabled = !isActive;
+        });
+    });
+    agentIndicators.forEach(function (indicator) {
+        const indicatorStep = Number(indicator.dataset.stepIndicator);
+        indicator.classList.toggle('active', indicatorStep === step);
+        indicator.classList.toggle('done', indicatorStep < step);
+    });
+    agentBackBtn.style.display = step > 1 ? '' : 'none';
+    agentNextBtn.style.display = step < agentSections.length ? '' : 'none';
+    agentSubmitBtn.style.display = step === agentSections.length ? '' : 'none';
+}
+
+function validateAgentStep() {
+    const section = agentForm.querySelector('.form-section[data-step="' + agentCurrentStep + '"]');
+    const fields = Array.from(section.querySelectorAll('input, select, textarea'));
+    for (const field of fields) {
+        if (!field.checkValidity()) {
+            field.reportValidity();
+            return false;
+        }
+    }
+    return true;
+}
+
+agentNextBtn.addEventListener('click', function () {
+    if (validateAgentStep()) showAgentStep(Math.min(agentCurrentStep + 1, agentSections.length));
+});
+
+agentBackBtn.addEventListener('click', function () {
+    showAgentStep(Math.max(agentCurrentStep - 1, 1));
+});
+
 // Toggle password visibility
 document.getElementById('togglePassword').addEventListener('click', function() {
     const passwordInput = document.getElementById('password');
@@ -523,7 +653,11 @@ document.getElementById('togglePassword').addEventListener('click', function() {
 });
 
 // Validate password confirmation
-document.getElementById('agentForm').addEventListener('submit', function(e) {
+agentForm.addEventListener('submit', function(e) {
+    if (!validateAgentStep()) {
+        e.preventDefault();
+        return false;
+    }
     const password = document.getElementById('password').value;
     const confirmation = document.getElementById('password_confirmation').value;
     
@@ -533,9 +667,15 @@ document.getElementById('agentForm').addEventListener('submit', function(e) {
         document.getElementById('password_confirmation').focus();
         return false;
     }
+
+    agentSections.forEach(function (section) {
+        section.querySelectorAll('input, select, textarea').forEach(function (field) {
+            field.disabled = false;
+        });
+    });
     
     // Show loading state
-    const submitBtn = this.querySelector('button[type="submit"]');
+    const submitBtn = this.querySelector('.step-submit');
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registering...';
 });
@@ -561,6 +701,37 @@ document.getElementById('id_number').addEventListener('input', function() {
 const eighteenYearsAgo = new Date();
 eighteenYearsAgo.setFullYear(eighteenYearsAgo.getFullYear() - 18);
 document.getElementById('date_of_birth').max = eighteenYearsAgo.toISOString().split('T')[0];
+
+(function () {
+    const storageKey = 'shena_admin_agent_registration_draft';
+    if (!agentForm || !window.localStorage) return;
+
+    try {
+        const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
+        Object.keys(saved).forEach(function (name) {
+            const field = agentForm.elements[name];
+            if (field && !field.value && name !== 'csrf_token' && name !== 'password' && name !== 'password_confirmation') {
+                field.value = saved[name];
+            }
+        });
+    } catch (_) {}
+
+    agentForm.addEventListener('input', function () {
+        const data = {};
+        Array.from(agentForm.elements).forEach(function (field) {
+            if (!field.name || ['csrf_token', 'password', 'password_confirmation'].includes(field.name)) return;
+            if ((field.type === 'radio' || field.type === 'checkbox') && !field.checked) return;
+            data[field.name] = field.value;
+        });
+        localStorage.setItem(storageKey, JSON.stringify(data));
+    });
+
+    agentForm.addEventListener('submit', function () {
+        localStorage.removeItem(storageKey);
+    });
+})();
+showAgentStep(agentInitialStep);
+showAgentFlash(agentFlashError, 'error');
 </script>
 
 <?php include_once __DIR__ . '/../layouts/admin-footer.php'; ?>

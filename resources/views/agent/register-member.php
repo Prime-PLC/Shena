@@ -1,17 +1,13 @@
 <?php 
 $page = 'register'; 
+$initialStep = (int)($_SESSION['error_step'] ?? 1);
+$flashError = $_SESSION['error'] ?? '';
+unset($_SESSION['error_step'], $_SESSION['error']);
 include __DIR__ . '/../layouts/agent-header.php';
 
 // Helper to get old form data or empty string
 $getOldValue = function($field) {
     $old = $_SESSION['form_data'][$field] ?? '';
-    // Clear form data after first use so it doesn't persist
-    if (isset($_SESSION['form_data'])) {
-        unset($_SESSION['form_data'][$field]);
-        if (empty($_SESSION['form_data'])) {
-            unset($_SESSION['form_data']);
-        }
-    }
     return htmlspecialchars($old);
 };
 ?>
@@ -74,8 +70,45 @@ $getOldValue = function($field) {
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
+.form-stepper {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 10px;
+    margin-bottom: 28px;
+}
+
+.step-pill {
+    border: 1px solid #E5E7EB;
+    background: #F9FAFB;
+    color: #6B7280;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.step-pill.active {
+    background: #F5F0FB;
+    border-color: #7F20B0;
+    color: #4C1D95;
+}
+
+.step-pill.done {
+    background: #ECFDF5;
+    border-color: #10B981;
+    color: #065F46;
+}
+
 .form-section {
     margin-bottom: 40px;
+}
+
+.form-section[data-step] {
+    display: none;
+}
+
+.form-section[data-step].active {
+    display: block;
 }
 
 .form-section:last-child {
@@ -378,7 +411,8 @@ $getOldValue = function($field) {
     }
 
     .form-grid,
-    .package-options {
+    .package-options,
+    .form-stepper {
         grid-template-columns: 1fr;
     }
 
@@ -406,20 +440,23 @@ $getOldValue = function($field) {
         </a>
     </div>
 
-    <?php if (isset($_SESSION['success']) || isset($_SESSION['error'])): ?>
+    <?php if ($flashError): ?>
         <script>
             document.addEventListener('DOMContentLoaded', function() {
                 const flashMessages = [
-                    <?php if (isset($_SESSION['success'])): ?>{ type: 'success', message: <?php echo json_encode($_SESSION['success']); ?> },<?php unset($_SESSION['success']); endif; ?>
-                    <?php if (isset($_SESSION['error'])): ?>{ type: 'error', message: <?php echo json_encode($_SESSION['error']); ?> },<?php unset($_SESSION['error']); endif; ?>
+                    { type: 'error', message: <?php echo json_encode($flashError); ?> }
                 ];
 
                 flashMessages.forEach(function(flash) {
+                    if (window.ShenaApp && typeof ShenaApp.alert === 'function') {
+                        ShenaApp.alert(flash.message, flash.type);
+                        return;
+                    }
                     if (window.ShenaApp && typeof ShenaApp.showNotification === 'function') {
                         ShenaApp.showNotification(flash.message, flash.type, 5000);
                         return;
                     }
-                    alert(flash.message);
+                    console.warn(flash.message);
                 });
             });
         </script>
@@ -428,9 +465,17 @@ $getOldValue = function($field) {
     <div class="registration-form-card">
         <form method="POST" action="/agent/register-member/store" id="memberRegistrationForm">
             <input type="hidden" name="csrf_token" value="<?php echo $csrf_token ?? ''; ?>">
+            <div class="form-stepper" aria-label="Registration progress">
+                <div class="step-pill active" data-step-indicator="1">1. Personal</div>
+                <div class="step-pill" data-step-indicator="2">2. Contact</div>
+                <div class="step-pill" data-step-indicator="3">3. Next of Kin</div>
+                <div class="step-pill" data-step-indicator="4">4. Package</div>
+                <div class="step-pill" data-step-indicator="5">5. Access</div>
+                <div class="step-pill" data-step-indicator="6">6. Confirm</div>
+            </div>
             
             <!-- Personal Information Section -->
-            <div class="form-section">
+            <div class="form-section active" data-step="1">
                 <div class="section-header">
                     <div class="section-icon">
                         <i class="fas fa-user"></i>
@@ -470,7 +515,7 @@ $getOldValue = function($field) {
             </div>
 
             <!-- Contact Information Section -->
-            <div class="form-section">
+            <div class="form-section" data-step="2">
                 <div class="section-header">
                     <div class="section-icon">
                         <i class="fas fa-address-book"></i>
@@ -499,7 +544,7 @@ $getOldValue = function($field) {
             </div>
 
             <!-- Next of Kin Information Section -->
-            <div class="form-section">
+            <div class="form-section" data-step="3">
                 <div class="section-header">
                     <div class="section-icon">
                         <i class="fas fa-user-friends"></i>
@@ -523,7 +568,7 @@ $getOldValue = function($field) {
             </div>
 
             <!-- Package Selection Section -->
-            <div class="form-section">
+            <div class="form-section" data-step="4">
                 <div class="section-header">
                     <div class="section-icon">
                         <i class="fas fa-box"></i>
@@ -574,7 +619,7 @@ $getOldValue = function($field) {
             </div>
 
             <!-- Account Security Notice -->
-            <div class="form-section">
+            <div class="form-section" data-step="5">
                 <div class="section-header">
                     <div class="section-icon">
                         <i class="fas fa-lock"></i>
@@ -592,7 +637,7 @@ $getOldValue = function($field) {
             </div>
 
             <!-- Terms and Conditions -->
-            <div class="form-section">
+            <div class="form-section" data-step="6">
                 <div class="form-checkbox">
                     <input type="checkbox" id="terms" name="terms" required>
                     <label for="terms">
@@ -607,23 +652,89 @@ $getOldValue = function($field) {
                     <i class="fas fa-undo"></i>
                     Reset Form
                 </button>
-                <button type="submit" class="btn-submit">
+                <button type="button" class="btn-reset step-back" style="display:none;">
+                    <i class="fas fa-arrow-left"></i>
+                    Back
+                </button>
+                <button type="button" class="btn-submit step-next">
+                    Continue
+                    <i class="fas fa-arrow-right"></i>
+                </button>
+                <button type="submit" class="btn-submit step-submit" style="display:none;">
                     <i class="fas fa-user-plus"></i>
                     Register Member
                 </button>
             </div>
         </form>
+        <?php unset($_SESSION['form_data']); ?>
     </div>
 </div>
 
 <script>
-// Form validation
-document.getElementById('memberRegistrationForm').addEventListener('submit', function(e) {
-    // Show loading state
-    const submitBtn = this.querySelector('.btn-submit');
+const memberForm = document.getElementById('memberRegistrationForm');
+const memberSections = Array.from(memberForm.querySelectorAll('.form-section[data-step]'));
+const memberIndicators = Array.from(memberForm.querySelectorAll('[data-step-indicator]'));
+const memberBackBtn = memberForm.querySelector('.step-back');
+const memberNextBtn = memberForm.querySelector('.step-next');
+const memberSubmitBtn = memberForm.querySelector('.step-submit');
+let memberCurrentStep = 1;
+const memberInitialStep = <?php echo json_encode(max(1, min(6, $initialStep))); ?>;
+
+function showMemberStep(step) {
+    memberCurrentStep = step;
+    memberSections.forEach(function (section) {
+        const isActive = Number(section.dataset.step) === step;
+        section.classList.toggle('active', isActive);
+        section.querySelectorAll('input, select, textarea').forEach(function (field) {
+            field.disabled = !isActive;
+        });
+    });
+    memberIndicators.forEach(function (indicator) {
+        const indicatorStep = Number(indicator.dataset.stepIndicator);
+        indicator.classList.toggle('active', indicatorStep === step);
+        indicator.classList.toggle('done', indicatorStep < step);
+    });
+    memberBackBtn.style.display = step > 1 ? '' : 'none';
+    memberNextBtn.style.display = step < memberSections.length ? '' : 'none';
+    memberSubmitBtn.style.display = step === memberSections.length ? '' : 'none';
+}
+
+function validateMemberStep() {
+    const section = memberForm.querySelector('.form-section[data-step="' + memberCurrentStep + '"]');
+    const fields = Array.from(section.querySelectorAll('input, select, textarea'));
+    for (const field of fields) {
+        if (!field.checkValidity()) {
+            field.reportValidity();
+            return false;
+        }
+    }
+    return true;
+}
+
+memberNextBtn.addEventListener('click', function () {
+    if (validateMemberStep()) showMemberStep(Math.min(memberCurrentStep + 1, memberSections.length));
+});
+
+memberBackBtn.addEventListener('click', function () {
+    showMemberStep(Math.max(memberCurrentStep - 1, 1));
+});
+
+memberForm.addEventListener('submit', function(e) {
+    if (!validateMemberStep()) {
+        e.preventDefault();
+        return;
+    }
+    memberSections.forEach(function (section) {
+        section.querySelectorAll('input, select, textarea').forEach(function (field) {
+            field.disabled = false;
+        });
+    });
+    const submitBtn = this.querySelector('.step-submit');
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registering...';
 });
+
+showMemberStep(memberInitialStep);
 
 // Phone number formatting
 document.getElementById('phone').addEventListener('input', function(e) {
@@ -647,6 +758,34 @@ document.getElementById('next_of_kin_phone').addEventListener('input', function(
     }
     e.target.value = '+' + value.substring(0, 12);
 });
+
+(function () {
+    const form = document.getElementById('memberRegistrationForm');
+    const storageKey = 'shena_agent_member_registration_draft';
+    if (!form || !window.localStorage) return;
+
+    try {
+        const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
+        Object.keys(saved).forEach(function (name) {
+            const field = form.elements[name];
+            if (field && !field.value && name !== 'csrf_token') field.value = saved[name];
+        });
+    } catch (_) {}
+
+    form.addEventListener('input', function () {
+        const data = {};
+        Array.from(form.elements).forEach(function (field) {
+            if (!field.name || field.name === 'csrf_token') return;
+            if ((field.type === 'radio' || field.type === 'checkbox') && !field.checked) return;
+            data[field.name] = field.value;
+        });
+        localStorage.setItem(storageKey, JSON.stringify(data));
+    });
+
+    form.addEventListener('submit', function () {
+        localStorage.removeItem(storageKey);
+    });
+})();
 </script>
 
 <?php include __DIR__ . '/../layouts/agent-footer.php'; ?>

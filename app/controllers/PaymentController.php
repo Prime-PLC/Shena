@@ -50,6 +50,16 @@ class PaymentController extends BaseController
                 $this->json(['error' => 'Member not found'], 404);
                 return;
             }
+
+            if ($paymentType !== 'registration') {
+                $paymentModel = new Payment();
+                if (($member['status'] ?? '') !== 'active' && !$paymentModel->hasPaidRegistrationFee($memberId)) {
+                    $this->json([
+                        'error' => 'Please pay the KES ' . number_format(defined('REGISTRATION_FEE') ? REGISTRATION_FEE : 200) . ' registration fee first to become an active SHENA member before using this service.'
+                    ], 403);
+                    return;
+                }
+            }
             
             // Format phone number
             $phoneNumber = $this->formatPhoneNumber($phoneNumber);
@@ -62,7 +72,7 @@ class PaymentController extends BaseController
             $response = $this->paymentService->initiateSTKPush(
                 $phoneNumber,
                 $amount,
-                $member['member_number'],
+                $member['id_number'] ?: $member['member_number'],
                 ucfirst($paymentType) . ' Contribution'
             );
             
@@ -507,18 +517,17 @@ class PaymentController extends BaseController
                     m.member_number,
                     u.first_name,
                     u.last_name,
-                    u.id_number,
-                    u.phone_number
+                    m.id_number,
+                    u.phone
                 FROM members m
                 INNER JOIN users u ON m.user_id = u.id
                 WHERE 
-                    m.status = 'active'
-                    AND (
+                    (
                         m.member_number LIKE :query
                         OR u.first_name LIKE :query
                         OR u.last_name LIKE :query
-                        OR u.id_number LIKE :query
-                        OR u.phone_number LIKE :query
+                        OR m.id_number LIKE :query
+                        OR u.phone LIKE :query
                         OR CONCAT(u.first_name, ' ', u.last_name) LIKE :query
                     )
                 LIMIT 15
@@ -534,7 +543,7 @@ class PaymentController extends BaseController
                     'member_number' => $member['member_number'],
                     'name' => $member['first_name'] . ' ' . $member['last_name'],
                     'id_number' => $member['id_number'],
-                    'phone' => $member['phone_number'],
+                    'phone' => $member['phone'],
                     'label' => sprintf(
                         '%s - %s (%s)',
                         $member['member_number'],

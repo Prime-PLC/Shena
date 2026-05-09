@@ -935,11 +935,15 @@ if ($notificationCount === null) {
                     const message = <?php echo json_encode($_SESSION['flash_message']); ?>;
                     const type = <?php echo json_encode($_SESSION['flash_type'] ?? 'info'); ?>;
 
+                    if (window.ShenaApp && typeof ShenaApp.alert === 'function') {
+                        ShenaApp.alert(message, type);
+                        return;
+                    }
                     if (window.ShenaApp && typeof ShenaApp.showNotification === 'function') {
                         ShenaApp.showNotification(message, type, 5000);
-                    } else {
-                        alert(message);
+                        return;
                     }
+                    console.warn(message);
                 });
             </script>
             <?php 

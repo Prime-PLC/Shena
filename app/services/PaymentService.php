@@ -219,9 +219,21 @@ class PaymentService
                 
                 if (!empty($payment)) {
                     $paymentId = $payment[0]['id'];
+
+                    if (($payment[0]['status'] ?? '') === 'completed' && !empty($payment[0]['mpesa_receipt_number'])) {
+                        return ['status' => 'success', 'message' => 'Payment already processed'];
+                    }
                     
                     // Update payment status
                     $paymentModel->confirmPayment($paymentId, $mpesaReceiptNumber);
+                    $paymentModel->update($paymentId, [
+                        'transaction_date' => $transactionDate ?: date('Y-m-d H:i:s'),
+                        'payment_date' => $transactionDate ?: date('Y-m-d H:i:s'),
+                        'sender_phone' => $phoneNumber,
+                        'reconciliation_status' => 'matched',
+                        'auto_matched' => 1,
+                        'reconciled_at' => date('Y-m-d H:i:s')
+                    ]);
                     
                     // Retrieve updated payment record to check type and member
                     $confirmedPayment = $paymentModel->find($paymentId);
