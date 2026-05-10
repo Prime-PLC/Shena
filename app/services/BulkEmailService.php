@@ -71,16 +71,21 @@ class BulkEmailService
         $stmt = $this->db->prepare("
             INSERT INTO bulk_messages (
                 title, message, message_type, target_audience, 
-                scheduled_at, total_recipients, created_by, status
-            ) VALUES (?, ?, 'email', ?, ?, ?, ?, ?)
+                custom_filters, scheduled_at, total_recipients, created_by, status
+            ) VALUES (?, ?, 'email', ?, ?, ?, ?, ?, ?)
         ");
         
         $status = !empty($data['scheduled_at']) ? 'scheduled' : 'draft';
+        $customFilters = $data['custom_filters'] ?? [];
+        if (!empty($data['subject'])) {
+            $customFilters['email_subject'] = $data['subject'];
+        }
         
         $stmt->execute([
             $data['title'],
             $data['message'],
             $data['target_audience'],
+            !empty($customFilters) ? json_encode($customFilters) : null,
             $data['scheduled_at'],
             $data['total_recipients'],
             $data['created_by'],
@@ -114,9 +119,17 @@ class BulkEmailService
                 $sql .= " AND m.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)";
                 break;
             case 'custom':
-                // Add custom filters if provided
                 if (!empty($additionalFilters['member_status'])) {
                     $sql .= " AND m.status = " . $this->db->quote($additionalFilters['member_status']);
+                }
+                if (!empty($additionalFilters['package'])) {
+                    $sql .= " AND m.package = " . $this->db->quote($additionalFilters['package']);
+                }
+                if (!empty($additionalFilters['joined_after'])) {
+                    $sql .= " AND m.created_at >= " . $this->db->quote($additionalFilters['joined_after']);
+                }
+                if (!empty($additionalFilters['joined_before'])) {
+                    $sql .= " AND m.created_at <= " . $this->db->quote($additionalFilters['joined_before'] . ' 23:59:59');
                 }
                 break;
             case 'all_members':
@@ -162,7 +175,7 @@ class BulkEmailService
         
         // Get pending recipients
         $stmt = $this->db->prepare("
-            SELECT bmr.*, u.first_name, u.last_name, m.member_number, bm.message as email_body, bm.title as email_subject
+            SELECT bmr.*, u.first_name, u.last_name, m.member_number, bm.message as email_body, bm.title as email_subject, bm.custom_filters
             FROM bulk_message_recipients bmr
             INNER JOIN users u ON bmr.user_id = u.id
             INNER JOIN members m ON u.id = m.user_id
@@ -186,9 +199,12 @@ class BulkEmailService
                     'email' => $recipient['recipient_value']
                 ]);
                 
+                $campaignMeta = !empty($recipient['custom_filters']) ? json_decode($recipient['custom_filters'], true) : [];
+                $subject = $campaignMeta['email_subject'] ?? $recipient['email_subject'];
+
                 $result = $this->emailService->sendEmail(
                     $recipient['recipient_value'],
-                    $recipient['email_subject'],
+                    $subject,
                     $body,
                     true // isHtml = true
                 );
@@ -336,6 +352,23 @@ class BulkEmailService
         $stmt->execute([$campaignId]);
         
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    public function getCampaignStats($campaignId)
+    {
+        $stmt = $this->db->prepare("
+            SELECT
+                COUNT(*) as total,
+                SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) as sent,
+                SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
+                SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+                SUM(CASE WHEN status = 'skipped' THEN 1 ELSE 0 END) as skipped
+            FROM bulk_message_recipients
+            WHERE bulk_message_id = ?
+        ");
+        $stmt->execute([$campaignId]);
+
+        return $stmt->fetch(PDO::FETCH_ASSOC);
     }
     
     /**

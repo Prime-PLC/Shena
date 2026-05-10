@@ -247,6 +247,135 @@ $pending_approvals = $pending_approvals ?? [];
         box-shadow: 0 4px 12px rgba(127, 61, 158, 0.3);
     }
 
+    /* Reusable management UI pattern */
+    .management-shell {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    .management-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+    }
+
+    .management-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .action-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .row-action {
+        min-height: 34px;
+        padding: 7px 10px;
+        border: 1px solid #E5E7EB;
+        border-radius: 7px;
+        background: white;
+        color: #374151;
+        font-size: 12px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        text-decoration: none;
+        cursor: pointer;
+        transition: all 0.2s;
+        white-space: nowrap;
+    }
+
+    .row-action:hover {
+        border-color: #7F3D9E;
+        color: #7F3D9E;
+        background: #FAF5FF;
+    }
+
+    .row-action.primary {
+        background: #7F3D9E;
+        border-color: #7F3D9E;
+        color: white;
+    }
+
+    .row-action.warning {
+        background: #FFFBEB;
+        border-color: #F59E0B;
+        color: #92400E;
+    }
+
+    .row-action.success {
+        background: #ECFDF5;
+        border-color: #10B981;
+        color: #065F46;
+    }
+
+    .entity-modal .modal-dialog {
+        max-width: 860px;
+    }
+
+    .entity-modal .modal-header {
+        background: #7F3D9E;
+        color: white;
+        border: none;
+    }
+
+    .entity-modal .modal-title {
+        font-weight: 800;
+    }
+
+    .entity-modal .btn-close {
+        filter: brightness(0) invert(1);
+    }
+
+    .entity-profile {
+        display: grid;
+        grid-template-columns: 120px 1fr;
+        gap: 20px;
+        align-items: start;
+    }
+
+    .entity-avatar {
+        width: 88px;
+        height: 88px;
+        border-radius: 18px;
+        background: #7F3D9E;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 30px;
+        font-weight: 800;
+    }
+
+    .entity-fields {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px 20px;
+    }
+
+    .entity-field-label {
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        color: #6B7280;
+        margin-bottom: 4px;
+    }
+
+    .entity-field-value {
+        font-size: 14px;
+        font-weight: 700;
+        color: #111827;
+        overflow-wrap: anywhere;
+    }
+
     /* Members Table */
     .members-table {
         width: 100%;
@@ -886,7 +1015,22 @@ $pending_approvals = $pending_approvals ?? [];
         }
 
         .members-table {
-            min-width: 520px;
+            min-width: 860px;
+        }
+
+        .entity-profile {
+            grid-template-columns: 1fr;
+        }
+
+        .entity-avatar {
+            width: 72px;
+            height: 72px;
+            border-radius: 14px;
+            font-size: 24px;
+        }
+
+        .entity-fields {
+            grid-template-columns: 1fr;
         }
     }
 </style>
@@ -1131,7 +1275,7 @@ $pending_approvals = $pending_approvals ?? [];
             </div>
 
             <div class="table-scroll-wrap">
-            <table class="members-table">
+            <table class="members-table management-table">
                 <thead>
                     <tr>
                         <th>MEMBER NAME</th>
@@ -1139,26 +1283,51 @@ $pending_approvals = $pending_approvals ?? [];
                         <th>PACKAGE</th>
                         <th>STATUS</th>
                         <th>LAST CONTRIBUTION</th>
+                        <th>ACTIONS</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php if (empty($members)): ?>
                     <tr>
-                        <td colspan="5" style="text-align: center; padding: 40px; color: #6B7280;">
+                        <td colspan="6" style="text-align: center; padding: 40px; color: #6B7280;">
                             <i class="fas fa-users" style="font-size: 48px; margin-bottom: 16px; opacity: 0.3;"></i>
                             <p>No members found</p>
                         </td>
                     </tr>
                     <?php else: ?>
                         <?php foreach ($members as $member): ?>
-                        <tr onclick="window.location.href='/admin/members/view/<?php echo $member['id']; ?>';" style="cursor: pointer;">
+                        <?php
+                            $memberName = trim(($member['first_name'] ?? '') . ' ' . ($member['last_name'] ?? ''));
+                            $lastPaymentDate = !empty($member['last_payment_date']) ? date('d M Y', strtotime($member['last_payment_date'])) : 'N/A';
+                            $memberModalData = [
+                                'id' => (int)($member['id'] ?? 0),
+                                'name' => $memberName ?: 'N/A',
+                                'initials' => strtoupper(substr($member['first_name'] ?? 'M', 0, 1) . substr($member['last_name'] ?? 'M', 0, 1)),
+                                'member_number' => $member['member_number'] ?? 'N/A',
+                                'national_id' => $member['id_number'] ?? $member['national_id'] ?? 'N/A',
+                                'phone' => $member['phone'] ?? 'N/A',
+                                'email' => $member['email'] ?? 'N/A',
+                                'county' => $member['county'] ?? 'N/A',
+                                'package' => $member['package'] ?? 'Standard',
+                                'status' => $member['status'] ?? 'active',
+                                'last_payment_amount' => 'KES ' . number_format($member['last_payment_amount'] ?? 0, 2),
+                                'last_payment_date' => $lastPaymentDate,
+                                'agent_number' => $member['agent_number'] ?? 'N/A',
+                                'edit_url' => '/admin/members/edit/' . (int)($member['id'] ?? 0),
+                                'payments_url' => '/admin/payments?member_id=' . (int)($member['id'] ?? 0),
+                            ];
+                            $memberModalJson = htmlspecialchars(json_encode($memberModalData, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_HEX_TAG), ENT_QUOTES, 'UTF-8');
+                        ?>
+                        <tr>
                             <td>
                                 <div class="member-info">
                                     <div class="member-avatar <?php echo $member['avatar_color'] ?? 'purple'; ?>">
                                         <?php echo strtoupper(substr($member['first_name'] ?? 'M', 0, 1) . substr($member['last_name'] ?? 'M', 0, 1)); ?>
                                     </div>
                                     <div class="member-details">
-                                        <a href="/admin/members/view/<?php echo $member['id']; ?>" class="member-name" onclick="event.stopPropagation();"><?php echo htmlspecialchars($member['first_name'] . ' ' . $member['last_name']); ?></a>
+                                        <button type="button" class="member-name" data-member="<?php echo $memberModalJson; ?>" onclick="openMemberModal(this)" style="border: 0; background: transparent; padding: 0; cursor: pointer;">
+                                            <?php echo htmlspecialchars($memberName); ?>
+                                        </button>
                                     </div>
                                 </div>
                             </td>
@@ -1185,6 +1354,34 @@ $pending_approvals = $pending_approvals ?? [];
                                         <span class="contribution-date"><?php echo date('d M Y', strtotime($member['last_payment_date'] ?? '')); ?></span>
                                     </div>
                                 <?php endif; ?>
+                            </td>
+                            <td>
+                                <div class="action-group">
+                                    <button type="button" class="row-action primary" data-member="<?php echo $memberModalJson; ?>" onclick="openMemberModal(this)" aria-label="View member details">
+                                        <i class="fas fa-eye"></i> View
+                                    </button>
+                                    <a class="row-action" href="/admin/members/edit/<?php echo (int)$member['id']; ?>">
+                                        <i class="fas fa-edit"></i> Edit
+                                    </a>
+                                    <a class="row-action" href="/admin/payments?member_id=<?php echo (int)$member['id']; ?>">
+                                        <i class="fas fa-money-bill-wave"></i> Payments
+                                    </a>
+                                    <?php if (($member['status'] ?? 'active') === 'active'): ?>
+                                        <form method="POST" action="/admin/members/suspend/<?php echo (int)$member['id']; ?>" style="display:inline;">
+                                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
+                                            <button type="button" class="row-action warning" onclick="confirmMemberStatus(event, 'Suspend this member?', 'danger')">
+                                                <i class="fas fa-ban"></i> Suspend
+                                            </button>
+                                        </form>
+                                    <?php elseif (($member['status'] ?? '') === 'suspended'): ?>
+                                        <form method="POST" action="/admin/members/activate/<?php echo (int)$member['id']; ?>" style="display:inline;">
+                                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
+                                            <button type="button" class="row-action success" onclick="confirmMemberStatus(event, 'Activate this member?', 'success')">
+                                                <i class="fas fa-check"></i> Activate
+                                            </button>
+                                        </form>
+                                    <?php endif; ?>
+                                </div>
                             </td>
                         </tr>
                         <?php endforeach; ?>
@@ -1247,7 +1444,116 @@ $pending_approvals = $pending_approvals ?? [];
     </div>
 </div>
 
+<!-- Member Detail Modal -->
+<div class="modal fade entity-modal" id="memberDetailModal" tabindex="-1" aria-labelledby="memberDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title" id="memberDetailModalLabel">Member Information</h5>
+                    <div id="memberModalSubtitle" style="font-size: 13px; opacity: 0.85; margin-top: 2px;"></div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="entity-profile">
+                    <div class="entity-avatar" id="memberModalAvatar">--</div>
+                    <div class="entity-fields">
+                        <div>
+                            <div class="entity-field-label">Full Name</div>
+                            <div class="entity-field-value" id="memberModalName">N/A</div>
+                        </div>
+                        <div>
+                            <div class="entity-field-label">Status</div>
+                            <div class="entity-field-value" id="memberModalStatus">N/A</div>
+                        </div>
+                        <div>
+                            <div class="entity-field-label">National ID</div>
+                            <div class="entity-field-value" id="memberModalNationalId">N/A</div>
+                        </div>
+                        <div>
+                            <div class="entity-field-label">Package</div>
+                            <div class="entity-field-value" id="memberModalPackage">N/A</div>
+                        </div>
+                        <div>
+                            <div class="entity-field-label">Phone</div>
+                            <div class="entity-field-value" id="memberModalPhone">N/A</div>
+                        </div>
+                        <div>
+                            <div class="entity-field-label">Email</div>
+                            <div class="entity-field-value" id="memberModalEmail">N/A</div>
+                        </div>
+                        <div>
+                            <div class="entity-field-label">County</div>
+                            <div class="entity-field-value" id="memberModalCounty">N/A</div>
+                        </div>
+                        <div>
+                            <div class="entity-field-label">Recruited By</div>
+                            <div class="entity-field-value" id="memberModalAgent">N/A</div>
+                        </div>
+                        <div>
+                            <div class="entity-field-label">Last Payment</div>
+                            <div class="entity-field-value" id="memberModalPaymentAmount">N/A</div>
+                        </div>
+                        <div>
+                            <div class="entity-field-label">Payment Date</div>
+                            <div class="entity-field-value" id="memberModalPaymentDate">N/A</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <a href="#" class="btn btn-outline-secondary" id="memberModalPaymentsLink">
+                    <i class="fas fa-money-bill-wave"></i> Payments
+                </a>
+                <a href="#" class="btn btn-primary" id="memberModalEditLink">
+                    <i class="fas fa-edit"></i> Edit Member
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
+function setText(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value || 'N/A';
+}
+
+function openMemberModal(button) {
+    const member = JSON.parse(button.getAttribute('data-member') || '{}');
+    setText('memberModalAvatar', member.initials);
+    setText('memberModalName', member.name);
+    setText('memberModalSubtitle', (member.member_number || 'N/A') + ' | ' + (member.phone || 'N/A'));
+    setText('memberModalStatus', (member.status || 'N/A').replace(/_/g, ' ').toUpperCase());
+    setText('memberModalNationalId', member.national_id);
+    setText('memberModalPackage', member.package);
+    setText('memberModalPhone', member.phone);
+    setText('memberModalEmail', member.email);
+    setText('memberModalCounty', member.county);
+    setText('memberModalAgent', member.agent_number);
+    setText('memberModalPaymentAmount', member.last_payment_amount);
+    setText('memberModalPaymentDate', member.last_payment_date);
+
+    document.getElementById('memberModalEditLink').href = member.edit_url || '#';
+    document.getElementById('memberModalPaymentsLink').href = member.payments_url || '#';
+
+    new bootstrap.Modal(document.getElementById('memberDetailModal')).show();
+}
+
+function confirmMemberStatus(event, message, type) {
+    const form = event.currentTarget.closest('form');
+    ShenaApp.confirmAction(
+        message,
+        function() {
+            form.submit();
+        },
+        null,
+        { type: type || 'warning', title: 'Confirm Member Action' }
+    );
+}
+
 // Tab Switching Function
 function switchTab(tabName) {
     // Hide all tab contents

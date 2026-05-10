@@ -741,6 +741,134 @@ $top_performers = $top_performers ?? [];
         border-color: #7F3D9E;
     }
 
+    /* Reusable management UI pattern */
+    .management-shell {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    .management-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+    }
+
+    .management-table {
+        width: 100%;
+    }
+
+    .action-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .row-action {
+        min-height: 34px;
+        padding: 7px 10px;
+        border: 1px solid #E5E7EB;
+        border-radius: 7px;
+        background: white;
+        color: #374151;
+        font-size: 12px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        text-decoration: none;
+        cursor: pointer;
+        transition: all 0.2s;
+        white-space: nowrap;
+    }
+
+    .row-action:hover {
+        border-color: #7F3D9E;
+        color: #7F3D9E;
+        background: #FAF5FF;
+    }
+
+    .row-action.primary {
+        background: #7F3D9E;
+        border-color: #7F3D9E;
+        color: white;
+    }
+
+    .row-action.warning {
+        background: #FFFBEB;
+        border-color: #F59E0B;
+        color: #92400E;
+    }
+
+    .row-action.success {
+        background: #ECFDF5;
+        border-color: #10B981;
+        color: #065F46;
+    }
+
+    .entity-modal .modal-dialog {
+        max-width: 860px;
+    }
+
+    .entity-modal .modal-header {
+        background: #7F3D9E;
+        color: white;
+        border: none;
+    }
+
+    .entity-modal .modal-title {
+        font-weight: 800;
+    }
+
+    .entity-modal .btn-close {
+        filter: brightness(0) invert(1);
+    }
+
+    .entity-profile {
+        display: grid;
+        grid-template-columns: 120px 1fr;
+        gap: 20px;
+        align-items: start;
+    }
+
+    .entity-avatar {
+        width: 88px;
+        height: 88px;
+        border-radius: 18px;
+        background: #7F3D9E;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 30px;
+        font-weight: 800;
+    }
+
+    .entity-fields {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px 20px;
+    }
+
+    .entity-field-label {
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        color: #6B7280;
+        margin-bottom: 4px;
+    }
+
+    .entity-field-value {
+        font-size: 14px;
+        font-weight: 700;
+        color: #111827;
+        overflow-wrap: anywhere;
+    }
+
     /* Top Performers */
     .performers-card {
         background: linear-gradient(135deg, #7F3D9E 0%, #7F3D9E 100%);
@@ -850,7 +978,22 @@ $top_performers = $top_performers ?? [];
         .agents-table thead,
         .agents-table tbody,
         .agents-table tr {
-            min-width: 480px;
+            min-width: 920px;
+        }
+
+        .entity-profile {
+            grid-template-columns: 1fr;
+        }
+
+        .entity-avatar {
+            width: 72px;
+            height: 72px;
+            border-radius: 14px;
+            font-size: 24px;
+        }
+
+        .entity-fields {
+            grid-template-columns: 1fr;
         }
     }
 </style>
@@ -989,7 +1132,7 @@ $top_performers = $top_performers ?? [];
                         Agent: <?php echo htmlspecialchars($commission['agent_number'] ?? 'N/A'); ?><br>
                         <?php echo number_format($commission['total_members'] ?? 0); ?> Portfolios
                     </div>
-                    <button class="payout-button" onclick="window.location.href='/admin/agents/view/<?php echo $commission['agent_id']; ?>'">View Details</button>
+                    <button class="payout-button" onclick="window.location.href='/admin/commissions?agent_id=<?php echo (int)$commission['agent_id']; ?>'">Review Commissions</button>
                 </div>
                 <?php endforeach; ?>
             <?php else: ?>
@@ -1054,7 +1197,7 @@ $top_performers = $top_performers ?? [];
 
 <div class="agents-table-card">
     <div style="overflow-x: auto;">
-        <table class="agents-table" id="agentsTable">
+        <table class="agents-table management-table" id="agentsTable">
             <thead>
                 <tr>
                     <th>Agent Details</th>
@@ -1077,13 +1220,34 @@ $top_performers = $top_performers ?? [];
                         $avatarColor = $avatarColors[$colorIndex % count($avatarColors)];
                         $colorIndex++;
                         $status = $agent['status'] ?? 'active';
+                        $agentName = trim(($agent['first_name'] ?? '') . ' ' . ($agent['last_name'] ?? ''));
+                        $agentModalData = [
+                            'id' => (int)($agent['id'] ?? 0),
+                            'name' => $agentName ?: 'N/A',
+                            'initials' => $initials,
+                            'agent_number' => $agent['agent_number'] ?? 'N/A',
+                            'national_id' => $agent['national_id'] ?? 'N/A',
+                            'phone' => $agent['phone'] ?? 'N/A',
+                            'email' => $agent['email'] ?? 'N/A',
+                            'county' => $agent['county'] ?? 'N/A',
+                            'region' => $agent['region'] ?? 'N/A',
+                            'status' => $status,
+                            'commission_rate' => ($agent['commission_rate'] ?? 0) . '%',
+                            'total_members' => number_format($agent['total_members'] ?? 0),
+                            'total_commission' => 'KES ' . number_format($agent['total_commission'] ?? 0, 2),
+                            'edit_url' => '/admin/agents/edit/' . (int)($agent['id'] ?? 0),
+                            'commissions_url' => '/admin/commissions?agent_id=' . (int)($agent['id'] ?? 0),
+                        ];
+                        $agentModalJson = htmlspecialchars(json_encode($agentModalData, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_HEX_TAG), ENT_QUOTES, 'UTF-8');
                         ?>
-                        <tr data-status="<?= $status ?>" onclick="window.location.href='/admin/agents/view/<?php echo $agent['id']; ?>'" style="cursor: pointer;">
+                        <tr data-status="<?= htmlspecialchars($status) ?>">
                             <td>
                                 <div class="agent-profile">
                                     <div class="agent-avatar" style="background: <?php echo $avatarColor; ?>;"><?php echo $initials; ?></div>
                                     <div class="agent-info">
-                                        <div class="agent-name"><?php echo htmlspecialchars(($agent['first_name'] ?? '') . ' ' . ($agent['last_name'] ?? '')); ?></div>
+                                        <button type="button" class="agent-name" data-agent="<?php echo $agentModalJson; ?>" onclick="openAgentModal(this)" style="border: 0; background: transparent; padding: 0; cursor: pointer;">
+                                            <?php echo htmlspecialchars($agentName); ?>
+                                        </button>
                                         <div class="agent-number"><?php echo htmlspecialchars($agent['agent_number'] ?? 'N/A'); ?></div>
                                     </div>
                                 </div>
@@ -1100,10 +1264,35 @@ $top_performers = $top_performers ?? [];
                                     <span class="status-badge inactive">Inactive</span>
                                 <?php endif; ?>
                             </td>
-                            <td onclick="event.stopPropagation();">
-                                <button class="action-btn" onclick="window.location.href='/admin/agents/view/<?php echo $agent['id']; ?>'">
+                            <td>
+                                <div class="action-group">
+                                <button type="button" class="row-action primary" data-agent="<?php echo $agentModalJson; ?>" onclick="openAgentModal(this)" aria-label="View agent details">
                                     <i class="fas fa-eye"></i> View
                                 </button>
+                                <a class="row-action" href="/admin/agents/edit/<?php echo (int)$agent['id']; ?>">
+                                    <i class="fas fa-edit"></i> Edit
+                                </a>
+                                <a class="row-action" href="/admin/commissions?agent_id=<?php echo (int)$agent['id']; ?>">
+                                    <i class="fas fa-coins"></i> Commissions
+                                </a>
+                                <?php if ($status === 'active'): ?>
+                                    <form method="POST" action="/admin/agents/status/<?php echo (int)$agent['id']; ?>" style="display:inline;">
+                                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
+                                        <input type="hidden" name="status" value="suspended">
+                                        <button type="button" class="row-action warning" onclick="confirmAgentStatus(event, 'Suspend this agent?', 'danger')">
+                                            <i class="fas fa-ban"></i> Suspend
+                                        </button>
+                                    </form>
+                                <?php elseif ($status === 'suspended'): ?>
+                                    <form method="POST" action="/admin/agents/status/<?php echo (int)$agent['id']; ?>" style="display:inline;">
+                                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
+                                        <input type="hidden" name="status" value="active">
+                                        <button type="button" class="row-action success" onclick="confirmAgentStatus(event, 'Activate this agent?', 'success')">
+                                            <i class="fas fa-check"></i> Activate
+                                        </button>
+                                    </form>
+                                <?php endif; ?>
+                                </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -1307,7 +1496,121 @@ $top_performers = $top_performers ?? [];
     </div>
 </div>
 
+<!-- Agent Detail Modal -->
+<div class="modal fade entity-modal" id="agentDetailModal" tabindex="-1" aria-labelledby="agentDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title" id="agentDetailModalLabel">Agent Information</h5>
+                    <div id="agentModalSubtitle" style="font-size: 13px; opacity: 0.85; margin-top: 2px;"></div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="entity-profile">
+                    <div class="entity-avatar" id="agentModalAvatar">--</div>
+                    <div class="entity-fields">
+                        <div>
+                            <div class="entity-field-label">Full Name</div>
+                            <div class="entity-field-value" id="agentModalName">N/A</div>
+                        </div>
+                        <div>
+                            <div class="entity-field-label">Status</div>
+                            <div class="entity-field-value" id="agentModalStatus">N/A</div>
+                        </div>
+                        <div>
+                            <div class="entity-field-label">Agent Number</div>
+                            <div class="entity-field-value" id="agentModalNumber">N/A</div>
+                        </div>
+                        <div>
+                            <div class="entity-field-label">National ID</div>
+                            <div class="entity-field-value" id="agentModalNationalId">N/A</div>
+                        </div>
+                        <div>
+                            <div class="entity-field-label">Phone</div>
+                            <div class="entity-field-value" id="agentModalPhone">N/A</div>
+                        </div>
+                        <div>
+                            <div class="entity-field-label">Email</div>
+                            <div class="entity-field-value" id="agentModalEmail">N/A</div>
+                        </div>
+                        <div>
+                            <div class="entity-field-label">Region</div>
+                            <div class="entity-field-value" id="agentModalRegion">N/A</div>
+                        </div>
+                        <div>
+                            <div class="entity-field-label">County</div>
+                            <div class="entity-field-value" id="agentModalCounty">N/A</div>
+                        </div>
+                        <div>
+                            <div class="entity-field-label">Active Portfolios</div>
+                            <div class="entity-field-value" id="agentModalMembers">N/A</div>
+                        </div>
+                        <div>
+                            <div class="entity-field-label">Total Commission</div>
+                            <div class="entity-field-value" id="agentModalCommission">N/A</div>
+                        </div>
+                        <div>
+                            <div class="entity-field-label">Commission Rate</div>
+                            <div class="entity-field-value" id="agentModalRate">N/A</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <a href="#" class="btn btn-outline-secondary" id="agentModalCommissionsLink">
+                    <i class="fas fa-coins"></i> Commissions
+                </a>
+                <a href="#" class="btn btn-primary" id="agentModalEditLink">
+                    <i class="fas fa-edit"></i> Edit Agent
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
+function setAgentText(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value || 'N/A';
+}
+
+function openAgentModal(button) {
+    const agent = JSON.parse(button.getAttribute('data-agent') || '{}');
+    setAgentText('agentModalAvatar', agent.initials);
+    setAgentText('agentModalName', agent.name);
+    setAgentText('agentModalSubtitle', (agent.agent_number || 'N/A') + ' | ' + (agent.phone || 'N/A'));
+    setAgentText('agentModalStatus', (agent.status || 'N/A').replace(/_/g, ' ').toUpperCase());
+    setAgentText('agentModalNumber', agent.agent_number);
+    setAgentText('agentModalNationalId', agent.national_id);
+    setAgentText('agentModalPhone', agent.phone);
+    setAgentText('agentModalEmail', agent.email);
+    setAgentText('agentModalRegion', agent.region);
+    setAgentText('agentModalCounty', agent.county);
+    setAgentText('agentModalMembers', agent.total_members);
+    setAgentText('agentModalCommission', agent.total_commission);
+    setAgentText('agentModalRate', agent.commission_rate);
+
+    document.getElementById('agentModalEditLink').href = agent.edit_url || '#';
+    document.getElementById('agentModalCommissionsLink').href = agent.commissions_url || '#';
+
+    new bootstrap.Modal(document.getElementById('agentDetailModal')).show();
+}
+
+function confirmAgentStatus(event, message, type) {
+    const form = event.currentTarget.closest('form');
+    ShenaApp.confirmAction(
+        message,
+        function() {
+            form.submit();
+        },
+        null,
+        { type: type || 'warning', title: 'Confirm Agent Action' }
+    );
+}
+
 // Tab Switching Function
 function switchTab(tabName) {
     // Hide all tab contents

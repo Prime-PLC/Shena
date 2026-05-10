@@ -32,19 +32,17 @@ class BulkSmsController extends BaseController
     {
         $this->requireRole(['admin', 'super_admin', 'manager']);
         
-        // For now, provide empty data until campaign tables are created
-        $campaigns = [];
-        $queue_items = [];
-        $templates = [];
+        $campaigns = $this->bulkSmsService->getAllCampaigns();
+        $queue_items = $this->bulkSmsService->getQueueItems();
+        $templates = $this->bulkSmsService->getTemplates();
         
-        // Get statistics from communications table
         $stats = [
-            'active_campaigns' => 0,
-            'sent_today' => $this->getSmsSentToday(),
-            'queue_pending' => 0,
-            'sms_credits' => 0,
-            'total_sent' => $this->getTotalSmsSent(),
-            'failed_count' => $this->getFailedSmsCount()
+            'active_campaigns' => $this->bulkSmsService->getActiveCampaignCount(),
+            'sent_today' => $this->bulkSmsService->getSentCountToday(),
+            'queue_pending' => $this->bulkSmsService->getQueuePendingCount(),
+            'sms_credits' => $this->bulkSmsService->getSmsCredits(),
+            'total_sent' => $this->bulkSmsService->getTotalSentCount(),
+            'failed_count' => $this->bulkSmsService->getFailedCount()
         ];
         
         $data = [
@@ -415,9 +413,20 @@ class BulkSmsController extends BaseController
             // Validate inputs
             $title = $this->sanitizeInput($_POST['title'] ?? '');
             $message = $this->sanitizeInput($_POST['message'] ?? '');
-            $targetAudience = $_POST['target_audience'] ?? '';
+            $rawTargetAudience = $_POST['target_audience'] ?? '';
+            $targetAudience = $this->normalizeTargetAudience($rawTargetAudience);
             $action = $_POST['action'] ?? 'draft'; // draft or send
             $sendTime = $_POST['send_time'] ?? 'now';
+            $scheduleType = $_POST['schedule_type'] ?? null;
+            if ($scheduleType === 'now') {
+                $action = 'send';
+                $sendTime = 'now';
+            } elseif ($scheduleType === 'scheduled') {
+                $sendTime = 'scheduled';
+            } elseif ($scheduleType === 'draft') {
+                $action = 'draft';
+                $sendTime = 'draft';
+            }
             $scheduledAt = $_POST['scheduled_at'] ?? null;
             
             if (empty($title) || empty($message) || empty($targetAudience)) {
@@ -433,7 +442,7 @@ class BulkSmsController extends BaseController
             if ($targetAudience === 'custom') {
                 $customFilters = [
                     'package' => $_POST['filter_package'] ?? null,
-                    'status' => $_POST['filter_status'] ?? null,
+                    'status' => $_POST['filter_status'] ?? ($rawTargetAudience === 'inactive' || $rawTargetAudience === 'pending' ? $rawTargetAudience : null),
                     'joined_after' => $_POST['filter_joined_after'] ?? null,
                     'joined_before' => $_POST['filter_joined_before'] ?? null,
                 ];
@@ -485,6 +494,18 @@ class BulkSmsController extends BaseController
             echo json_encode(['success' => false, 'message' => $e->getMessage()]);
             exit();
         }
+    }
+
+    private function normalizeTargetAudience($targetAudience)
+    {
+        $map = [
+            'active_only' => 'active',
+            'defaulters' => 'defaulted',
+            'inactive' => 'custom',
+            'pending' => 'custom',
+        ];
+
+        return $map[$targetAudience] ?? $targetAudience;
     }
     
     /**
@@ -743,14 +764,16 @@ class BulkSmsController extends BaseController
         }
         
         $recipients = $this->bulkSmsService->getCampaignRecipients($id);
-        
-        // Redirect back to communications with campaign details in session
-        $_SESSION['campaign_view'] = [
+        $stats = $this->bulkSmsService->getCampaignStats($id);
+
+        $this->view('admin.campaign-details', [
+            'title' => 'SMS Campaign Report - ' . $campaign['title'],
             'campaign' => $campaign,
-            'recipients' => $recipients
-        ];
-        
-        $this->redirect('/admin/communications#campaigns');
+            'recipients' => $recipients,
+            'stats' => $stats,
+            'channel' => 'sms',
+            'back_url' => '/admin/sms-campaigns'
+        ]);
     }
     
     /**

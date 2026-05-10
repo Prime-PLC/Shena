@@ -618,9 +618,10 @@ if (empty($_SESSION['csrf_token'])) {
                     <select class="form-control" id="target-audience" name="target_audience" required>
                         <option value="">Select audience...</option>
                         <option value="all_members">All Active Members</option>
-                        <option value="active_only">Active Members Only</option>
+                        <option value="active">Active Members Only</option>
                         <option value="inactive">Inactive Members</option>
-                        <option value="defaulters">Payment Defaulters</option>
+                        <option value="grace_period">Grace Period Members</option>
+                        <option value="defaulted">Payment Defaulters</option>
                         <option value="custom">Custom Selection</option>
                     </select>
                 </div>
@@ -822,7 +823,8 @@ document.getElementById('quick-recipient-type')?.addEventListener('change', func
                 recipientDropdown.innerHTML = '<option value="">Select member...</option>';
                 if (Array.isArray(data)) {
                     data.forEach(member => {
-                        recipientDropdown.innerHTML += `<option value="${member.id}">${member.member_name} (${member.member_number})</option>`;
+                        const memberName = member.member_name || `${member.first_name || ''} ${member.last_name || ''}`.trim() || 'Member';
+                        recipientDropdown.innerHTML += `<option value="${member.id}">${memberName} (${member.member_number})</option>`;
                     });
                 }
             })

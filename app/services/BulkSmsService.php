@@ -55,10 +55,11 @@ class BulkSmsService
      */
     public function createCampaign($data, $createdBy)
     {
+        $status = !empty($data['scheduled_at']) ? 'scheduled' : 'draft';
         $sql = "INSERT INTO bulk_messages (
                     title, message, message_type, target_audience, 
                     custom_filters, scheduled_at, created_by, status
-                ) VALUES (?, ?, 'sms', ?, ?, ?, ?, 'draft')";
+                ) VALUES (?, ?, 'sms', ?, ?, ?, ?, ?)";
         
         $params = [
             $data['title'],
@@ -66,7 +67,8 @@ class BulkSmsService
             $data['target_audience'],
             isset($data['custom_filters']) ? json_encode($data['custom_filters']) : null,
             $data['scheduled_at'] ?? null,
-            $createdBy
+            $createdBy,
+            $status
         ];
         
         $stmt = $this->db->prepare($sql);
@@ -249,7 +251,9 @@ class BulkSmsService
                             $recipient['id'], 
                             'sent', 
                             null, 
-                            $deliveryMethod
+                            $deliveryMethod,
+                            $result['data']['transactionId'] ?? null,
+                            $result
                         );
                         
                         if ($deliveryMethod === 'email') {
@@ -273,7 +277,14 @@ class BulkSmsService
                     );
                     
                     if ($result['success']) {
-                        $this->updateRecipientStatus($recipient['id'], 'sent', null, 'sms');
+                        $this->updateRecipientStatus(
+                            $recipient['id'],
+                            'sent',
+                            null,
+                            'sms',
+                            $result['data']['transactionId'] ?? null,
+                            $result
+                        );
                         $sentCount++;
                     } else {
                         $this->updateRecipientStatus(
@@ -410,17 +421,20 @@ class BulkSmsService
      * @param string $errorMessage Optional error message
      * @return bool Success status
      */
-    private function updateRecipientStatus($recipientId, $status, $errorMessage = null, $deliveryMethod = null)
+    private function updateRecipientStatus($recipientId, $status, $errorMessage = null, $deliveryMethod = null, $providerMessageId = null, $providerResponse = null)
     {
         $sql = "UPDATE bulk_message_recipients 
                 SET status = ?, sent_at = NOW(), error_message = ?, 
                     delivery_method = ?,
+                    provider_message_id = ?,
+                    provider_response = ?,
                     email_fallback_sent = IF(delivery_method = 'email', 1, 0),
                     email_sent_at = IF(delivery_method = 'email', NOW(), NULL)
                 WHERE id = ?";
         
         $stmt = $this->db->prepare($sql);
-        return $stmt->execute([$status, $errorMessage, $deliveryMethod, $recipientId]);
+        $encodedResponse = $providerResponse === null ? null : json_encode($providerResponse);
+        return $stmt->execute([$status, $errorMessage, $deliveryMethod, $providerMessageId, $encodedResponse, $recipientId]);
     }
     
     /**
@@ -525,6 +539,26 @@ class BulkSmsService
     {
         $sql = "SELECT COUNT(*) as count FROM bulk_message_recipients 
                 WHERE status = 'sent' AND DATE(sent_at) = CURDATE()";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute();
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result['count'] ?? 0;
+    }
+
+    public function getTotalSentCount()
+    {
+        $sql = "SELECT COUNT(*) as count FROM bulk_message_recipients
+                WHERE recipient_type = 'sms' AND status = 'sent'";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute();
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result['count'] ?? 0;
+    }
+
+    public function getFailedCount()
+    {
+        $sql = "SELECT COUNT(*) as count FROM bulk_message_recipients
+                WHERE recipient_type = 'sms' AND status = 'failed'";
         $stmt = $this->db->prepare($sql);
         $stmt->execute();
         $result = $stmt->fetch(PDO::FETCH_ASSOC);

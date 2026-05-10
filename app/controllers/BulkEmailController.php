@@ -32,16 +32,14 @@ class BulkEmailController extends BaseController
     {
         $this->requireRole(['admin', 'super_admin', 'manager']);
         
-        // For now, provide empty data until campaign tables are created
-        $campaigns = [];
-        $templates = [];
+        $campaigns = $this->bulkEmailService->getAllCampaigns();
+        $templates = $this->bulkEmailService->getTemplates();
         
-        // Get statistics from communications table
         $stats = [
-            'active_campaigns' => 0,
-            'sent_today' => $this->getEmailsSentToday(),
-            'total_sent' => $this->getTotalEmailsSent(),
-            'failed_count' => $this->getFailedEmailsCount()
+            'active_campaigns' => $this->bulkEmailService->getActiveCampaignCount(),
+            'sent_today' => $this->bulkEmailService->getSentCountToday(),
+            'total_sent' => $this->bulkEmailService->getTotalSent(),
+            'failed_count' => $this->bulkEmailService->getFailedCount()
         ];
         
         $data = [
@@ -123,60 +121,73 @@ class BulkEmailController extends BaseController
     {
         $this->requireRole(['admin', 'super_admin', 'manager']);
         
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            $this->json(['error' => 'Method not allowed'], 405);
-            return;
-        }
-        
-        $title = trim($_POST['title'] ?? '');
-        $subject = trim($_POST['subject'] ?? '');
-        $message = trim($_POST['message'] ?? '');
-        $targetAudience = $_POST['target_audience'] ?? 'all_members';
-        $scheduledAt = $_POST['scheduled_at'] ?? null;
-        $sendNow = isset($_POST['send_now']);
-        
-        if (empty($title) || empty($subject) || empty($message)) {
-            $this->json(['error' => 'Title, subject, and message are required'], 400);
-            return;
-        }
-        
-        // Get recipients based on target audience
-        $recipients = $this->bulkEmailService->getRecipients($targetAudience, $_POST);
-        
-        if (empty($recipients)) {
-            $this->json(['error' => 'No recipients found for the selected audience'], 400);
-            return;
-        }
-        
-        // Create campaign
-        $campaignId = $this->bulkEmailService->createCampaign([
-            'title' => $title,
-            'subject' => $subject,
-            'message' => $message,
-            'message_type' => 'email',
-            'target_audience' => $targetAudience,
-            'scheduled_at' => $scheduledAt && !$sendNow ? $scheduledAt : null,
-            'total_recipients' => count($recipients),
-            'created_by' => $_SESSION['user_id'] ?? 0
-        ]);
-        
-        // Add recipients
-        $this->bulkEmailService->addRecipients($campaignId, $recipients);
-        
-        // Send now if requested
-        if ($sendNow) {
-            $this->bulkEmailService->sendCampaign($campaignId);
+        try {
+            if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+                throw new Exception('Method not allowed');
+            }
+
+            $input = $this->readRequestData();
+            $this->validateRequestCsrf($input);
+
+            $title = trim($input['title'] ?? '');
+            $subject = trim($input['subject'] ?? '');
+            $message = trim($input['message'] ?? $input['body'] ?? '');
+            $targetAudience = $this->normalizeTargetAudience($input['target_audience'] ?? 'all_members');
+            $scheduleType = $input['schedule_type'] ?? null;
+            $scheduledAt = $input['scheduled_at'] ?? null;
+            $sendNow = isset($input['send_now']) || $scheduleType === 'now' || ($input['action'] ?? '') === 'send';
+
+            if (empty($title) || empty($subject) || empty($message)) {
+                throw new Exception('Title, subject, and message are required');
+            }
+
+            if ($scheduleType === 'scheduled' && empty($scheduledAt)) {
+                throw new Exception('Schedule date and time is required for scheduled campaigns');
+            }
+
+            $customFilters = $this->extractCustomFilters($input);
+            $recipients = $this->bulkEmailService->getRecipients($targetAudience, $customFilters);
+
+            if (empty($recipients)) {
+                throw new Exception('No recipients found for the selected audience');
+            }
+
+            $campaignId = $this->bulkEmailService->createCampaign([
+                'title' => $title,
+                'subject' => $subject,
+                'message' => $message,
+                'target_audience' => $targetAudience,
+                'custom_filters' => $customFilters,
+                'scheduled_at' => ($scheduleType === 'scheduled' && !$sendNow) ? $scheduledAt : null,
+                'total_recipients' => count($recipients),
+                'created_by' => $_SESSION['user_id'] ?? 0
+            ]);
+
+            if (!$campaignId) {
+                throw new Exception('Failed to create email campaign');
+            }
+
+            $this->bulkEmailService->addRecipients($campaignId, $recipients);
+
+            if ($sendNow) {
+                $result = $this->bulkEmailService->sendCampaign($campaignId);
+                $this->json([
+                    'success' => true,
+                    'message' => "Email campaign created and sent to {$result['sent']} recipient(s), {$result['failed']} failed",
+                    'campaign_id' => $campaignId,
+                    'sent' => $result['sent'] ?? 0,
+                    'failed' => $result['failed'] ?? 0,
+                ]);
+            }
+
             $this->json([
                 'success' => true,
-                'message' => 'Email campaign created and sending started',
+                'message' => $scheduleType === 'scheduled' ? 'Email campaign scheduled successfully' : 'Email campaign saved as draft',
                 'campaign_id' => $campaignId
             ]);
-        } else {
-            $this->json([
-                'success' => true,
-                'message' => 'Email campaign created successfully',
-                'campaign_id' => $campaignId
-            ]);
+        } catch (Throwable $e) {
+            error_log('Email campaign creation error: ' . $e->getMessage());
+            $this->jsonError($e->getMessage(), 400);
         }
     }
     
@@ -188,14 +199,15 @@ class BulkEmailController extends BaseController
         $this->requireRole(['admin', 'super_admin', 'manager']);
         
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            $this->json(['error' => 'Method not allowed'], 405);
+            $this->jsonError('Method not allowed', 405);
             return;
         }
         
-        $campaignId = $_POST['campaign_id'] ?? 0;
+        $input = $this->readRequestData();
+        $campaignId = $input['campaign_id'] ?? 0;
         
         if (!$campaignId) {
-            $this->json(['error' => 'Campaign ID is required'], 400);
+            $this->jsonError('Campaign ID is required', 400);
             return;
         }
         
@@ -209,7 +221,7 @@ class BulkEmailController extends BaseController
                 'failed' => $result['failed'] ?? 0
             ]);
         } else {
-            $this->json(['error' => $result['message'] ?? 'Failed to send campaign'], 500);
+            $this->jsonError($result['message'] ?? 'Failed to send campaign', 500);
         }
     }
     
@@ -221,14 +233,15 @@ class BulkEmailController extends BaseController
         $this->requireRole(['admin', 'super_admin', 'manager']);
         
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            $this->json(['error' => 'Method not allowed'], 405);
+            $this->jsonError('Method not allowed', 405);
             return;
         }
         
-        $campaignId = $_POST['campaign_id'] ?? 0;
+        $input = $this->readRequestData();
+        $campaignId = $input['campaign_id'] ?? 0;
         
         if (!$campaignId) {
-            $this->json(['error' => 'Campaign ID is required'], 400);
+            $this->jsonError('Campaign ID is required', 400);
             return;
         }
         
@@ -237,7 +250,7 @@ class BulkEmailController extends BaseController
         if ($result) {
             $this->json(['success' => true, 'message' => 'Campaign cancelled successfully']);
         } else {
-            $this->json(['error' => 'Failed to cancel campaign'], 500);
+            $this->jsonError('Failed to cancel campaign', 500);
         }
     }
     
@@ -258,10 +271,15 @@ class BulkEmailController extends BaseController
         
         $recipients = $this->bulkEmailService->getCampaignRecipients($id);
         
-        $this->view('admin.email-campaign-details', [
+        $stats = $this->bulkEmailService->getCampaignStats($id);
+
+        $this->view('admin.campaign-details', [
             'title' => 'Campaign Details - ' . $campaign['title'],
             'campaign' => $campaign,
-            'recipients' => $recipients
+            'recipients' => $recipients,
+            'stats' => $stats,
+            'channel' => 'email',
+            'back_url' => '/admin/email-campaigns'
         ]);
     }
     
@@ -285,7 +303,7 @@ class BulkEmailController extends BaseController
         $this->requireRole(['admin', 'super_admin', 'manager']);
         
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            $this->json(['error' => 'Method not allowed'], 405);
+            $this->jsonError('Method not allowed', 405);
             return;
         }
         
@@ -294,7 +312,7 @@ class BulkEmailController extends BaseController
         $message = trim($_POST['message'] ?? '');
         
         if (empty($recipients) || empty($subject) || empty($message)) {
-            $this->json(['error' => 'Recipients, subject, and message are required'], 400);
+            $this->jsonError('Recipients, subject, and message are required', 400);
             return;
         }
         
@@ -331,14 +349,15 @@ class BulkEmailController extends BaseController
         $this->requireRole(['admin', 'super_admin', 'manager']);
         
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            $this->json(['error' => 'Method not allowed'], 405);
+            $this->jsonError('Method not allowed', 405);
             return;
         }
         
-        $campaignId = $_POST['campaign_id'] ?? 0;
+        $input = $this->readRequestData();
+        $campaignId = $input['campaign_id'] ?? 0;
         
         if (!$campaignId) {
-            $this->json(['error' => 'Campaign ID is required'], 400);
+            $this->jsonError('Campaign ID is required', 400);
             return;
         }
         
@@ -347,7 +366,7 @@ class BulkEmailController extends BaseController
         if ($result) {
             $this->json(['success' => true, 'message' => 'Campaign paused successfully']);
         } else {
-            $this->json(['error' => 'Failed to pause campaign'], 500);
+            $this->jsonError('Failed to pause campaign', 500);
         }
     }
     
@@ -359,15 +378,16 @@ class BulkEmailController extends BaseController
         $this->requireRole(['admin', 'super_admin', 'manager']);
         
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            $this->json(['error' => 'Method not allowed'], 405);
+            $this->jsonError('Method not allowed', 405);
             return;
         }
         
-        $campaignId = $_POST['campaign_id'] ?? 0;
-        $scheduledAt = $_POST['scheduled_at'] ?? null;
+        $input = $this->readRequestData();
+        $campaignId = $input['campaign_id'] ?? 0;
+        $scheduledAt = $input['scheduled_at'] ?? null;
         
         if (!$campaignId || !$scheduledAt) {
-            $this->json(['error' => 'Campaign ID and scheduled date are required'], 400);
+            $this->jsonError('Campaign ID and scheduled date are required', 400);
             return;
         }
         
@@ -376,7 +396,7 @@ class BulkEmailController extends BaseController
         if ($result) {
             $this->json(['success' => true, 'message' => 'Campaign rescheduled successfully']);
         } else {
-            $this->json(['error' => 'Failed to reschedule campaign'], 500);
+            $this->jsonError('Failed to reschedule campaign', 500);
         }
     }
     
@@ -388,14 +408,15 @@ class BulkEmailController extends BaseController
         $this->requireRole(['admin', 'super_admin', 'manager']);
         
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            $this->json(['error' => 'Method not allowed'], 405);
+            $this->jsonError('Method not allowed', 405);
             return;
         }
         
-        $campaignId = $_POST['campaign_id'] ?? 0;
+        $input = $this->readRequestData();
+        $campaignId = $input['campaign_id'] ?? 0;
         
         if (!$campaignId) {
-            $this->json(['error' => 'Campaign ID is required'], 400);
+            $this->jsonError('Campaign ID is required', 400);
             return;
         }
         
@@ -407,5 +428,61 @@ class BulkEmailController extends BaseController
             'sent' => $result['sent'] ?? 0,
             'failed' => $result['failed'] ?? 0
         ]);
+    }
+
+    private function readRequestData()
+    {
+        $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+        if (stripos($contentType, 'application/json') !== false) {
+            $data = json_decode(file_get_contents('php://input'), true);
+            return is_array($data) ? $data : [];
+        }
+
+        return $_POST;
+    }
+
+    private function jsonError($message, $code = 400)
+    {
+        $this->json(['success' => false, 'message' => $message, 'error' => $message], $code);
+    }
+
+    private function validateRequestCsrf(array $input)
+    {
+        if (isset($_SESSION['csrf_token']) && isset($input['csrf_token']) && hash_equals($_SESSION['csrf_token'], $input['csrf_token'])) {
+            return;
+        }
+
+        throw new Exception('CSRF token mismatch');
+    }
+
+    private function normalizeTargetAudience($targetAudience)
+    {
+        $map = [
+            'active_only' => 'active',
+            'inactive' => 'custom',
+            'pending' => 'custom',
+            'defaulters' => 'defaulted',
+        ];
+
+        return $map[$targetAudience] ?? $targetAudience;
+    }
+
+    private function extractCustomFilters(array $input)
+    {
+        $filters = [];
+
+        if (($input['target_audience'] ?? '') === 'inactive') {
+            $filters['member_status'] = 'inactive';
+        } elseif (($input['target_audience'] ?? '') === 'pending') {
+            $filters['member_status'] = 'pending';
+        }
+
+        foreach (['filter_status' => 'member_status', 'filter_package' => 'package', 'filter_joined_after' => 'joined_after', 'filter_joined_before' => 'joined_before'] as $inputKey => $filterKey) {
+            if (!empty($input[$inputKey])) {
+                $filters[$filterKey] = $input[$inputKey];
+            }
+        }
+
+        return $filters;
     }
 }

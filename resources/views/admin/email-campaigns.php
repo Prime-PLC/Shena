@@ -544,9 +544,11 @@
                     <select class="form-control" id="target-audience" name="target_audience" required>
                         <option value="">Select audience...</option>
                         <option value="all_members">All Active Members</option>
-                        <option value="active_only">Active Members Only</option>
+                        <option value="active">Active Members Only</option>
                         <option value="inactive">Inactive Members</option>
                         <option value="pending">Pending Members</option>
+                        <option value="grace_period">Grace Period Members</option>
+                        <option value="defaulted">Payment Defaulters</option>
                         <option value="custom">Custom Selection</option>
                     </select>
                 </div>
@@ -558,7 +560,7 @@
 
                 <div class="form-group">
                     <label for="email-body">Email Content</label>
-                    <textarea class="form-control" id="email-body" name="body" required placeholder="Enter your email message here..."></textarea>
+                    <textarea class="form-control" id="email-body" name="message" required placeholder="Enter your email message here..."></textarea>
                     <small style="color: #6b7280; display: block; margin-top: 0.5rem;">
                         You can use placeholders: {member_name}, {member_number}, {package}
                     </small>
