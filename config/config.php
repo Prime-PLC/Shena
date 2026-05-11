@@ -146,7 +146,7 @@ define('ALLOWED_FILE_TYPES', ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx']);
 define('UPLOAD_PATH', (defined('ROOT_PATH') ? ROOT_PATH : __DIR__ . '/..') . '/storage/uploads');
 
 // Payment Settings
-define('REGISTRATION_FEE', 200); // Ksh. 10 (Testing)
+define('REGISTRATION_FEE', 200);
 define('REACTIVATION_FEE', 100); // Ksh. 100
 define('MORTUARY_DAYS_COVERED', 14); // Maximum days of mortuary covered
 

@@ -75,6 +75,9 @@ include VIEWS_PATH . '/layouts/header.php';
                             <button type="submit" class="btn btn-primary btn-lg w-100" id="initiateSTKBtn">
                                 <i class="fas fa-paper-plane"></i> Send Payment Request (KES <?php echo number_format($registration['amount'], 2); ?>)
                             </button>
+                            <button type="button" class="btn btn-outline-primary btn-lg w-100 mt-2" id="retryRegistrationSTKBtn" style="display:none;">
+                                <i class="fas fa-redo-alt"></i> Retry STK Push
+                            </button>
                         </form>
                         
                         <div id="stkPushStatus" class="mt-3" style="display: none;">
@@ -180,10 +183,36 @@ document.querySelectorAll('input[name="paymentMethod"]').forEach(radio => {
 // STK Push Form Submission
 document.getElementById('stkPushForm')?.addEventListener('submit', async function(e) {
     e.preventDefault();
-    
+    await initiateRegistrationStkPush();
+});
+
+const retryRegistrationSTKBtn = document.getElementById('retryRegistrationSTKBtn');
+retryRegistrationSTKBtn?.addEventListener('click', async function() {
+    await initiateRegistrationStkPush();
+});
+
+function showRegistrationRetry(message) {
     const btn = document.getElementById('initiateSTKBtn');
     const statusDiv = document.getElementById('stkPushStatus');
     const statusMsg = document.getElementById('statusMessage');
+    const retryBtn = document.getElementById('retryRegistrationSTKBtn');
+
+    statusDiv.style.display = 'block';
+    statusDiv.querySelector('.alert').className = 'alert alert-danger';
+    statusMsg.innerHTML = '<i class="fas fa-times-circle"></i> ' + message;
+
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send Payment Request (KES <?php echo number_format($registration['amount'], 2); ?>)';
+    if (retryBtn) {
+        retryBtn.style.display = '';
+    }
+}
+
+async function initiateRegistrationStkPush() {
+    const btn = document.getElementById('initiateSTKBtn');
+    const statusDiv = document.getElementById('stkPushStatus');
+    const statusMsg = document.getElementById('statusMessage');
+    const retryBtn = document.getElementById('retryRegistrationSTKBtn');
     const phoneNumber = document.getElementById('phoneNumber').value;
     
     // Validate phone number
@@ -196,6 +225,9 @@ document.getElementById('stkPushForm')?.addEventListener('submit', async functio
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
     statusDiv.style.display = 'none';
+    if (retryBtn) {
+        retryBtn.style.display = 'none';
+    }
     
     try {
         const response = await fetch('/registration/pay', {
@@ -226,23 +258,13 @@ document.getElementById('stkPushForm')?.addEventListener('submit', async functio
                 pollPaymentStatus(data.checkout_request_id);
             }
         } else {
-            statusDiv.style.display = 'block';
-            statusDiv.querySelector('.alert').className = 'alert alert-danger';
-            statusMsg.innerHTML = '<i class="fas fa-times-circle"></i> ' + (data.error || 'Payment initiation failed');
-            
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send Payment Request';
+            showRegistrationRetry(data.error || data.message || 'Payment initiation failed');
         }
     } catch (error) {
         console.error('Payment error:', error);
-        statusDiv.style.display = 'block';
-        statusDiv.querySelector('.alert').className = 'alert alert-danger';
-        statusMsg.innerHTML = '<i class="fas fa-times-circle"></i> Network error. Please try again.';
-        
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send Payment Request';
+        showRegistrationRetry('Network error. Please try again.');
     }
-});
+}
 
 // Poll payment status
 function pollPaymentStatus(checkoutRequestId) {
@@ -268,7 +290,7 @@ function pollPaymentStatus(checkoutRequestId) {
             const data = await response.json();
             
             if (data.success && data.status) {
-                if (data.status.ResultCode === '0') {
+                if (String(data.status.ResultCode) === '0') {
                     // Payment successful
                     clearInterval(interval);
                     const statusDiv = document.getElementById('stkPushStatus');
@@ -282,14 +304,7 @@ function pollPaymentStatus(checkoutRequestId) {
                 } else if (data.status.ResultCode !== undefined) {
                     // Payment failed
                     clearInterval(interval);
-                    const statusDiv = document.getElementById('stkPushStatus');
-                    statusDiv.querySelector('.alert').className = 'alert alert-danger';
-                    document.getElementById('statusMessage').innerHTML = 
-                        '<i class="fas fa-times-circle"></i> ' + (data.status.ResultDesc || 'Payment failed');
-                    
-                    const btn = document.getElementById('initiateSTKBtn');
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-paper-plane"></i> Try Again';
+                    showRegistrationRetry(data.status.ResultDesc || 'Payment failed. Please retry.');
                 }
             }
         } catch (error) {

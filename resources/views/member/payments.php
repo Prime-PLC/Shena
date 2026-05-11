@@ -1031,10 +1031,11 @@ main {
                     <div id="paymentRecoveryForm" style="display:none; margin-top:12px; padding:12px; background:#fffdf0; border-radius:6px; border:1px solid #fde68a;">
                         <form method="POST" action="/payments/verify-transaction">
                             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token ?? ''); ?>">
+                            <input type="hidden" name="phone_number" value="<?php echo htmlspecialchars($member['phone'] ?? ''); ?>">
                             <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
                                 <div>
                                     <label style="font-size:12px; font-weight:600; color:#78350f; display:block; margin-bottom:4px;">M-Pesa Confirmation Code</label>
-                                    <input type="text" name="mpesa_code" class="form-control form-control-sm" placeholder="e.g. RGH3XK02AB" style="text-transform:uppercase; width:200px;" required>
+                                    <input type="text" name="transaction_code" class="form-control form-control-sm" placeholder="e.g. RGH3XK02AB" style="text-transform:uppercase; width:200px;" required>
                                 </div>
                                 <button type="submit" class="btn btn-sm btn-success" style="font-size:13px; padding:6px 16px; font-weight:600;">
                                     <i class="fas fa-check"></i> Check &amp; Link
@@ -1220,6 +1221,9 @@ main {
                         
                         <button type="submit" class="btn-send-payment" id="initiateSTKBtn">
                             <i class="fas fa-paper-plane"></i> Send Payment Request
+                        </button>
+                        <button type="button" class="btn btn-outline-primary w-100 mt-2" id="retrySTKBtn" style="display:none;">
+                            <i class="fas fa-redo-alt"></i> Retry STK Push
                         </button>
                     </form>
                     
@@ -1411,6 +1415,44 @@ main {
 </div>
 
 <script>
+const PAYMENT_AMOUNTS = {
+    monthly: <?php echo json_encode((float)($member['monthly_contribution'] ?? 0)); ?>,
+    registration: <?php echo json_encode(defined('REGISTRATION_FEE') ? (float)REGISTRATION_FEE : 200.0); ?>,
+    reactivation: <?php echo json_encode(defined('REACTIVATION_FEE') ? (float)REACTIVATION_FEE : 100.0); ?>
+};
+
+function formatPaymentAmount(amount) {
+    return 'KES ' + Number(amount || 0).toLocaleString('en-KE', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+}
+
+function syncPaymentAmount() {
+    const paymentTypeSelect = document.getElementById('paymentType');
+    const amountInput = document.getElementById('amount');
+    if (!paymentTypeSelect || !amountInput) {
+        return;
+    }
+
+    const paymentType = paymentTypeSelect.value || 'monthly';
+    const amount = PAYMENT_AMOUNTS[paymentType] ?? PAYMENT_AMOUNTS.monthly;
+    amountInput.value = amount;
+
+    document.querySelectorAll('#paymentModal .amount-value').forEach(function (el) {
+        el.textContent = formatPaymentAmount(amount);
+    });
+    document.querySelectorAll('#paymentModal .highlight-orange').forEach(function (el) {
+        el.textContent = formatPaymentAmount(amount);
+    });
+}
+
+const paymentTypeSelect = document.getElementById('paymentType');
+if (paymentTypeSelect) {
+    paymentTypeSelect.addEventListener('change', syncPaymentAmount);
+    syncPaymentAmount();
+}
+
 // Payment method tab toggle
 document.querySelectorAll('.payment-method-tab').forEach(tab => {
     tab.addEventListener('click', function() {
@@ -1448,10 +1490,36 @@ document.querySelectorAll('input[name="paymentMethod"]').forEach(radio => {
 // STK Push Form Submission
 document.getElementById('stkPushForm')?.addEventListener('submit', async function(e) {
     e.preventDefault();
-    
+    await initiateMemberStkPush();
+});
+
+const retrySTKBtn = document.getElementById('retrySTKBtn');
+retrySTKBtn?.addEventListener('click', async function() {
+    await initiateMemberStkPush();
+});
+
+function showStkRetry(message) {
     const btn = document.getElementById('initiateSTKBtn');
     const statusDiv = document.getElementById('stkPushStatus');
     const statusMsg = document.getElementById('statusMessage');
+    const retryBtn = document.getElementById('retrySTKBtn');
+
+    statusDiv.style.display = 'block';
+    statusDiv.querySelector('.alert').className = 'alert alert-danger';
+    statusMsg.innerHTML = '<i class="fas fa-times-circle"></i> ' + message;
+
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send Payment Request';
+    if (retryBtn) {
+        retryBtn.style.display = '';
+    }
+}
+
+async function initiateMemberStkPush() {
+    const btn = document.getElementById('initiateSTKBtn');
+    const statusDiv = document.getElementById('stkPushStatus');
+    const statusMsg = document.getElementById('statusMessage');
+    const retryBtn = document.getElementById('retrySTKBtn');
     
     const phoneNumber = document.getElementById('phoneNumber').value;
     const amount = document.getElementById('amount').value;
@@ -1467,6 +1535,9 @@ document.getElementById('stkPushForm')?.addEventListener('submit', async functio
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
     statusDiv.style.display = 'none';
+    if (retryBtn) {
+        retryBtn.style.display = 'none';
+    }
     
     try {
         const response = await fetch('/payment/initiate', {
@@ -1501,23 +1572,13 @@ document.getElementById('stkPushForm')?.addEventListener('submit', async functio
                 btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send Payment Request';
             }, 3000);
         } else {
-            statusDiv.style.display = 'block';
-            statusDiv.querySelector('.alert').className = 'alert alert-danger';
-            statusMsg.innerHTML = '<i class="fas fa-times-circle"></i> ' + (data.error || 'Payment initiation failed');
-            
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send Payment Request';
+            showStkRetry(data.error || data.message || 'Payment initiation failed');
         }
     } catch (error) {
         console.error('Payment error:', error);
-        statusDiv.style.display = 'block';
-        statusDiv.querySelector('.alert').className = 'alert alert-danger';
-        statusMsg.innerHTML = '<i class="fas fa-times-circle"></i> Network error. Please try again.';
-        
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send Payment Request';
+        showStkRetry('Network error. Please try again.');
     }
-});
+}
 
 // Poll payment status
 function pollPaymentStatus(checkoutRequestId) {
@@ -1539,7 +1600,7 @@ function pollPaymentStatus(checkoutRequestId) {
             const data = await response.json();
             
             if (data.success && data.status) {
-                if (data.status.ResultCode === '0') {
+                if (String(data.status.ResultCode) === '0') {
                     // Payment successful
                     clearInterval(interval);
                     document.getElementById('statusMessage').innerHTML = 
@@ -1552,10 +1613,7 @@ function pollPaymentStatus(checkoutRequestId) {
                 } else if (data.status.ResultCode !== undefined) {
                     // Payment failed
                     clearInterval(interval);
-                    const statusDiv = document.getElementById('stkPushStatus');
-                    statusDiv.querySelector('.alert').className = 'alert alert-danger';
-                    document.getElementById('statusMessage').innerHTML = 
-                        '<i class="fas fa-times-circle"></i> ' + (data.status.ResultDesc || 'Payment failed');
+                    showStkRetry(data.status.ResultDesc || 'Payment failed. Please retry.');
                 }
             }
         } catch (error) {
@@ -1660,11 +1718,13 @@ document.getElementById('verifyTransactionForm')?.addEventListener('submit', asy
 
     try {
         const formData = new FormData();
+        formData.append('csrf_token', <?php echo json_encode($csrf_token ?? ''); ?>);
         formData.append('transaction_code', transactionCode);
         formData.append('phone_number', phoneNumber);
 
         const response = await fetch('/payments/verify-transaction', {
             method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
             body: formData
         });
 

@@ -13,10 +13,14 @@ class Payment extends BaseModel
     
     public function getMemberPayments($memberId, $limit = null)
     {
-        $sql = "SELECT p.*, m.member_number 
-                FROM {$this->table} p 
-                JOIN members m ON p.member_id = m.id 
-                WHERE p.member_id = :member_id 
+        if ($this->hasPaidRegistrationFee($memberId)) {
+            $this->cancelStaleRegistrationPaymentAttempts((int)$memberId);
+        }
+
+        $sql = "SELECT p.*, m.member_number
+                FROM {$this->table} p
+                JOIN members m ON p.member_id = m.id
+                WHERE p.member_id = :member_id
                 ORDER BY p.created_at DESC";
         
         if ($limit) {
@@ -161,6 +165,8 @@ class Payment extends BaseModel
             return false;
         }
 
+        $wasActive = (($member['status'] ?? '') === 'active');
+
         if (($member['status'] ?? '') !== 'active') {
             $memberModel->update($memberId, [
                 'status' => 'active',
@@ -173,7 +179,53 @@ class Payment extends BaseModel
             $userModel->update($member['user_id'], ['status' => 'active']);
         }
 
+        $this->cancelStaleRegistrationPaymentAttempts($memberId);
+
+        if (!$wasActive) {
+            $this->sendRegistrationWelcomeSms($memberId);
+        }
+
         return true;
+    }
+
+    private function cancelStaleRegistrationPaymentAttempts(int $memberId): void
+    {
+        $sql = "UPDATE {$this->table}
+                SET status = 'cancelled',
+                    notes = CASE
+                        WHEN notes IS NULL OR notes = '' THEN 'Cancelled after registration fee was completed'
+                        ELSE CONCAT(notes, ' | Cancelled after registration fee was completed')
+                    END,
+                    updated_at = NOW()
+                WHERE member_id = :member_id
+                  AND payment_type = 'registration'
+                  AND status = 'pending'";
+
+        $this->db->execute($sql, ['member_id' => $memberId]);
+    }
+
+    private function sendRegistrationWelcomeSms(int $memberId): void
+    {
+        try {
+            $memberModel = new Member();
+            $member = $memberModel->getMemberWithUser($memberId);
+
+            if (!$member || empty($member['phone'])) {
+                return;
+            }
+
+            $firstName = $member['first_name'] ?? 'Member';
+            $memberNo = $member['member_number'] ?? '';
+            $nationalId = $member['id_number'] ?? $memberNo;
+            $contribution = number_format((float)($member['monthly_contribution'] ?? 0), 0);
+
+            $smsMsg = "Hi {$firstName}! Welcome to SHENA. Your monthly contribution is KES {$contribution} to be paid by the 7th of every month via Paybill 4163987, Acct: {$nationalId}. {$memberNo} is your member number.";
+
+            $smsService = new SmsService();
+            $smsService->sendSms($member['phone'], $smsMsg);
+        } catch (Exception $smsEx) {
+            error_log('Registration welcome SMS error for member ' . $memberId . ': ' . $smsEx->getMessage());
+        }
     }
 
     /**
@@ -184,11 +236,14 @@ class Payment extends BaseModel
      */
     public function findByReceiptNumber($receiptNumber)
     {
-        $sql = "SELECT * FROM {$this->table} 
-                WHERE mpesa_receipt_number = :receipt OR transaction_id = :receipt
+        $sql = "SELECT * FROM {$this->table}
+                WHERE mpesa_receipt_number = :receipt OR transaction_id = :receipt_txn
                 LIMIT 1";
-        
-        return $this->db->fetch($sql, ['receipt' => $receiptNumber]);
+
+        return $this->db->fetch($sql, [
+            'receipt' => $receiptNumber,
+            'receipt_txn' => $receiptNumber
+        ]);
     }
     
     public function failPayment($paymentId, $reason = null)

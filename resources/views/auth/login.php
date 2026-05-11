@@ -539,9 +539,9 @@ include VIEWS_PATH . '/layouts/header.php';
                         <input type="hidden" name="csrf_token" value="<?php echo $csrf_token ?? ''; ?>">
 
                         <div class="form-group">
-                            <label class="form-label">National ID or Member Number</label>
+                            <label class="form-label">National ID, Agent Number, or Member Number</label>
                             <input type="text" name="credential" id="credInput" class="form-control"
-                                   placeholder="e.g. 12345678 or SWA-001" required autocomplete="username"
+                                   placeholder="e.g. 12345678, AG20240001, or SH-123456" required autocomplete="username"
                                    value="<?php echo htmlspecialchars($email ?? $_POST['email'] ?? ($_SESSION['email'] ?? ''), ENT_QUOTES); ?>">
                             <small style="color:#9CA3AF; font-size:0.8rem;">You may also use your email address.</small>
                             <?php if (!empty($_SESSION['email'])) { unset($_SESSION['email']); } ?>
@@ -597,7 +597,7 @@ include VIEWS_PATH . '/layouts/header.php';
                 </div>
 
                 <div class="footer-links">
-                    <a href="/admin/login" class="footer-link">
+                    <a href="/login" class="footer-link">
                         <i class="fas fa-user-shield"></i>
                         Agent Login
                     </a>
@@ -680,7 +680,7 @@ include VIEWS_PATH . '/layouts/header.php';
                 var credential = document.getElementById('credInput').value.trim();
                 var password   = document.getElementById('passwordInput').value;
                 if (!credential || !password) {
-                    showMsg(loginMsg, 'Please enter your ID / Member Number and password.', 'warning');
+                    showMsg(loginMsg, 'Please enter your National ID, Agent Number, Member Number, or email and password.', 'warning');
                     return;
                 }
                 loginBtn.disabled = true;

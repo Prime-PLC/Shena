@@ -35,7 +35,7 @@ $requestLog .= str_repeat('-', 80) . "\n";
 file_put_contents($logFile, $requestLog, FILE_APPEND);
 
 // Validate caller IP against known Safaricom IP ranges
-// Production: 196.201.214.0/24, 196.201.215.0/24
+// Production: 196.201.212.0/24, 196.201.213.0/24, 196.201.214.0/24, 196.201.215.0/24
 // Sandbox:    196.201.214.200
 function safaricom_ip_allowed(string $ip): bool {
     // Allow localhost / private ranges during local development only
@@ -43,6 +43,8 @@ function safaricom_ip_allowed(string $ip): bool {
         return true;
     }
     $allowedCidrs = [
+        '196.201.212.0/24',
+        '196.201.213.0/24',
         '196.201.214.0/24',
         '196.201.215.0/24',
     ];
@@ -156,8 +158,15 @@ try {
         
         // Find the payment record by checkout request ID
         $payment = $db->fetch(
-            "SELECT * FROM payments WHERE transaction_reference = :checkout_id",
-            ['checkout_id' => $checkoutRequestId]
+            "SELECT * FROM payments
+             WHERE transaction_reference = :checkout_id
+                OR checkout_request_id = :checkout_id_alt
+             ORDER BY id DESC
+             LIMIT 1",
+            [
+                'checkout_id' => $checkoutRequestId,
+                'checkout_id_alt' => $checkoutRequestId
+            ]
         );
         
         if ($payment) {
@@ -166,6 +175,10 @@ try {
             $paymentModel->confirmPayment($payment['id'], $mpesaReceiptNumber);
             $updated = $db->execute(
                 "UPDATE payments SET
+                    merchant_request_id = :merchant_request_id,
+                    checkout_request_id = :checkout_id,
+                    result_code = :result_code,
+                    result_desc = :result_desc,
                     transaction_date = :trans_date,
                     payment_date = :trans_date,
                     sender_phone = :phone,
@@ -174,6 +187,10 @@ try {
                     reconciled_at = NOW()
                  WHERE id = :id",
                 [
+                    'merchant_request_id' => $merchantRequestId,
+                    'checkout_id' => $checkoutRequestId,
+                    'result_code' => $resultCode,
+                    'result_desc' => $resultDesc,
                     'trans_date' => $transactionDate,
                     'phone' => $phoneNumber,
                     'id' => $payment['id']
@@ -264,17 +281,32 @@ try {
         
         // Find and update payment record
         $payment = $db->fetch(
-            "SELECT * FROM payments WHERE transaction_reference = :checkout_id",
-            ['checkout_id' => $checkoutRequestId]
+            "SELECT * FROM payments
+             WHERE transaction_reference = :checkout_id
+                OR checkout_request_id = :checkout_id_alt
+             ORDER BY id DESC
+             LIMIT 1",
+            [
+                'checkout_id' => $checkoutRequestId,
+                'checkout_id_alt' => $checkoutRequestId
+            ]
         );
         
         if ($payment) {
             $db->execute(
                 "UPDATE payments SET 
                     status = 'failed',
+                    merchant_request_id = :merchant_request_id,
+                    checkout_request_id = :checkout_id,
+                    result_code = :result_code,
+                    result_desc = :result_desc,
                     notes = :notes
                 WHERE id = :id",
                 [
+                    'merchant_request_id' => $merchantRequestId,
+                    'checkout_id' => $checkoutRequestId,
+                    'result_code' => $resultCode,
+                    'result_desc' => $resultDesc,
                     'notes' => "Failed: {$resultDesc}",
                     'id' => $payment['id']
                 ]

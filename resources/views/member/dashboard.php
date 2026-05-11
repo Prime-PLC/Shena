@@ -830,6 +830,9 @@ $missingFields = $missing_profile_fields ?? [];
                     <button class="onb-mpesa-btn" id="onb-pay-btn" type="button">
                         <i class="fas fa-mobile-alt"></i> Pay with M-Pesa
                     </button>
+                    <button class="btn btn-outline-primary btn-sm mt-2" id="onb-pay-retry-btn" type="button" style="display:none; border-radius:8px;">
+                        <i class="fas fa-redo-alt"></i> Retry STK Push
+                    </button>
                     <div id="onb-pay-status" style="margin-top:14px; font-size:0.88rem;"></div>
                 </div>
             </div>
@@ -866,6 +869,7 @@ $missingFields = $missing_profile_fields ?? [];
     const REG_FEE    = <?php echo json_encode(defined('REGISTRATION_FEE') ? (float)REGISTRATION_FEE : 200.0); ?>;
     const HAS_PAID_REGISTRATION = <?php echo json_encode(($member['status'] ?? 'inactive') === 'active'); ?>;
     let paymentPollTimer = null;
+    let registrationCheckoutRequestId = null;
 
     const tierMap = {
         individual: {
@@ -1143,7 +1147,11 @@ $missingFields = $missing_profile_fields ?? [];
             btnNext.disabled = true;
             btnNext.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Verifying...';
             try {
-                var pr = await fetch('/member/onboarding/payment-status', {
+                var statusUrl = '/member/onboarding/payment-status';
+                if (registrationCheckoutRequestId) {
+                    statusUrl += '?' + new URLSearchParams({ checkout_request_id: registrationCheckoutRequestId }).toString();
+                }
+                var pr = await fetch(statusUrl, {
                     headers: { 'X-Requested-With': 'XMLHttpRequest' }
                 });
                 var pd = await pr.json();
@@ -1199,6 +1207,7 @@ $missingFields = $missing_profile_fields ?? [];
     /* ── M-Pesa payment (Step 4) ─────────────────────────────────────── */
     var payPhone  = document.getElementById('onb-pay-phone');
     var payBtn    = document.getElementById('onb-pay-btn');
+    var payRetryBtn = document.getElementById('onb-pay-retry-btn');
     var payStatus = document.getElementById('onb-pay-status');
 
     if (MEMBER_PHONE) {
@@ -1207,10 +1216,26 @@ $missingFields = $missing_profile_fields ?? [];
         payPhone.value = ph;
     }
 
-    payBtn.addEventListener('click', async function () {
+    function resetOnboardingStkAction() {
+        payBtn.disabled = false;
+        payBtn.innerHTML = '<i class="fas fa-mobile-alt"></i> Pay with M-Pesa';
+    }
+
+    function showOnboardingRetry(message) {
+        payStatus.innerHTML = '<span class="text-danger">' + message + '</span>';
+        resetOnboardingStkAction();
+        if (payRetryBtn) {
+            payRetryBtn.style.display = '';
+        }
+    }
+
+    async function initiateOnboardingStkPush() {
         var rawPhone = payPhone.value.trim();
         if (!rawPhone) { payStatus.innerHTML = '<span class="text-danger">Please enter a phone number.</span>'; return; }
         payBtn.disabled = true;
+        if (payRetryBtn) {
+            payRetryBtn.style.display = 'none';
+        }
         payBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Please wait...';
         try {
             var resp = await fetch('/payment/initiate', {
@@ -1220,26 +1245,30 @@ $missingFields = $missing_profile_fields ?? [];
             });
             var data = await resp.json();
             if (data.success) {
+                registrationCheckoutRequestId = data.checkout_request_id || registrationCheckoutRequestId;
                 payStatus.innerHTML = '<span class="text-success"><i class="fas fa-check-circle me-1"></i>' + (data.message || 'STK Push sent! Check your phone for the M-Pesa prompt.') + '</span>';
                 payBtn.innerHTML = '<i class="fas fa-check me-1"></i> Prompt Sent';
                 startPaymentPolling();
             } else {
-                payStatus.innerHTML = '<span class="text-danger">' + (data.error || data.message || 'Payment failed. Please try again.') + '</span>';
-                payBtn.disabled = false;
-                payBtn.innerHTML = '<i class="fas fa-mobile-alt"></i> Pay with M-Pesa';
+                showOnboardingRetry(data.error || data.message || 'Payment failed. Please try again.');
             }
         } catch (e) {
-            payStatus.innerHTML = '<span class="text-danger">Network error. Please try again.</span>';
-            payBtn.disabled = false;
-            payBtn.innerHTML = '<i class="fas fa-mobile-alt"></i> Pay with M-Pesa';
+            showOnboardingRetry('Network error. Please try again.');
         }
-    });
+    }
+
+    payBtn.addEventListener('click', initiateOnboardingStkPush);
+    payRetryBtn.addEventListener('click', initiateOnboardingStkPush);
 
     function startPaymentPolling() {
         if (paymentPollTimer) clearInterval(paymentPollTimer);
         paymentPollTimer = setInterval(async function () {
             try {
-                var pr = await fetch('/member/onboarding/payment-status', {
+                var statusUrl = '/member/onboarding/payment-status';
+                if (registrationCheckoutRequestId) {
+                    statusUrl += '?' + new URLSearchParams({ checkout_request_id: registrationCheckoutRequestId }).toString();
+                }
+                var pr = await fetch(statusUrl, {
                     headers: { 'X-Requested-With': 'XMLHttpRequest' }
                 });
                 var pd = await pr.json();
@@ -1253,6 +1282,10 @@ $missingFields = $missing_profile_fields ?? [];
                         'success'
                     );
                     setTimeout(dismissAndReload, 1600);
+                } else if (pd.status && pd.status.ResultCode !== undefined && String(pd.status.ResultCode) !== '0') {
+                    clearInterval(paymentPollTimer);
+                    paymentPollTimer = null;
+                    showOnboardingRetry(pd.status.ResultDesc || 'STK push failed. Please retry.');
                 }
             } catch (_) {}
         }, 5000);

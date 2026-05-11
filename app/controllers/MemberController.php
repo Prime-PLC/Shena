@@ -2,7 +2,10 @@
 /**
  * Member Controller - Handles member dashboard and operations
  */
-class MemberController extends BaseController 
+require_once __DIR__ . '/../services/ReportService.php';
+require_once __DIR__ . '/../helpers/ReportDocumentTemplate.php';
+
+class MemberController extends BaseController
 {
     private $userModel;
     private $memberModel;
@@ -525,30 +528,7 @@ class MemberController extends BaseController
             }
 
             $this->paymentModel->activateMemberAfterRegistrationPayment((int)$member['id']);
-
-            // Send personalised welcome SMS only once after confirmed registration payment
-            if (!empty($_SESSION['is_first_login'])) {
-                try {
-                    $userId = (int) ($_SESSION['user_id'] ?? 0);
-                    $member = $this->memberModel->getMemberByUserId($userId);
-                    if ($member && !empty($member['phone'])) {
-                        $firstName   = $member['first_name'] ?? 'Member';
-                        $memberNo    = $member['member_number'] ?? '';
-                        $nationalId  = $member['id_number'] ?? '';
-                        $contribution = number_format((float)($member['monthly_contribution'] ?? 0), 0);
-                        $phone        = $member['phone'];
-
-                        $smsMsg = "Hi {$firstName}! Welcome to SHENA. Your monthly contribution is KES {$contribution} to be paid by the 7th of every month via Paybill 4163987, Acct: {$nationalId}. {$memberNo} is your member number.";
-                        $smsService = new SmsService();
-                        $smsService->sendSms($phone, $smsMsg);
-
-                        $_SESSION['success'] = "Welcome, {$firstName}! Your SHENA membership is active. "
-                            . "Your monthly contribution of KES {$contribution} is due by the 7th of every month.";
-                    }
-                } catch (Exception $smsEx) {
-                    error_log('Welcome SMS error: ' . $smsEx->getMessage());
-                }
-            }
+            $_SESSION['success'] = 'Welcome to SHENA. Your membership is active.';
 
             unset($_SESSION['is_first_login']);
             unset($_SESSION['onboarding_skipped']);
@@ -577,6 +557,13 @@ class MemberController extends BaseController
                 ]);
                 return;
             }
+            $checkoutRequestId = trim((string)($_GET['checkout_request_id'] ?? ''));
+            $stkStatus = null;
+
+            if ($checkoutRequestId !== '') {
+                $stkStatus = $this->reconcileRegistrationCheckout($member, $checkoutRequestId);
+            }
+
             // Also check for a completed registration payment record
             $regFee = defined('REGISTRATION_FEE') ? (float) REGISTRATION_FEE : 200.0;
             $payments = $this->paymentModel->findAll([
@@ -594,14 +581,65 @@ class MemberController extends BaseController
                 'paid' => $paid,
                 'message' => $paid ? 'Welcome to SHENA. Your membership is active.' : 'Registration fee not yet confirmed.',
                 'monthly_contribution' => (float)($member['monthly_contribution'] ?? 0),
-                'member_number' => $member['member_number'] ?? ''
+                'member_number' => $member['member_number'] ?? '',
+                'status' => $stkStatus
             ]);
         } catch (Exception $e) {
             error_log('checkRegistrationPayment error: ' . $e->getMessage());
             echo json_encode(['paid' => false]);
         }
     }
-    
+
+    private function reconcileRegistrationCheckout(array $member, string $checkoutRequestId): ?array
+    {
+        try {
+            $paymentService = new PaymentService();
+            $status = $paymentService->queryTransactionStatus($checkoutRequestId);
+
+            if (!$status || !array_key_exists('ResultCode', $status)) {
+                return null;
+            }
+
+            $db = Database::getInstance();
+            $payment = $db->fetch(
+                "SELECT * FROM payments
+                 WHERE member_id = :member_id
+                   AND (transaction_reference = :checkout_id OR checkout_request_id = :checkout_id_alt)
+                 ORDER BY id DESC
+                 LIMIT 1",
+                [
+                    'member_id' => $member['id'],
+                    'checkout_id' => $checkoutRequestId,
+                    'checkout_id_alt' => $checkoutRequestId
+                ]
+            );
+
+            if (!$payment) {
+                return $status;
+            }
+
+            $resultCode = (string)$status['ResultCode'];
+            $this->paymentModel->update($payment['id'], [
+                'checkout_request_id' => $checkoutRequestId,
+                'result_code' => $status['ResultCode'],
+                'result_desc' => $status['ResultDesc'] ?? null,
+            ]);
+
+            if (in_array($resultCode, ['0', '00'], true)) {
+                $this->paymentModel->confirmPayment($payment['id'], $payment['mpesa_receipt_number'] ?? null);
+                return $status;
+            }
+
+            if (($payment['status'] ?? '') !== 'completed') {
+                $this->paymentModel->failPayment($payment['id'], $status['ResultDesc'] ?? 'STK payment failed');
+            }
+            return $status;
+        } catch (Exception $e) {
+            error_log('reconcileRegistrationCheckout error: ' . $e->getMessage());
+            return null;
+        }
+    }
+
     public function payments()
     {
         $member = $this->memberModel->findByUserId($_SESSION['user_id']);
@@ -716,112 +754,22 @@ class MemberController extends BaseController
             return;
         }
 
-        // Generate PDF receipt using Dompdf
         require_once 'vendor/autoload.php';
-        $dompdf = new Dompdf\Dompdf();
 
-        $html = '<!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <title>Payment Receipt - ' . htmlspecialchars($member['first_name'] . ' ' . $member['last_name']) . '</title>
-            <style>
-                body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f8f9fa; }
-                .receipt-container { max-width: 600px; margin: 0 auto; background: white; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); overflow: hidden; }
-                .header { background: linear-gradient(135deg, #7F20B0 0%, #5E2B7A 100%); color: white; padding: 30px; text-align: center; position: relative; }
-                .header::before { content: ""; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: url("data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMzAiIGN5PSIzMCIgcj0iMyIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwwLjEpIi8+Cjwvc3ZnPg==") repeat; opacity: 0.1; }
-                .logo { font-size: 28px; font-weight: bold; margin-bottom: 10px; position: relative; z-index: 1; }
-                .company-name { font-size: 16px; opacity: 0.9; position: relative; z-index: 1; }
-                .receipt-title { font-size: 24px; font-weight: bold; margin: 30px 0 20px 0; color: #1F2937; text-align: center; }
-                .receipt-details { padding: 30px; }
-                .detail-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f0f0f0; }
-                .detail-row:last-child { border-bottom: none; }
-                .detail-label { font-weight: 600; color: #6B7280; font-size: 14px; }
-                .detail-value { font-size: 14px; color: #1F2937; }
-                .amount-highlight { font-size: 18px; font-weight: bold; color: #059669; }
-                .member-info { background: #f8f9fa; padding: 20px; margin: 20px 0; border-radius: 8px; border-left: 4px solid #7F20B0; }
-                .member-info h5 { margin: 0 0 10px 0; color: #1F2937; font-size: 16px; }
-                .member-info p { margin: 5px 0; color: #6B7280; font-size: 14px; }
-                .footer { background: #f8f9fa; padding: 20px; text-align: center; border-top: 1px solid #e9ecef; }
-                .footer p { margin: 5px 0; font-size: 12px; color: #6B7280; }
-                .status-badge { display: inline-block; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; text-transform: uppercase; }
-                .status-completed { background: #D1FAE5; color: #059669; }
-                .status-pending { background: #FEF3C7; color: #D97706; }
-                .status-failed { background: #FEE2E2; color: #DC2626; }
-                @media print { body { background: white; } .receipt-container { box-shadow: none; } }
-            </style>
-        </head>
-        <body>
-            <div class="receipt-container">
-                <div class="header">
-                    <div class="logo">SHENA</div>
-                    <div class="company-name">Companion Welfare Association</div>
-                </div>
+        $reportService = new ReportService();
+        $payload = $reportService->getPaymentReceiptPayload($member, $payment);
+        $payload['title'] = 'Payment Receipt';
+        $html = ReportDocumentTemplate::render($payload);
+        $dompdf = new Dompdf\Dompdf([
+            'isRemoteEnabled' => true,
+            'isHtml5ParserEnabled' => true
+        ]);
 
-                <div class="receipt-details">
-                    <h2 class="receipt-title">Payment Receipt</h2>
-
-                    <div class="detail-row">
-                        <span class="detail-label">Receipt Number:</span>
-                        <span class="detail-value">' . htmlspecialchars($payment['transaction_id'] ?? $payment['mpesa_receipt_number'] ?? 'N/A') . '</span>
-                    </div>
-
-                    <div class="detail-row">
-                        <span class="detail-label">Payment Date:</span>
-                        <span class="detail-value">' . date('M d, Y', strtotime($payment['payment_date'] ?? $payment['created_at'] ?? 'now')) . '</span>
-                    </div>
-
-                    <div class="detail-row">
-                        <span class="detail-label">Amount Paid:</span>
-                        <span class="detail-value amount-highlight">KES ' . number_format((float)($payment['amount'] ?? 0), 2) . '</span>
-                    </div>
-
-                    <div class="detail-row">
-                        <span class="detail-label">Period:</span>
-                        <span class="detail-value">' . htmlspecialchars($payment['period'] ?? 'N/A') . '</span>
-                    </div>
-
-                    <div class="detail-row">
-                        <span class="detail-label">Payment Method:</span>
-                        <span class="detail-value">' . htmlspecialchars($payment['payment_method'] ?? 'M-Pesa') . '</span>
-                    </div>
-
-                    <div class="detail-row">
-                        <span class="detail-label">Status:</span>
-                        <span class="detail-value">
-                            <span class="status-badge status-' . ($payment['status'] ?? 'pending') . '">' . strtoupper($payment['status'] ?? 'pending') . '</span>
-                        </span>
-                    </div>';
-
-        if (!empty($payment['mpesa_receipt_number']) && $payment['mpesa_receipt_number'] !== $payment['transaction_id']) {
-            $html .= '<div class="detail-row">
-                        <span class="detail-label">M-Pesa Code:</span>
-                        <span class="detail-value">' . htmlspecialchars($payment['mpesa_receipt_number']) . '</span>
-                    </div>';
-        }
-
-        $html .= '<div class="member-info">
-                        <h5>Member Information</h5>
-                        <p><strong>Name:</strong> ' . htmlspecialchars($member['first_name'] . ' ' . $member['last_name']) . '</p>
-                        <p><strong>Member ID:</strong> ' . htmlspecialchars($member['member_id'] ?? 'N/A') . '</p>
-                        <p><strong>Phone:</strong> ' . htmlspecialchars($member['phone'] ?? 'N/A') . '</p>
-                    </div>
-                </div>
-
-                <div class="footer">
-                    <p><strong>SHENA Companion Welfare Association</strong></p>
-                    <p>This is an official payment receipt. Generated on ' . date('F d, Y \a\t H:i') . '</p>
-                    <p>For any inquiries, please contact our support team.</p>
-                </div>
-            </div>
-        </body>
-        </html>';
-
-        $dompdf->loadHtml($html);
+        $dompdf->loadHtml($html, 'UTF-8');
         $dompdf->setPaper('A4', 'portrait');
         $dompdf->render();
 
-        $filename = 'receipt-' . ($payment['transaction_id'] ?? $payment['mpesa_receipt_number'] ?? 'payment') . '.pdf';
+        $filename = $payload['pdf_filename'] ?? ('receipt-' . ($payment['transaction_id'] ?? $payment['mpesa_receipt_number'] ?? 'payment') . '.pdf');
         $dompdf->stream($filename, array('Attachment' => true));
         exit;
     }
@@ -835,90 +783,27 @@ class MemberController extends BaseController
             return;
         }
 
-        $payments = $this->paymentModel->getMemberPayments($member['id']);
-        $statusFilter = $this->sanitizeInput($_GET['status'] ?? '');
         $yearFilter = $this->sanitizeInput($_GET['year'] ?? '');
-        $payments = $this->filterPayments($payments, $statusFilter, $yearFilter);
-
-        // Generate PDF using Dompdf
         require_once 'vendor/autoload.php';
-        $dompdf = new Dompdf\Dompdf();
 
-        $html = '<!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <title>Payment History - ' . htmlspecialchars($member['first_name'] . ' ' . $member['last_name']) . '</title>
-            <style>
-                body { font-family: Arial, sans-serif; margin: 20px; }
-                h1 { color: #7F3D9E; text-align: center; }
-                .header-info { margin-bottom: 30px; }
-                .header-info p { margin: 5px 0; }
-                table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-                th { background-color: #f2f2f2; font-weight: bold; }
-                .total-row { background-color: #e8f4fd; font-weight: bold; }
-                .status-completed { color: #10B981; }
-                .status-pending { color: #F59E0B; }
-                .status-failed { color: #EF4444; }
-            </style>
-        </head>
-        <body>
-            <h1>Payment History Report</h1>
-            <div class="header-info">
-                <p><strong>Member:</strong> ' . htmlspecialchars($member['first_name'] . ' ' . $member['last_name']) . '</p>
-                <p><strong>Member ID:</strong> ' . htmlspecialchars($member['member_id'] ?? 'N/A') . '</p>
-                <p><strong>Report Date:</strong> ' . date('F d, Y') . '</p>
-                <p><strong>Period:</strong> ' . (!empty($yearFilter) ? $yearFilter : 'All Years') . ' ' . (!empty($statusFilter) ? ' - ' . ucfirst($statusFilter) . ' Payments' : '') . '</p>
-            </div>
+        $dateFrom = $yearFilter ? $yearFilter . '-01-01' : '';
+        $dateTo = $yearFilter ? $yearFilter . '-12-31' : '';
+        $reportService = new ReportService();
+        $payload = $reportService->getMemberStatementPayload((int)$member['id'], $dateFrom, $dateTo, [
+            'prepared_for' => trim(($member['first_name'] ?? '') . ' ' . ($member['last_name'] ?? '')) ?: 'Member',
+            'title' => 'Member Payment Statement',
+        ]);
+        $html = ReportDocumentTemplate::render($payload);
+        $dompdf = new Dompdf\Dompdf([
+            'isRemoteEnabled' => true,
+            'isHtml5ParserEnabled' => true
+        ]);
 
-            <table>
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Reference</th>
-                        <th>Amount (KES)</th>
-                        <th>Type</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>';
-
-        $totalAmount = 0;
-        foreach ($payments as $payment) {
-            $reference = $payment['transaction_id']
-                ?? $payment['mpesa_receipt_number']
-                ?? $payment['transaction_reference']
-                ?? 'N/A';
-            $amount = (float)($payment['amount'] ?? 0);
-            $totalAmount += $amount;
-            $statusClass = 'status-' . ($payment['status'] ?? 'pending');
-
-            $html .= '<tr>
-                <td>' . date('M d, Y', strtotime($payment['payment_date'] ?? $payment['created_at'] ?? 'now')) . '</td>
-                <td>' . htmlspecialchars($reference) . '</td>
-                <td>KES ' . number_format($amount, 2) . '</td>
-                <td>' . htmlspecialchars($payment['payment_type'] ?? 'monthly') . '</td>
-                <td class="' . $statusClass . '">' . htmlspecialchars(strtoupper($payment['status'] ?? 'pending')) . '</td>
-            </tr>';
-        }
-
-        $html .= '<tr class="total-row">
-                <td colspan="2"><strong>Total Amount</strong></td>
-                <td><strong>KES ' . number_format($totalAmount, 2) . '</strong></td>
-                <td colspan="2"></td>
-            </tr>';
-
-        $html .= '</tbody>
-            </table>
-        </body>
-        </html>';
-
-        $dompdf->loadHtml($html);
+        $dompdf->loadHtml($html, 'UTF-8');
         $dompdf->setPaper('A4', 'portrait');
         $dompdf->render();
 
-        $filename = 'payment-history-' . date('Y-m-d') . '.pdf';
+        $filename = $payload['pdf_filename'] ?? ('payment-history-' . date('Y-m-d') . '.pdf');
         $dompdf->stream($filename, array('Attachment' => true));
         exit;
     }
@@ -928,47 +813,47 @@ class MemberController extends BaseController
      */
     public function verifyTransaction()
     {
-        header('Content-Type: application/json');
-        
         try {
+            $this->validateCsrf();
+
             $member = $this->memberModel->findByUserId($_SESSION['user_id']);
             if (!$member) {
-                $this->json(['success' => false, 'message' => 'Member not found'], 404);
+                $this->paymentVerificationResponse(false, 'Member not found', 404);
                 return;
             }
-            
-            $transactionCode = $_POST['transaction_code'] ?? '';
-            $phoneNumber = $_POST['phone_number'] ?? '';
-            
+
+            $transactionCode = $_POST['transaction_code'] ?? $_POST['mpesa_code'] ?? '';
+            $phoneNumber = $_POST['phone_number'] ?? ($member['phone'] ?? '');
+
             // Validate inputs
             if (empty($transactionCode)) {
-                $this->json(['success' => false, 'message' => 'Please enter M-Pesa transaction code'], 400);
+                $this->paymentVerificationResponse(false, 'Please enter M-Pesa transaction code', 400);
                 return;
             }
-            
+
             if (empty($phoneNumber)) {
-                $this->json(['success' => false, 'message' => 'Please enter your phone number'], 400);
+                $this->paymentVerificationResponse(false, 'Please enter your phone number', 400);
                 return;
             }
-            
+
             // Format phone number
             $phoneNumber = preg_replace('/[^0-9]/', '', $phoneNumber);
             if (strlen($phoneNumber) === 10 && substr($phoneNumber, 0, 1) === '0') {
                 $phoneNumber = '254' . substr($phoneNumber, 1);
             }
-            
+
             // Format transaction code (remove spaces, uppercase)
             $transactionCode = strtoupper(preg_replace('/\s+/', '', $transactionCode));
-            
+
             // Search for payment record for this member
-            $sql = "SELECT * FROM payments 
+            $sql = "SELECT * FROM payments
                     WHERE member_id = :member_id
                     AND (mpesa_receipt_number = :code OR transaction_reference LIKE :code_pattern)
                     AND phone_number LIKE :phone
                     AND status IN ('pending', 'failed', 'initiated')
-                    ORDER BY created_at DESC 
+                    ORDER BY created_at DESC
                     LIMIT 1";
-            
+
             $stmt = $this->db->getConnection()->prepare($sql);
             $stmt->execute([
                 ':member_id' => $member['id'],
@@ -976,19 +861,19 @@ class MemberController extends BaseController
                 ':code_pattern' => '%' . $transactionCode . '%',
                 ':phone' => '%' . substr($phoneNumber, -9) . '%'
             ]);
-            
+
             $payment = $stmt->fetch(PDO::FETCH_ASSOC);
-            
+
             if (!$payment) {
                 // Try alternative search - by phone and recent pending payments for this member
-                $sql = "SELECT * FROM payments 
+                $sql = "SELECT * FROM payments
                         WHERE member_id = :member_id
                         AND phone_number LIKE :phone
                         AND status IN ('pending', 'failed', 'initiated')
                         AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-                        ORDER BY created_at DESC 
+                        ORDER BY created_at DESC
                         LIMIT 1";
-                
+
                 $stmt = $this->db->getConnection()->prepare($sql);
                 $stmt->execute([
                     ':member_id' => $member['id'],
@@ -996,62 +881,95 @@ class MemberController extends BaseController
                 ]);
                 $payment = $stmt->fetch(PDO::FETCH_ASSOC);
             }
-            
+
             if (!$payment) {
-                $this->json([
-                    'success' => false, 
-                    'message' => 'No matching pending payment found. Please verify your transaction code and phone number.'
-                ], 404);
+                $paymentType = $this->paymentModel->hasPaidRegistrationFee((int)$member['id']) ? 'monthly' : 'registration';
+                $reconciliationService = new PaymentReconciliationService();
+                $result = $reconciliationService->verifyPaybillReceipt(
+                    $transactionCode,
+                    (int)$member['id'],
+                    (int)($_SESSION['user_id'] ?? 0),
+                    'Verified by member from member portal',
+                    $paymentType
+                );
+
+                if (!empty($result['success'])) {
+                    $this->paymentVerificationResponse(true, $result['message'] ?? 'Payment verified successfully! Your account has been updated.', 200, [
+                        'payment_id' => $result['payment_id'] ?? null,
+                    ]);
+                    return;
+                }
+
+                $this->paymentVerificationResponse(
+                    false,
+                    $result['message'] ?? 'No matching pending payment found. Please verify your transaction code and phone number.',
+                    404
+                );
                 return;
             }
-            
+
             // Update payment status
             $this->db->getConnection()->beginTransaction();
-            
+
             try {
-                // Update payment record
-                $updatePayment = "UPDATE payments SET 
-                                status = 'completed',
-                                mpesa_receipt_number = :receipt,
+                $this->paymentModel->confirmPayment((int)$payment['id'], $transactionCode);
+
+                $updatePayment = "UPDATE payments SET
                                 transaction_date = NOW(),
                                 verified_at = NOW(),
                                 verified_by = 'manual_verification'
                               WHERE id = :id";
-                
+
                 $stmt = $this->db->getConnection()->prepare($updatePayment);
-                $stmt->execute([
-                    ':receipt' => $transactionCode,
-                    ':id' => $payment['id']
-                ]);
-                
+                $stmt->execute([':id' => $payment['id']]);
+
                 // Update member last payment date
-                $updateMember = "UPDATE members SET 
+                $updateMember = "UPDATE members SET
                                last_payment_date = NOW()
                              WHERE id = :id";
-                
+
                 $stmt = $this->db->getConnection()->prepare($updateMember);
                 $stmt->execute([':id' => $member['id']]);
-                
+
                 $this->db->getConnection()->commit();
-                
-                $this->json([
-                    'success' => true,
-                    'message' => 'Payment verified successfully! Your account has been updated.',
+
+                $this->paymentVerificationResponse(true, 'Payment verified successfully! Your account has been updated.', 200, [
                     'amount' => $payment['amount']
                 ]);
-                
+
             } catch (Exception $e) {
                 $this->db->getConnection()->rollBack();
                 error_log('Transaction verification error: ' . $e->getMessage());
-                $this->json(['success' => false, 'message' => 'Failed to verify payment'], 500);
+                $this->paymentVerificationResponse(false, 'Failed to verify payment', 500);
             }
-            
+
         } catch (Exception $e) {
             error_log('Verify transaction error: ' . $e->getMessage());
-            $this->json(['success' => false, 'message' => 'An error occurred'], 500);
+            $this->paymentVerificationResponse(false, 'An error occurred', 500);
         }
     }
-    
+
+    private function wantsJsonResponse(): bool
+    {
+        $requestedWith = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? ''));
+
+        return $requestedWith === 'xmlhttprequest';
+    }
+
+    private function paymentVerificationResponse(bool $success, string $message, int $code = 200, array $extra = []): void
+    {
+        if ($this->wantsJsonResponse()) {
+            $this->json(array_merge([
+                'success' => $success,
+                'message' => $message,
+            ], $extra), $code);
+            return;
+        }
+
+        $_SESSION[$success ? 'success' : 'error'] = $message;
+        $this->redirect('/payments');
+    }
+
     public function beneficiaries()
     {
         $member = $this->memberModel->findByUserId($_SESSION['user_id']);

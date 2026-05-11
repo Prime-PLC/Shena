@@ -1,7 +1,7 @@
 <?php
 /**
  * Bulk Email Service
- * Handles bulk email campaign creation, scheduling, and sending
+ * Handles bulk email campaign creation, scheduling, sending, and delivery stats.
  */
 
 require_once __DIR__ . '/../core/Database.php';
@@ -13,169 +13,222 @@ class BulkEmailService
     private $db;
     private $emailService;
     private $memberModel;
-    
+
     public function __construct()
     {
         $this->db = Database::getInstance()->getConnection();
         $this->emailService = new EmailService();
         $this->memberModel = new Member();
     }
-    
-    /**
-     * Get all campaigns with optional filters
-     */
+
     public function getAllCampaigns($filters = [])
     {
-        $sql = "SELECT * FROM bulk_messages WHERE message_type = 'email'";
+        $sql = "SELECT bm.*,
+                       COALESCE(stats.total_count, 0) AS total_recipients,
+                       COALESCE(stats.sent_count, 0) AS sent_count,
+                       COALESCE(stats.failed_count, 0) AS failed_count
+                FROM bulk_messages bm
+                LEFT JOIN (
+                    SELECT bulk_message_id,
+                           COUNT(*) AS total_count,
+                           SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) AS sent_count,
+                           SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed_count
+                    FROM bulk_message_recipients
+                    GROUP BY bulk_message_id
+                ) stats ON bm.id = stats.bulk_message_id
+                WHERE bm.message_type = 'email'";
         $params = [];
-        
+
         if (!empty($filters['status'])) {
-            $sql .= " AND status = :status";
-            $params['status'] = $filters['status'];
+            $sql .= " AND bm.status = ?";
+            $params[] = $filters['status'];
         }
-        
         if (!empty($filters['date_from'])) {
-            $sql .= " AND created_at >= :date_from";
-            $params['date_from'] = $filters['date_from'];
+            $sql .= " AND bm.created_at >= ?";
+            $params[] = $filters['date_from'];
         }
-        
         if (!empty($filters['date_to'])) {
-            $sql .= " AND created_at <= :date_to";
-            $params['date_to'] = $filters['date_to'] . ' 23:59:59';
+            $sql .= " AND bm.created_at <= ?";
+            $params[] = $filters['date_to'] . ' 23:59:59';
         }
-        
-        $sql .= " ORDER BY created_at DESC";
-        
+
+        $sql .= " ORDER BY bm.created_at DESC";
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
-        
+
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
-    
-    /**
-     * Get single campaign by ID
-     */
+
     public function getCampaign($id)
     {
-        $stmt = $this->db->prepare("SELECT * FROM bulk_messages WHERE id = ? AND message_type = 'email'");
+        $sql = "SELECT bm.*,
+                       COALESCE(stats.total_count, 0) AS total_recipients,
+                       COALESCE(stats.sent_count, 0) AS sent_count,
+                       COALESCE(stats.failed_count, 0) AS failed_count
+                FROM bulk_messages bm
+                LEFT JOIN (
+                    SELECT bulk_message_id,
+                           COUNT(*) AS total_count,
+                           SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) AS sent_count,
+                           SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed_count
+                    FROM bulk_message_recipients
+                    GROUP BY bulk_message_id
+                ) stats ON bm.id = stats.bulk_message_id
+                WHERE bm.id = ? AND bm.message_type = 'email'";
+        $stmt = $this->db->prepare($sql);
         $stmt->execute([$id]);
-        
+
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
-    
-    /**
-     * Create new email campaign
-     */
+
     public function createCampaign($data)
     {
         $stmt = $this->db->prepare("
             INSERT INTO bulk_messages (
-                title, message, message_type, target_audience, 
+                title, message, message_type, target_audience,
                 custom_filters, scheduled_at, total_recipients, created_by, status
             ) VALUES (?, ?, 'email', ?, ?, ?, ?, ?, ?)
         ");
-        
+
         $status = !empty($data['scheduled_at']) ? 'scheduled' : 'draft';
         $customFilters = $data['custom_filters'] ?? [];
         if (!empty($data['subject'])) {
             $customFilters['email_subject'] = $data['subject'];
         }
-        
+
         $stmt->execute([
             $data['title'],
             $data['message'],
             $data['target_audience'],
             !empty($customFilters) ? json_encode($customFilters) : null,
             $data['scheduled_at'],
-            $data['total_recipients'],
+            $data['total_recipients'] ?? 0,
             $data['created_by'],
             $status
         ]);
-        
+
         return $this->db->lastInsertId();
     }
-    
-    /**
-     * Get recipients based on target audience
-     */
+
     public function getRecipients($targetAudience, $additionalFilters = [])
     {
-        $sql = "SELECT u.id, u.email, u.first_name, u.last_name, m.member_number
-                FROM users u
-                INNER JOIN members m ON u.id = m.user_id
-                WHERE u.email IS NOT NULL AND u.email != ''";
-        
-        switch ($targetAudience) {
-            case 'active':
-                $sql .= " AND m.status = 'active'";
-                break;
-            case 'grace_period':
-                $sql .= " AND m.status = 'grace_period'";
-                break;
-            case 'defaulted':
-                $sql .= " AND m.status = 'defaulted'";
-                break;
-            case 'new_members':
-                $sql .= " AND m.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)";
-                break;
-            case 'custom':
-                if (!empty($additionalFilters['member_status'])) {
-                    $sql .= " AND m.status = " . $this->db->quote($additionalFilters['member_status']);
-                }
-                if (!empty($additionalFilters['package'])) {
-                    $sql .= " AND m.package = " . $this->db->quote($additionalFilters['package']);
-                }
-                if (!empty($additionalFilters['joined_after'])) {
-                    $sql .= " AND m.created_at >= " . $this->db->quote($additionalFilters['joined_after']);
-                }
-                if (!empty($additionalFilters['joined_before'])) {
-                    $sql .= " AND m.created_at <= " . $this->db->quote($additionalFilters['joined_before'] . ' 23:59:59');
-                }
-                break;
-            case 'all_members':
-            default:
-                // No additional filter
-                break;
-        }
-        
-        $stmt = $this->db->query($sql);
-        
+        [$sql, $params] = $this->buildRecipientQuery($targetAudience, $additionalFilters);
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
-    
-    /**
-     * Add recipients to campaign
-     */
+
+    private function buildRecipientQuery($targetAudience, array $additionalFilters = [])
+    {
+        $sql = "SELECT DISTINCT
+                    u.id,
+                    u.email,
+                    u.phone,
+                    u.first_name,
+                    u.last_name,
+                    m.member_number,
+                    m.package,
+                    m.status,
+                    COALESCE(m.monthly_contribution, 0) AS amount_due
+                FROM users u
+                INNER JOIN members m ON u.id = m.user_id
+                WHERE 1 = 1";
+        $params = [];
+
+        $targetAudience = $this->normalizeAudience($targetAudience);
+
+        if ($targetAudience === 'active') {
+            $sql .= " AND m.status = ?";
+            $params[] = 'active';
+        } elseif ($targetAudience === 'grace_period') {
+            $sql .= " AND m.status = ?";
+            $params[] = 'grace_period';
+        } elseif ($targetAudience === 'defaulted') {
+            $sql .= " AND m.status = ?";
+            $params[] = 'defaulted';
+        } elseif ($targetAudience === 'new_members') {
+            $sql .= " AND m.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)";
+        } elseif ($targetAudience === 'custom') {
+            if (!empty($additionalFilters['member_status'])) {
+                $sql .= " AND m.status = ?";
+                $params[] = $additionalFilters['member_status'];
+            }
+            if (!empty($additionalFilters['status'])) {
+                $sql .= " AND m.status = ?";
+                $params[] = $additionalFilters['status'];
+            }
+            if (!empty($additionalFilters['package'])) {
+                $sql .= " AND m.package = ?";
+                $params[] = $additionalFilters['package'];
+            }
+            if (!empty($additionalFilters['joined_after'])) {
+                $sql .= " AND m.created_at >= ?";
+                $params[] = $additionalFilters['joined_after'];
+            }
+            if (!empty($additionalFilters['joined_before'])) {
+                $sql .= " AND m.created_at <= ?";
+                $params[] = $additionalFilters['joined_before'] . ' 23:59:59';
+            }
+        }
+
+        $sql .= " ORDER BY u.first_name ASC, u.last_name ASC, m.member_number ASC";
+
+        return [$sql, $params];
+    }
+
+    private function normalizeAudience($targetAudience)
+    {
+        $map = [
+            'active_only' => 'active',
+            'defaulters' => 'defaulted',
+            'inactive' => 'custom',
+            'pending' => 'custom',
+        ];
+
+        return $map[$targetAudience] ?? ($targetAudience ?: 'all_members');
+    }
+
     public function addRecipients($campaignId, $recipients)
     {
         $stmt = $this->db->prepare("
             INSERT INTO bulk_message_recipients (
-                bulk_message_id, user_id, recipient_type, recipient_value, status
-            ) VALUES (?, ?, 'email', ?, 'pending')
+                bulk_message_id, user_id, recipient_type, recipient_value, status, error_message
+            ) VALUES (?, ?, 'email', ?, ?, ?)
         ");
-        
+
         foreach ($recipients as $recipient) {
+            $email = trim((string) ($recipient['email'] ?? ''));
+            $status = 'pending';
+            $error = null;
+
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                $status = 'failed';
+                $error = 'invalid_email';
+            }
+
             $stmt->execute([
                 $campaignId,
                 $recipient['id'],
-                $recipient['email']
+                $email,
+                $status,
+                $error
             ]);
         }
-        
+
+        $this->recalculateCampaignCounts($campaignId);
         return true;
     }
-    
-    /**
-     * Send campaign emails
-     */
+
     public function sendCampaign($campaignId)
     {
-        // Update campaign status to sending
         $this->updateCampaignStatus($campaignId, 'sending', ['started_at' => date('Y-m-d H:i:s')]);
-        
-        // Get pending recipients
+
         $stmt = $this->db->prepare("
-            SELECT bmr.*, u.first_name, u.last_name, m.member_number, bm.message as email_body, bm.title as email_subject, bm.custom_filters
+            SELECT bmr.*, u.first_name, u.last_name, u.phone,
+                   m.member_number, m.package, m.status AS member_status,
+                   COALESCE(m.monthly_contribution, 0) AS amount_due,
+                   bm.message AS email_body, bm.title AS email_subject, bm.custom_filters
             FROM bulk_message_recipients bmr
             INNER JOIN users u ON bmr.user_id = u.id
             INNER JOIN members m ON u.id = m.user_id
@@ -184,165 +237,198 @@ class BulkEmailService
         ");
         $stmt->execute([$campaignId]);
         $recipients = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
-        $sent = 0;
-        $failed = 0;
-        
+
         foreach ($recipients as $recipient) {
             try {
-                // Replace placeholders in email body
-                $body = $this->replacePlaceholders($recipient['email_body'], [
-                    'name' => $recipient['first_name'] . ' ' . $recipient['last_name'],
-                    'first_name' => $recipient['first_name'],
-                    'last_name' => $recipient['last_name'],
-                    'member_number' => $recipient['member_number'],
-                    'email' => $recipient['recipient_value']
-                ]);
-                
+                $email = trim((string) ($recipient['recipient_value'] ?? ''));
+                if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    $this->updateRecipientStatus($recipient['id'], 'failed', 'invalid_email', null, [
+                        'error' => 'invalid_email',
+                        'recipient' => $email
+                    ]);
+                    continue;
+                }
+
+                $body = $this->replacePlaceholders($recipient['email_body'], $recipient);
                 $campaignMeta = !empty($recipient['custom_filters']) ? json_decode($recipient['custom_filters'], true) : [];
                 $subject = $campaignMeta['email_subject'] ?? $recipient['email_subject'];
 
-                $result = $this->emailService->sendEmail(
-                    $recipient['recipient_value'],
-                    $subject,
-                    $body,
-                    true // isHtml = true
-                );
-                
+                $result = $this->emailService->sendEmail($email, $subject, $body, true);
+
                 if ($result) {
-                    $this->updateRecipientStatus($recipient['id'], 'sent');
-                    $sent++;
+                    $this->updateRecipientStatus($recipient['id'], 'sent', null, null, [
+                        'success' => true,
+                        'method' => 'email'
+                    ]);
                 } else {
-                    $this->updateRecipientStatus($recipient['id'], 'failed', 'Email send failed');
-                    $failed++;
+                    $this->updateRecipientStatus($recipient['id'], 'failed', 'Email send failed', null, [
+                        'success' => false,
+                        'error' => 'Email send failed'
+                    ]);
                 }
-            } catch (Exception $e) {
+            } catch (Throwable $e) {
                 error_log('Bulk email error: ' . $e->getMessage());
-                $this->updateRecipientStatus($recipient['id'], 'failed', $e->getMessage());
-                $failed++;
+                $this->updateRecipientStatus($recipient['id'], 'failed', $e->getMessage(), null, [
+                    'success' => false,
+                    'error' => $e->getMessage()
+                ]);
             }
-            
-            // Small delay to avoid overwhelming SMTP server
-            usleep(100000); // 0.1 second
+
+            usleep(100000);
         }
-        
-        // Update campaign statistics
-        $this->updateCampaignStats($campaignId, $sent, $failed);
-        
-        // Update campaign status to completed
-        $this->updateCampaignStatus($campaignId, 'completed', ['completed_at' => date('Y-m-d H:i:s')]);
-        
+
+        $counts = $this->recalculateCampaignCounts($campaignId);
+        if ((int) $counts['pending_count'] === 0) {
+            $finalStatus = ((int) $counts['sent_count'] > 0 || (int) $counts['failed_count'] > 0) ? 'completed' : 'failed';
+            $this->updateCampaignStatus($campaignId, $finalStatus, ['completed_at' => date('Y-m-d H:i:s')]);
+        }
+
         return [
             'success' => true,
-            'sent' => $sent,
-            'failed' => $failed
+            'sent' => (int) $counts['sent_count'],
+            'failed' => (int) $counts['failed_count']
         ];
     }
-    
-    /**
-     * Replace placeholders in message
-     */
-    private function replacePlaceholders($message, $data)
+
+    private function replacePlaceholders($message, array $recipient)
     {
-        foreach ($data as $key => $value) {
-            $message = str_replace('{' . $key . '}', $value, $message);
+        $name = trim(($recipient['first_name'] ?? '') . ' ' . ($recipient['last_name'] ?? ''));
+        if ($name === '') {
+            $name = 'Member';
         }
-        
+
+        $data = [
+            'member_name' => $name,
+            'name' => $name,
+            'first_name' => $recipient['first_name'] ?? '',
+            'last_name' => $recipient['last_name'] ?? '',
+            'member_number' => $recipient['member_number'] ?? '',
+            'phone' => $recipient['phone'] ?? '',
+            'email' => $recipient['recipient_value'] ?? '',
+            'package' => $recipient['package'] ?? '',
+            'status' => $recipient['member_status'] ?? $recipient['status'] ?? '',
+            'amount_due' => number_format((float) ($recipient['amount_due'] ?? 0), 2),
+        ];
+
+        foreach ($data as $key => $value) {
+            $message = str_replace('{' . $key . '}', (string) $value, $message);
+        }
+
         return $message;
     }
-    
-    /**
-     * Update recipient status
-     */
-    private function updateRecipientStatus($recipientId, $status, $errorMessage = null)
+
+    private function updateRecipientStatus($recipientId, $status, $errorMessage = null, $providerMessageId = null, $providerResponse = null)
     {
         $stmt = $this->db->prepare("
-            UPDATE bulk_message_recipients 
-            SET status = ?, error_message = ?, sent_at = ?
+            UPDATE bulk_message_recipients
+            SET status = ?,
+                error_message = ?,
+                sent_at = CASE WHEN ? = 'sent' THEN NOW() ELSE sent_at END,
+                delivery_method = ?,
+                provider_message_id = ?,
+                provider_response = ?
             WHERE id = ?
         ");
-        
-        $sentAt = $status === 'sent' ? date('Y-m-d H:i:s') : null;
-        
-        $stmt->execute([$status, $errorMessage, $sentAt, $recipientId]);
+
+        $encodedResponse = $providerResponse === null ? null : json_encode($providerResponse);
+        $stmt->execute([
+            $status,
+            $errorMessage,
+            $status,
+            $status === 'sent' ? 'email' : 'failed',
+            $providerMessageId,
+            $encodedResponse,
+            $recipientId
+        ]);
     }
-    
-    /**
-     * Update campaign statistics
-     */
-    private function updateCampaignStats($campaignId, $sent, $failed)
+
+    private function recalculateCampaignCounts($campaignId)
     {
         $stmt = $this->db->prepare("
-            UPDATE bulk_messages 
-            SET sent_count = sent_count + ?, failed_count = failed_count + ?
+            SELECT
+                COUNT(*) AS total_count,
+                SUM(CASE WHEN bmr.status = 'sent' THEN 1 ELSE 0 END) AS sent_count,
+                SUM(CASE WHEN bmr.status = 'failed' THEN 1 ELSE 0 END) AS failed_count,
+                SUM(CASE WHEN bmr.status = 'pending' THEN 1 ELSE 0 END) AS pending_count,
+                SUM(CASE WHEN bmr.status = 'skipped' THEN 1 ELSE 0 END) AS skipped_count
+            FROM bulk_message_recipients bmr
+            WHERE bmr.bulk_message_id = ?
+        ");
+        $stmt->execute([$campaignId]);
+        $counts = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+
+        $update = $this->db->prepare("
+            UPDATE bulk_messages
+            SET total_recipients = ?, sent_count = ?, failed_count = ?
             WHERE id = ?
         ");
-        
-        $stmt->execute([$sent, $failed, $campaignId]);
+        $update->execute([
+            (int) ($counts['total_count'] ?? 0),
+            (int) ($counts['sent_count'] ?? 0),
+            (int) ($counts['failed_count'] ?? 0),
+            $campaignId
+        ]);
+
+        return [
+            'total_count' => (int) ($counts['total_count'] ?? 0),
+            'sent_count' => (int) ($counts['sent_count'] ?? 0),
+            'failed_count' => (int) ($counts['failed_count'] ?? 0),
+            'pending_count' => (int) ($counts['pending_count'] ?? 0),
+            'skipped_count' => (int) ($counts['skipped_count'] ?? 0),
+        ];
     }
-    
-    /**
-     * Update campaign status
-     */
+
     private function updateCampaignStatus($campaignId, $status, $additionalData = [])
     {
         $fields = ['status' => $status];
         $fields = array_merge($fields, $additionalData);
-        
+
         $setClause = implode(', ', array_map(fn($k) => "$k = ?", array_keys($fields)));
         $values = array_values($fields);
         $values[] = $campaignId;
-        
+
         $stmt = $this->db->prepare("UPDATE bulk_messages SET $setClause WHERE id = ?");
-        $stmt->execute($values);
+        return $stmt->execute($values);
     }
-    
-    /**
-     * Cancel a campaign
-     */
+
     public function cancelCampaign($campaignId)
     {
         $this->updateCampaignStatus($campaignId, 'cancelled');
-        
-        // Mark all pending recipients as skipped
+
         $stmt = $this->db->prepare("
-            UPDATE bulk_message_recipients 
-            SET status = 'skipped' 
+            UPDATE bulk_message_recipients
+            SET status = 'skipped'
             WHERE bulk_message_id = ? AND status = 'pending'
         ");
-        
-        return $stmt->execute([$campaignId]);
+
+        $result = $stmt->execute([$campaignId]);
+        $this->recalculateCampaignCounts($campaignId);
+
+        return $result;
     }
-    
-    /**
-     * Pause a campaign
-     */
+
     public function pauseCampaign($campaignId)
     {
-        return $this->updateCampaignStatus($campaignId, 'draft');
+        return $this->updateCampaignStatus($campaignId, 'paused');
     }
-    
-    /**
-     * Reschedule a campaign
-     */
+
     public function rescheduleCampaign($campaignId, $scheduledAt)
     {
         $stmt = $this->db->prepare("
-            UPDATE bulk_messages 
+            UPDATE bulk_messages
             SET scheduled_at = ?, status = 'scheduled'
             WHERE id = ?
         ");
-        
+
         return $stmt->execute([$scheduledAt, $campaignId]);
     }
-    
-    /**
-     * Get campaign recipients
-     */
+
     public function getCampaignRecipients($campaignId)
     {
         $stmt = $this->db->prepare("
-            SELECT bmr.*, u.first_name, u.last_name, m.member_number
+            SELECT bmr.*, u.first_name, u.last_name, u.phone, u.email,
+                   m.member_number, m.package, m.status AS member_status,
+                   bmr.provider_message_id, bmr.provider_response
             FROM bulk_message_recipients bmr
             INNER JOIN users u ON bmr.user_id = u.id
             INNER JOIN members m ON u.id = m.user_id
@@ -350,107 +436,90 @@ class BulkEmailService
             ORDER BY bmr.sent_at DESC, bmr.id DESC
         ");
         $stmt->execute([$campaignId]);
-        
+
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     public function getCampaignStats($campaignId)
     {
-        $stmt = $this->db->prepare("
-            SELECT
-                COUNT(*) as total,
-                SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) as sent,
-                SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
-                SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
-                SUM(CASE WHEN status = 'skipped' THEN 1 ELSE 0 END) as skipped
-            FROM bulk_message_recipients
-            WHERE bulk_message_id = ?
-        ");
-        $stmt->execute([$campaignId]);
-
-        return $stmt->fetch(PDO::FETCH_ASSOC);
+        $counts = $this->recalculateCampaignCounts($campaignId);
+        return [
+            'total' => $counts['total_count'],
+            'sent' => $counts['sent_count'],
+            'failed' => $counts['failed_count'],
+            'pending' => $counts['pending_count'],
+            'skipped' => $counts['skipped_count'],
+        ];
     }
-    
-    /**
-     * Retry failed recipients
-     */
+
     public function retryFailedRecipients($campaignId)
     {
-        // Reset failed recipients to pending
         $stmt = $this->db->prepare("
-            UPDATE bulk_message_recipients 
-            SET status = 'pending', error_message = NULL
+            UPDATE bulk_message_recipients
+            SET status = 'pending', error_message = NULL, delivery_method = NULL, provider_response = NULL
             WHERE bulk_message_id = ? AND status = 'failed'
         ");
         $stmt->execute([$campaignId]);
-        
+
         $retried = $stmt->rowCount();
-        
-        // Resend campaign
         $result = $this->sendCampaign($campaignId);
         $result['retried'] = $retried;
-        
+
         return $result;
     }
-    
-    /**
-     * Get email templates
-     */
+
     public function getTemplates()
     {
         $stmt = $this->db->query("
-            SELECT * FROM sms_templates 
-            WHERE is_active = 1 
+            SELECT * FROM sms_templates
+            WHERE is_active = 1
             ORDER BY category, name
         ");
-        
+
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
-    
-    /**
-     * Get statistics
-     */
+
     public function getActiveCampaignCount()
     {
         $stmt = $this->db->query("
-            SELECT COUNT(*) as count FROM bulk_messages 
+            SELECT COUNT(*) AS count FROM bulk_messages
             WHERE message_type = 'email' AND status IN ('sending', 'scheduled')
         ");
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        return $result['count'] ?? 0;
+
+        return (int) ($result['count'] ?? 0);
     }
-    
+
     public function getSentCountToday()
     {
         $stmt = $this->db->query("
-            SELECT SUM(sent_count) as total FROM bulk_messages 
-            WHERE message_type = 'email' AND DATE(started_at) = CURDATE()
+            SELECT COUNT(*) AS total FROM bulk_message_recipients
+            WHERE recipient_type = 'email' AND status = 'sent' AND DATE(sent_at) = CURDATE()
         ");
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        return $result['total'] ?? 0;
+
+        return (int) ($result['total'] ?? 0);
     }
-    
+
     public function getTotalSent()
     {
         $stmt = $this->db->query("
-            SELECT SUM(sent_count) as total FROM bulk_messages 
-            WHERE message_type = 'email'
+            SELECT COUNT(*) AS total FROM bulk_message_recipients
+            WHERE recipient_type = 'email' AND status = 'sent'
         ");
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        return $result['total'] ?? 0;
+
+        return (int) ($result['total'] ?? 0);
     }
-    
+
     public function getFailedCount()
     {
         $stmt = $this->db->query("
-            SELECT SUM(failed_count) as total FROM bulk_messages 
-            WHERE message_type = 'email'
+            SELECT COUNT(*) AS total FROM bulk_message_recipients
+            WHERE recipient_type = 'email' AND status = 'failed'
         ");
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        return $result['total'] ?? 0;
+
+        return (int) ($result['total'] ?? 0);
     }
 }

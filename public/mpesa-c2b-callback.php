@@ -13,6 +13,7 @@ require_once ROOT_PATH . '/app/core/BaseModel.php';
 require_once ROOT_PATH . '/app/models/Payment.php';
 require_once ROOT_PATH . '/app/models/Member.php';
 require_once ROOT_PATH . '/app/models/User.php';
+require_once ROOT_PATH . '/app/helpers/functions.php';
 require_once ROOT_PATH . '/app/services/SmsService.php';
 require_once ROOT_PATH . '/app/services/PaymentReconciliationService.php';
 
@@ -30,6 +31,8 @@ function safaricom_ip_allowed_c2b(string $ip): bool {
         return true;
     }
     $allowedCidrs = [
+        '196.201.212.0/24',
+        '196.201.213.0/24',
         '196.201.214.0/24',
         '196.201.215.0/24',
     ];

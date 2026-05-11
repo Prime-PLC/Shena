@@ -17,8 +17,8 @@ class User extends BaseModel
     
     public function findByEmail($email)
     {
-        $sql = "SELECT * FROM {$this->table} WHERE email = :email";
-        return $this->db->fetch($sql, ['email' => $email]);
+        $sql = "SELECT * FROM {$this->table} WHERE LOWER(email) = LOWER(:email)";
+        return $this->db->fetch($sql, ['email' => trim((string) $email)]);
     }
     
     public function findByPhone($phone)
@@ -91,14 +91,59 @@ class User extends BaseModel
      */
     public function findByNationalId($nationalId)
     {
-        $sql = "SELECT u.* FROM {$this->table} u 
-                INNER JOIN members m ON u.id = m.user_id 
+        $sql = "SELECT u.* FROM {$this->table} u
+                INNER JOIN members m ON u.id = m.user_id
                 WHERE m.id_number = :id_number";
         return $this->db->fetch($sql, ['id_number' => $nationalId]);
     }
+
+    /**
+     * Find an agent user by credentials shown/issued to agents.
+     *
+     * @param string $credential
+     * @return array|null
+     */
+    public function findByAgentCredential($credential)
+    {
+        $credential = trim((string) $credential);
+        if ($credential === '') {
+            return null;
+        }
+
+        $phone = preg_replace('/[^0-9]/', '', $credential);
+        if (function_exists('formatKenyanPhone')) {
+            $phone = formatKenyanPhone($credential);
+        } elseif (strlen($phone) === 10 && substr($phone, 0, 1) === '0') {
+            $phone = '254' . substr($phone, 1);
+        } elseif (strlen($phone) === 9) {
+            $phone = '254' . $phone;
+        }
+
+        $sql = "SELECT u.* FROM {$this->table} u
+                INNER JOIN agents a ON u.id = a.user_id
+                WHERE u.role = 'agent'
+                AND (
+                    a.national_id = :credential
+                    OR a.agent_number = :agent_number
+                    OR LOWER(u.email) = LOWER(:user_email)
+                    OR LOWER(a.email) = LOWER(:agent_email)
+                    OR u.phone = :phone
+                    OR a.phone = :agent_phone
+                )
+                LIMIT 1";
+
+        return $this->db->fetch($sql, [
+            'credential' => $credential,
+            'agent_number' => $credential,
+            'user_email' => $credential,
+            'agent_email' => $credential,
+            'phone' => $phone,
+            'agent_phone' => $phone,
+        ]);
+    }
     
     /**
-     * Find user by email, member number, or national ID
+     * Find user by email, phone, member number, national ID, or agent credential
      * Tries each credential type in order
      * @param string $credential
      * @return array|null
@@ -132,7 +177,13 @@ class User extends BaseModel
         if ($user) {
             return $user;
         }
-        
+
+        // Try agent national ID / agent number / agent profile credentials
+        $user = $this->findByAgentCredential($credential);
+        if ($user) {
+            return $user;
+        }
+
         return null;
     }
 }

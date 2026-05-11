@@ -543,7 +543,7 @@
                     <label for="target-audience">Target Audience</label>
                     <select class="form-control" id="target-audience" name="target_audience" required>
                         <option value="">Select audience...</option>
-                        <option value="all_members">All Active Members</option>
+                        <option value="all_members">All Members</option>
                         <option value="active">Active Members Only</option>
                         <option value="inactive">Inactive Members</option>
                         <option value="pending">Pending Members</option>
@@ -551,6 +551,42 @@
                         <option value="defaulted">Payment Defaulters</option>
                         <option value="custom">Custom Selection</option>
                     </select>
+                </div>
+
+                <div id="custom-filters-panel" style="display:none; background:#F9FAFB; border:1px solid #E5E7EB; border-radius:10px; padding:16px 18px; margin-bottom:16px;">
+                    <p style="font-size:0.82rem; font-weight:600; color:#7F3D9E; margin:0 0 12px;">Custom Filters <span style="font-weight:400; color:#6B7280;">(leave blank to skip a filter)</span></p>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label style="font-size:0.82rem;">Membership Status</label>
+                            <select class="form-control form-control-sm" name="filter_status">
+                                <option value="">Any status</option>
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                                <option value="grace_period">Grace Period</option>
+                                <option value="suspended">Suspended</option>
+                                <option value="defaulted">Defaulted</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label style="font-size:0.82rem;">Package Type</label>
+                            <select class="form-control form-control-sm" name="filter_package">
+                                <option value="">Any package</option>
+                                <option value="individual">Individual</option>
+                                <option value="family">Family / Couple</option>
+                                <option value="extended_family_1">Extended Family 1</option>
+                                <option value="extended_family_2">Extended Family 2</option>
+                                <option value="executive">Executive</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label style="font-size:0.82rem;">Joined After</label>
+                            <input type="date" class="form-control form-control-sm" name="filter_joined_after">
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label style="font-size:0.82rem;">Joined Before</label>
+                            <input type="date" class="form-control form-control-sm" name="filter_joined_before">
+                        </div>
+                    </div>
                 </div>
 
                 <div class="form-group">
@@ -562,7 +598,7 @@
                     <label for="email-body">Email Content</label>
                     <textarea class="form-control" id="email-body" name="message" required placeholder="Enter your email message here..."></textarea>
                     <small style="color: #6b7280; display: block; margin-top: 0.5rem;">
-                        You can use placeholders: {member_name}, {member_number}, {package}
+                        You can use placeholders: {member_name}, {first_name}, {last_name}, {member_number}, {package}, {status}, {amount_due}
                     </small>
                 </div>
 
@@ -623,6 +659,13 @@ document.addEventListener('keydown', function(e) {
 document.getElementById('schedule-type')?.addEventListener('change', function() {
     const datetimeField = document.getElementById('schedule-datetime-field');
     datetimeField.style.display = this.value === 'scheduled' ? 'block' : 'none';
+});
+
+document.getElementById('target-audience')?.addEventListener('change', function () {
+    const panel = document.getElementById('custom-filters-panel');
+    if (panel) {
+        panel.style.display = this.value === 'custom' ? '' : 'none';
+    }
 });
 
 // Campaign actions

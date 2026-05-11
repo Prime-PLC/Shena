@@ -181,20 +181,7 @@ class PaymentReconciliationService
             } elseif ($paymentType === 'reactivation') {
                 $this->memberModel->reactivateMember($member['id']);
             } elseif ($paymentType === 'registration') {
-                $totalPaid = $this->db->fetchColumn(
-                    "SELECT COALESCE(SUM(amount), 0) FROM payments
-                     WHERE member_id = :mid AND payment_type = 'registration' AND status = 'completed'",
-                    ['mid' => $member['id']]
-                );
-                if ($totalPaid >= REGISTRATION_FEE) {
-                    require_once ROOT_PATH . '/app/models/User.php';
-                    $this->memberModel->update($member['id'], [
-                        'status' => 'active',
-                        'coverage_ends' => date('Y-m-d', strtotime('+1 year'))
-                    ]);
-                    $userModel = new User();
-                    $userModel->update($member['user_id'], ['status' => 'active']);
-                }
+                $this->paymentModel->activateMemberAfterRegistrationPayment((int)$member['id']);
             }
 
             // Send payment confirmation SMS
@@ -583,13 +570,12 @@ class PaymentReconciliationService
         
         // Search by phone number
         if (!empty($payment['sender_phone'])) {
-            $query = "SELECT m.*, 'phone' as match_type, 70 as confidence 
-                      FROM members m
-                      JOIN users u ON m.user_id = u.id
-                      WHERE u.phone = :phone";
-            
-            $results = $this->db->fetchAll($query, ['phone' => $payment['sender_phone']]);
-            $matches = array_merge($matches, $results);
+            $memberByPhone = $this->memberModel->findByPhone($payment['sender_phone']);
+            if ($memberByPhone) {
+                $memberByPhone['match_type'] = 'phone';
+                $memberByPhone['confidence'] = 70;
+                $matches[] = $memberByPhone;
+            }
         }
         
         // Search by name (fuzzy match)
@@ -695,17 +681,7 @@ class PaymentReconciliationService
      */
     private function formatPhoneNumber($phone)
     {
-        $phone = preg_replace('/[^0-9]/', '', $phone);
-        
-        if (strlen($phone) == 12 && substr($phone, 0, 3) == '254') {
-            return '+' . $phone;
-        } elseif (strlen($phone) == 10 && substr($phone, 0, 1) == '0') {
-            return '+254' . substr($phone, 1);
-        } elseif (strlen($phone) == 9) {
-            return '+254' . $phone;
-        }
-        
-        return $phone;
+        return formatKenyanPhone($phone);
     }
     
     /**
@@ -717,7 +693,7 @@ class PaymentReconciliationService
             COUNT(*) as total_payments,
             SUM(CASE WHEN reconciliation_status = 'matched' THEN 1 ELSE 0 END) as matched,
             SUM(CASE WHEN reconciliation_status = 'unmatched' THEN 1 ELSE 0 END) as unmatched,
-            SUM(CASE WHEN reconciliation_status = 'manual_match' THEN 1 ELSE 0 END) as `manual`,
+            SUM(CASE WHEN reconciliation_status = 'manual' THEN 1 ELSE 0 END) as `manual`,
             SUM(CASE WHEN auto_matched = TRUE THEN 1 ELSE 0 END) as auto_matched,
             SUM(amount) as total_amount,
             SUM(CASE WHEN reconciliation_status = 'matched' THEN amount ELSE 0 END) as matched_amount,

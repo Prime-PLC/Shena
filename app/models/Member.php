@@ -983,11 +983,20 @@ class Member extends BaseModel
      */
     public function findByPhone($phone)
     {
+        $phone = formatKenyanPhone($phone);
+        $phoneTail = substr(preg_replace('/[^0-9]/', '', (string)$phone), -9);
+
         $sql = "SELECT m.* FROM {$this->table} m
                 JOIN users u ON m.user_id = u.id
                 WHERE u.phone = :phone
+                   OR REPLACE(u.phone, '+', '') = :phone_254
+                   OR RIGHT(REPLACE(u.phone, '+', ''), 9) = :phone_tail
                 LIMIT 1";
-        return $this->db->fetch($sql, ['phone' => $phone]);
+        return $this->db->fetch($sql, [
+            'phone' => $phone,
+            'phone_254' => $phone,
+            'phone_tail' => $phoneTail
+        ]);
     }
     
     /**

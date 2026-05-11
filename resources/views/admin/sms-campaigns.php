@@ -617,7 +617,7 @@ if (empty($_SESSION['csrf_token'])) {
                     <label for="target-audience">Target Audience</label>
                     <select class="form-control" id="target-audience" name="target_audience" required>
                         <option value="">Select audience...</option>
-                        <option value="all_members">All Active Members</option>
+                        <option value="all_members">All Members</option>
                         <option value="active">Active Members Only</option>
                         <option value="inactive">Inactive Members</option>
                         <option value="grace_period">Grace Period Members</option>
@@ -667,8 +667,8 @@ if (empty($_SESSION['csrf_token'])) {
                     <label for="sms-message">SMS Message</label>
                     <textarea class="form-control" id="sms-message" name="message" required placeholder="Enter your SMS message here..." maxlength="160"></textarea>
                     <small style="color: #6b7280; display: block; margin-top: 0.5rem;">
-                        <span id="char-counter">0</span>/160 characters | 
-                        Placeholders: {member_name}, {member_number}, {amount_due}
+                        <span id="char-counter">0</span>/160 characters |
+                        Placeholders: {member_name}, {first_name}, {last_name}, {member_number}, {package}, {status}, {amount_due}
                     </small>
                 </div>
 

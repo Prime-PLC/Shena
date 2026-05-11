@@ -81,7 +81,7 @@
 
     .report-table {
         width: 100%;
-        min-width: 860px;
+        min-width: 1120px;
         border-collapse: collapse;
     }
 
@@ -127,6 +127,7 @@ $total = (int)($stats['total'] ?? $campaign['total_recipients'] ?? 0);
 $sent = (int)($stats['sent'] ?? $campaign['sent_count'] ?? 0);
 $failed = (int)($stats['failed'] ?? $campaign['failed_count'] ?? 0);
 $pending = (int)($stats['pending'] ?? max(0, $total - $sent - $failed));
+$skipped = (int)($stats['skipped'] ?? 0);
 ?>
 
 <div class="campaign-report-header">
@@ -156,6 +157,10 @@ $pending = (int)($stats['pending'] ?? max(0, $total - $sent - $failed));
         <div class="report-label">Pending</div>
         <div class="report-value"><?php echo number_format($pending); ?></div>
     </div>
+    <div class="report-card">
+        <div class="report-label">Skipped</div>
+        <div class="report-value"><?php echo number_format($skipped); ?></div>
+    </div>
 </div>
 
 <div class="report-table-card">
@@ -165,10 +170,13 @@ $pending = (int)($stats['pending'] ?? max(0, $total - $sent - $failed));
             <thead>
                 <tr>
                     <th>Recipient</th>
+                    <th>Member Number</th>
                     <th>Destination</th>
+                    <th>Type</th>
                     <th>Status</th>
                     <th>Delivery Method</th>
                     <th>Provider Ref</th>
+                    <th>Provider Response</th>
                     <th>Sent At</th>
                     <th>Error</th>
                 </tr>
@@ -176,16 +184,25 @@ $pending = (int)($stats['pending'] ?? max(0, $total - $sent - $failed));
             <tbody>
                 <?php if (empty($recipients)): ?>
                     <tr>
-                        <td colspan="7" style="text-align:center; color:#6B7280; padding:32px;">No recipient records found.</td>
+                        <td colspan="10" style="text-align:center; color:#6B7280; padding:32px;">No recipient records found.</td>
                     </tr>
                 <?php else: ?>
                     <?php foreach ($recipients as $recipient): ?>
+                        <?php
+                        $providerResponse = $recipient['provider_response'] ?? '';
+                        if (strlen((string)$providerResponse) > 120) {
+                            $providerResponse = substr((string)$providerResponse, 0, 117) . '...';
+                        }
+                        ?>
                         <tr>
                             <td><?php echo htmlspecialchars(trim(($recipient['first_name'] ?? '') . ' ' . ($recipient['last_name'] ?? '')) ?: 'N/A'); ?></td>
+                            <td><?php echo htmlspecialchars($recipient['member_number'] ?? 'N/A'); ?></td>
                             <td><?php echo htmlspecialchars($recipient['recipient_value'] ?? $recipient['phone'] ?? $recipient['email'] ?? 'N/A'); ?></td>
+                            <td><?php echo htmlspecialchars($recipient['recipient_type'] ?? $channel); ?></td>
                             <td><span class="status-pill <?php echo htmlspecialchars($recipient['status'] ?? 'pending'); ?>"><?php echo htmlspecialchars($recipient['status'] ?? 'pending'); ?></span></td>
                             <td><?php echo htmlspecialchars($recipient['delivery_method'] ?? $recipient['recipient_type'] ?? $channel); ?></td>
                             <td><?php echo htmlspecialchars($recipient['provider_message_id'] ?? 'N/A'); ?></td>
+                            <td title="<?php echo htmlspecialchars($recipient['provider_response'] ?? '', ENT_QUOTES); ?>"><?php echo htmlspecialchars($providerResponse ?: 'N/A'); ?></td>
                             <td><?php echo !empty($recipient['sent_at']) ? date('M j, Y H:i', strtotime($recipient['sent_at'])) : 'N/A'; ?></td>
                             <td><?php echo htmlspecialchars($recipient['error_message'] ?? ''); ?></td>
                         </tr>

@@ -213,20 +213,24 @@ class PaymentService
                             break;
                     }
                 }
-                
-                // Find the payment record by checkout request ID
-                $payment = $paymentModel->findAll(['transaction_reference' => $checkoutRequestId]);
-                
-                if (!empty($payment)) {
-                    $paymentId = $payment[0]['id'];
 
-                    if (($payment[0]['status'] ?? '') === 'completed' && !empty($payment[0]['mpesa_receipt_number'])) {
+                // Find the payment record by checkout request ID
+                $payment = $this->findPaymentByCheckoutRequestId($checkoutRequestId);
+
+                if (!empty($payment)) {
+                    $paymentId = $payment['id'];
+
+                    if (($payment['status'] ?? '') === 'completed' && !empty($payment['mpesa_receipt_number'])) {
                         return ['status' => 'success', 'message' => 'Payment already processed'];
                     }
                     
                     // Update payment status
                     $paymentModel->confirmPayment($paymentId, $mpesaReceiptNumber);
                     $paymentModel->update($paymentId, [
+                        'merchant_request_id' => $merchantRequestId,
+                        'checkout_request_id' => $checkoutRequestId,
+                        'result_code' => $resultCode,
+                        'result_desc' => $resultDesc,
                         'transaction_date' => $transactionDate ?: date('Y-m-d H:i:s'),
                         'payment_date' => $transactionDate ?: date('Y-m-d H:i:s'),
                         'sender_phone' => $phoneNumber,
@@ -340,19 +344,25 @@ class PaymentService
                     // }
 
                     // Send confirmation SMS and email
-                    $this->sendPaymentConfirmation($payment[0], $amount, $mpesaReceiptNumber);
+                    $this->sendPaymentConfirmation($payment, $amount, $mpesaReceiptNumber);
 
                     return ['status' => 'success', 'message' => 'Payment processed successfully'];
                 }
             } else {
                 // Payment failed
-                $payment = $paymentModel->findAll(['transaction_reference' => $checkoutRequestId]);
-                
+                $payment = $this->findPaymentByCheckoutRequestId($checkoutRequestId);
+
                 if (!empty($payment)) {
-                    $paymentId = $payment[0]['id'];
+                    $paymentId = $payment['id'];
                     $paymentModel->failPayment($paymentId, $resultDesc);
+                    $paymentModel->update($paymentId, [
+                        'merchant_request_id' => $merchantRequestId,
+                        'checkout_request_id' => $checkoutRequestId,
+                        'result_code' => $resultCode,
+                        'result_desc' => $resultDesc,
+                    ]);
                 }
-                
+
                 return ['status' => 'failed', 'message' => $resultDesc];
             }
             
@@ -362,10 +372,10 @@ class PaymentService
         }
     }
     
-    public function recordPaymentAttempt($memberId, $amount, $phoneNumber, $checkoutRequestId, $paymentType = 'monthly')
+    public function recordPaymentAttempt($memberId, $amount, $phoneNumber, $checkoutRequestId, $paymentType = 'monthly', $merchantRequestId = null)
     {
         $paymentModel = new Payment();
-        
+
         return $paymentModel->recordPayment([
             'member_id' => $memberId,
             'amount' => $amount,
@@ -373,8 +383,27 @@ class PaymentService
             'payment_method' => 'mpesa',
             'phone_number' => $phoneNumber,
             'status' => 'pending',
-            'transaction_reference' => $checkoutRequestId
+            'transaction_reference' => $checkoutRequestId,
+            'checkout_request_id' => $checkoutRequestId,
+            'merchant_request_id' => $merchantRequestId
         ]);
+    }
+
+    private function findPaymentByCheckoutRequestId($checkoutRequestId)
+    {
+        $db = Database::getInstance();
+
+        return $db->fetch(
+            "SELECT * FROM payments
+             WHERE transaction_reference = :checkout_id
+                OR checkout_request_id = :checkout_id_alt
+             ORDER BY id DESC
+             LIMIT 1",
+            [
+                'checkout_id' => $checkoutRequestId,
+                'checkout_id_alt' => $checkoutRequestId
+            ]
+        );
     }
     
     public function queryTransactionStatus($checkoutRequestId)

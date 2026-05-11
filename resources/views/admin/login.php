@@ -14,17 +14,28 @@
             box-sizing: border-box;
         }
 
+        html,
+        body {
+            min-height: 100%;
+        }
+
         body {
             font-family: 'Manrope', sans-serif;
             background: #F5F5F7;
             min-height: 100vh;
+            min-height: 100dvh;
             display: flex;
-            overflow: hidden;
+            overflow-x: hidden;
+            overflow-y: auto;
         }
 
         /* Left Panel */
         .left-panel {
+            flex: 1 1 50%;
             width: 50%;
+            min-width: 0;
+            min-height: 100vh;
+            min-height: 100dvh;
             background: linear-gradient(180deg, #8B5CF6 0%, #7C3AED 50%, #6B21A8 100%);
             display: flex;
             flex-direction: column;
@@ -32,17 +43,17 @@
             justify-content: center;
             color: white;
             position: relative;
-            padding: 60px 40px;
+            padding: clamp(28px, 5vw, 60px) clamp(20px, 4vw, 40px);
         }
 
         .logo-container {
             text-align: center;
-            margin-bottom: 60px;
+            margin-bottom: clamp(28px, 7vh, 60px);
         }
 
         .logo-icon {
-            width: 100px;
-            height: 100px;
+            width: clamp(72px, 10vw, 100px);
+            height: clamp(72px, 10vw, 100px);
             margin: 0 auto 20px;
             background: rgba(255, 255, 255, 0.15);
             border-radius: 20px;
@@ -60,15 +71,16 @@
 
         .brand-name {
             font-family: 'Playfair Display', serif;
-            font-size: 42px;
+            font-size: clamp(30px, 4vw, 42px);
             font-weight: 700;
             margin-bottom: 10px;
-            letter-spacing: 1px;
+            letter-spacing: 0;
+            overflow-wrap: anywhere;
         }
 
         .tagline {
             font-family: 'Playfair Display', serif;
-            font-size: 22px;
+            font-size: clamp(17px, 2.4vw, 22px);
             font-weight: 400;
             font-style: italic;
             color: rgba(255, 255, 255, 0.95);
@@ -76,7 +88,7 @@
 
         .portal-label {
             position: absolute;
-            bottom: 40px;
+            bottom: clamp(20px, 4vh, 40px);
             font-size: 11px;
             font-weight: 600;
             letter-spacing: 3px;
@@ -86,12 +98,16 @@
 
         /* Right Panel */
         .right-panel {
+            flex: 1 1 50%;
             width: 50%;
+            min-width: 0;
+            min-height: 100vh;
+            min-height: 100dvh;
             background: #F5F5F7;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 60px;
+            padding: clamp(24px, 6vw, 60px);
         }
 
         .login-container {
@@ -101,7 +117,7 @@
 
         .login-title {
             font-family: 'Playfair Display', serif;
-            font-size: 32px;
+            font-size: clamp(28px, 4vw, 32px);
             font-weight: 700;
             color: #1F2937;
             margin-bottom: 8px;
@@ -278,8 +294,9 @@
             }
 
             .left-panel {
-                min-height: 35vh;
-                padding: 40px 20px;
+                min-height: 32vh;
+                min-height: 32dvh;
+                padding: 36px 20px;
             }
 
             .logo-icon {
@@ -296,7 +313,67 @@
             }
 
             .right-panel {
+                min-height: auto;
                 padding: 40px 20px;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .left-panel {
+                min-height: auto;
+                padding: 28px 18px 22px;
+            }
+
+            .logo-container {
+                margin-bottom: 16px;
+            }
+
+            .logo-icon {
+                width: 64px;
+                height: 64px;
+                border-radius: 16px;
+            }
+
+            .brand-name {
+                font-size: 28px;
+            }
+
+            .tagline {
+                font-size: 16px;
+            }
+
+            .portal-label {
+                position: static;
+                margin-top: 12px;
+                text-align: center;
+                letter-spacing: 1.5px;
+            }
+
+            .right-panel {
+                padding: 28px 16px;
+            }
+
+            .login-container {
+                max-width: 100%;
+            }
+
+            .security-notice {
+                align-items: flex-start;
+            }
+        }
+
+        @media (max-height: 720px) and (min-width: 993px) {
+            .left-panel,
+            .right-panel {
+                min-height: 720px;
+            }
+
+            .logo-container {
+                margin-bottom: 28px;
+            }
+
+            .security-notice {
+                margin-top: 18px;
             }
         }
     </style>

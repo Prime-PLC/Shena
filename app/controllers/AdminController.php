@@ -2,7 +2,10 @@
 /**
  * Admin Controller - Handles administrative functions
  */
-class AdminController extends BaseController 
+require_once __DIR__ . '/../services/ReportService.php';
+require_once __DIR__ . '/../helpers/ReportDocumentTemplate.php';
+
+class AdminController extends BaseController
 {
     private $memberModel;
     private $paymentModel;
@@ -90,28 +93,34 @@ class AdminController extends BaseController
             }
 
             try {
-                // Check admin credentials in users table
-                $admin = $this->userModel->findByEmail($username);
+                // Staff and agent credentials share the users table; agents may use
+                // agent number, National ID, phone, or email.
+                $loginUser = $this->userModel->findByAnyCredential($username);
 
-                if (!$admin) {
+                if (!$loginUser) {
                     // Also try to find by first_name as username for admin
                     $db = Database::getInstance();
                     $query = "SELECT * FROM users WHERE first_name = :first_name AND role IN ('super_admin', 'manager') LIMIT 1";
-                    $admin = $db->fetch($query, ['first_name' => $username]);
+                    $loginUser = $db->fetch($query, ['first_name' => $username]);
                 }
 
-                if ($admin && in_array($admin['role'], ['super_admin', 'manager']) &&
-                    ($admin['status'] ?? 'pending') === 'active' &&
-                    password_verify($password, $admin['password'])) {
+                if ($loginUser && in_array($loginUser['role'], ['super_admin', 'manager', 'agent'], true) &&
+                    ($loginUser['status'] ?? 'pending') === 'active' &&
+                    password_verify($password, $loginUser['password'])) {
 
-                    $_SESSION['user_id'] = $admin['id'];
-                    $_SESSION['user_role'] = $admin['role'];
-                    $_SESSION['user_name'] = $admin['first_name'] . ' ' . $admin['last_name'];
-                    $_SESSION['user_email'] = $admin['email'];
+                    $_SESSION['user_id'] = $loginUser['id'];
+                    $_SESSION['user_role'] = $loginUser['role'];
+                    $_SESSION['user_name'] = $loginUser['first_name'] . ' ' . $loginUser['last_name'];
+                    $_SESSION['user_email'] = $loginUser['email'];
 
                     // Update last login
                     $db = Database::getInstance();
-                    $db->execute("UPDATE users SET last_login = NOW() WHERE id = :id", ['id' => $admin['id']]);
+                    $db->execute("UPDATE users SET last_login = NOW() WHERE id = :id", ['id' => $loginUser['id']]);
+
+                    if ($loginUser['role'] === 'agent') {
+                        header('Location: /agent/dashboard');
+                        exit();
+                    }
 
                     header('Location: /admin/dashboard');
                     exit();
@@ -1525,38 +1534,25 @@ class AdminController extends BaseController
     public function reports()
     {
         $this->requireAdminAccess();
-        
+
         $reportType = $_GET['report_type'] ?? 'overview';
         $startDate = $_GET['date_from'] ?? date('Y-m-01');
         $endDate = $_GET['date_to'] ?? date('Y-m-d');
-        
+        $reportService = new ReportService();
+        $payload = $reportService->getReportPayload($reportType, $startDate, $endDate, $_GET);
+
         $data = [
             'title' => 'Reports - Admin',
             'reportType' => $reportType,
             'startDate' => $startDate,
             'endDate' => $endDate,
-            'totalMembers' => $this->memberModel->getTotalMembers(),
-            'activeMembers' => $this->memberModel->getActiveMembers(),
-            'inactiveMembers' => $this->memberModel->getInactiveMembers(),
-            'pendingMembers' => $this->memberModel->getPendingMembersCount(),
-            'totalRevenue' => $this->paymentModel->getTotalRevenue($startDate, $endDate),
-            'monthlyRevenue' => $this->paymentModel->getMonthlyRevenue(),
-            'totalClaimsPaid' => $this->claimModel->getTotalClaimsValue(),
-            'newMembersThisMonth' => count($this->memberModel->getNewRegistrations(date('Y-m-01'), date('Y-m-d'))),
-            'renewalDue' => count($this->paymentModel->getMembersWithOverduePayments()),
-            'pendingPayments' => count($this->paymentModel->getPendingPayments()),
-            'failedPayments' => count($this->paymentModel->getFailedPayments())
+            'payload' => $payload,
+            'availableReports' => $payload['available_reports'] ?? [],
+            'previewRows' => $payload['tables'][0]['rows'] ?? [],
+            'previewHeaders' => $payload['tables'][0]['headers'] ?? [],
+            'metrics' => $payload['metrics'] ?? [],
         ];
-        
-        // Add specific report data based on type
-        if ($reportType === 'members') {
-            $data['memberReports'] = $this->memberModel->getNewRegistrations($startDate, $endDate);
-        } elseif ($reportType === 'payments') {
-            $data['paymentReports'] = $this->paymentModel->getPaymentReport($startDate, $endDate);
-        } elseif ($reportType === 'claims') {
-            $data['claimReports'] = $this->claimModel->getClaimReport($startDate, $endDate);
-        }
-        
+
         $this->view('admin.reports', $data);
     }
 
@@ -1567,37 +1563,14 @@ class AdminController extends BaseController
     {
         $this->requireAdminAccess();
 
-        $type = $_GET['type'] ?? '';
+        $type = $_GET['type'] ?? ($_GET['report_type'] ?? 'overview');
         $dateFrom = $_GET['date_from'] ?? date('Y-m-01');
         $dateTo = $_GET['date_to'] ?? date('Y-m-d');
+        $format = strtolower($_GET['format'] ?? 'pdf');
         set_time_limit(120);
 
-        if ($type === 'payments') {
-            $payments = $this->paymentModel->getPaymentReport($dateFrom, $dateTo);
-            $html = $this->renderPdfView('admin/reports-payments-pdf', [
-                'payments' => $payments,
-                'dateFrom' => $dateFrom,
-                'dateTo' => $dateTo,
-                'generatedAt' => date('Y-m-d H:i')
-            ]);
-            $this->streamPdf($html, 'monthly-payments-report-' . date('Ymd_His') . '.pdf');
-            return;
-        }
-        if ($type === 'financial') {
-            $summary = $this->paymentModel->getPaymentStatistics();
-            $methods = $this->paymentModel->getPaymentsByMethod($dateFrom, $dateTo);
-            $types = $this->paymentModel->getPaymentsByType($dateFrom, $dateTo);
-            $html = $this->renderPdfView('admin/reports-financial-pdf', [
-                'summary' => $summary,
-                'methods' => $methods,
-                'types' => $types,
-                'dateFrom' => $dateFrom,
-                'dateTo' => $dateTo,
-                'generatedAt' => date('Y-m-d H:i')
-            ]);
-            $this->streamPdf($html, 'financial-report-' . date('Ymd_His') . '.pdf');
-            return;
-        }
+        $reportService = new ReportService();
+
         if ($type === 'member_payments') {
             $memberId = $_GET['member_id'] ?? null;
             if (!$memberId) {
@@ -1605,30 +1578,50 @@ class AdminController extends BaseController
                 echo 'Missing member_id.';
                 return;
             }
-            $member = $this->memberModel->getMemberById($memberId);
-            $payments = $this->paymentModel->getMemberPayments($memberId);
-            $html = $this->renderPdfView('admin/reports-member-payments-pdf', [
-                'member' => $member,
-                'payments' => $payments,
-                'dateFrom' => $dateFrom,
-                'dateTo' => $dateTo,
-                'generatedAt' => date('Y-m-d H:i')
+            $payload = $reportService->getMemberStatementPayload((int)$memberId, $dateFrom, $dateTo, [
+                'prepared_for' => 'Admin',
+                'title' => 'Member Payment Statement',
             ]);
-            $this->streamPdf($html, 'member-' . ($member['member_number'] ?? 'report') . '-' . date('Ymd_His') . '.pdf');
+        } else {
+            $payload = $reportService->getExportPayload($type, $dateFrom, $dateTo, $_GET);
+        }
+
+        if ($this->queryParam('format') === 'csv' || $format === 'excel') {
+            $this->streamCsvReport($payload, $type . '-report-' . date('Ymd_His') . '.csv');
             return;
         }
-        if ($type === 'members') {
-            $members = $this->memberModel->getAllMembersWithDetails('', 'all', 'all');
-            $html = $this->renderPdfView('admin/reports-members-pdf', [
-                'members' => $members,
-                'generatedAt' => date('Y-m-d H:i')
-            ]);
-            $this->streamPdf($html, 'members-report-' . date('Ymd_His') . '.pdf');
-            return;
+
+        $html = ReportDocumentTemplate::render($payload);
+        $this->streamPdf($html, ($payload['pdf_filename'] ?? $type . '-report-' . date('Ymd_His') . '.pdf'));
+    }
+
+    private function streamCsvReport(array $payload, string $filename)
+    {
+        $table = $payload['tables'][0] ?? ['headers' => [], 'rows' => []];
+
+        header('Content-Type: text/csv; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+
+        $output = fopen('php://output', 'w');
+        fputcsv($output, [$payload['title'] ?? 'SHENA Report'], ',', '"', '\\', '');
+        fputcsv($output, ['Generated', $payload['generated_at'] ?? date('Y-m-d H:i')], ',', '"', '\\', '');
+        if (!empty($payload['date_range'])) {
+            fputcsv($output, ['Period', $payload['date_range']], ',', '"', '\\', '');
         }
-        http_response_code(400);
-        echo 'Unsupported report type.';
-        return;
+        fputcsv($output, [], ',', '"', '\\', '');
+        fputcsv($output, $table['headers'] ?? [], ',', '"', '\\', '');
+
+        foreach (($table['rows'] ?? []) as $row) {
+            fputcsv($output, $row, ',', '"', '\\', '');
+        }
+
+        fclose($output);
+        exit;
+    }
+
+    private function queryParam(string $key, $default = null)
+    {
+        return $_GET[$key] ?? $default;
     }
 
     private function renderPdfView($template, $data = [])

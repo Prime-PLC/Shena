@@ -2,56 +2,43 @@
 
 class MemberNumberHelper
 {
-    private const PREFIX = 'SHENA';
+    private const PREFIX = 'SH-';
 
     /**
-     * Generate canonical member number format: SHENA-YYYY-NNNNNN.
-     * When called inside a transaction, the SELECT ... FOR UPDATE lock is held
-     * until the caller inserts the member and commits.
+     * Generate canonical member number format: SHNNNNNN.
      *
      * @return string
      */
     public static function generateCanonical()
     {
-        $db = Database::getInstance();
-        $year = date('Y');
-        $prefix = self::PREFIX . '-' . $year . '-';
-        $connection = $db->getConnection();
-        $startedTransaction = false;
+        $attempts = 0;
 
-        try {
-            if (!$connection->inTransaction()) {
-                $connection->beginTransaction();
-                $startedTransaction = true;
+        do {
+            $memberNumber = self::PREFIX . random_int(100000, 999999);
+            $attempts++;
+
+            if ($attempts > 20) {
+                throw new Exception('Unable to generate a unique member number.');
             }
+        } while (self::exists($memberNumber));
 
-            $sql = 'SELECT member_number FROM members WHERE member_number LIKE :pattern ORDER BY member_number DESC LIMIT 1 FOR UPDATE';
-            $last = $db->fetch($sql, ['pattern' => $prefix . '%']);
-
-            $sequence = 1;
-            if (!empty($last['member_number']) && preg_match('/^' . self::PREFIX . '-' . $year . '-(\d{6,})$/', $last['member_number'], $matches)) {
-                $sequence = ((int)$matches[1]) + 1;
-            }
-
-            $memberNumber = self::format((int)$year, $sequence);
-
-            if ($startedTransaction) {
-                $connection->commit();
-            }
-
-            return $memberNumber;
-        } catch (Exception $e) {
-            if ($startedTransaction && $connection->inTransaction()) {
-                $connection->rollBack();
-            }
-
-            throw $e;
-        }
+        return $memberNumber;
     }
 
     public static function format(int $year, int $sequence): string
     {
-        return self::PREFIX . '-' . $year . '-' . str_pad((string)$sequence, 6, '0', STR_PAD_LEFT);
+        return self::PREFIX . str_pad((string)$sequence, 6, '0', STR_PAD_LEFT);
+    }
+
+    private static function exists(string $memberNumber): bool
+    {
+        $db = Database::getInstance();
+        $existing = $db->fetch(
+            'SELECT id FROM members WHERE member_number = :member_number LIMIT 1',
+            ['member_number' => $memberNumber]
+        );
+
+        return !empty($existing);
     }
 
     /**
@@ -62,7 +49,16 @@ class MemberNumberHelper
      */
     public static function parse($memberNumber)
     {
-        if (preg_match('/^(SHENA|SHA)-(\d{4})-(\d{4,})$/', $memberNumber, $matches)) {
+        if (preg_match('/^(SH-)(\d{6,})$/', $memberNumber, $matches)) {
+            return [
+                'prefix' => $matches[1],
+                'year' => null,
+                'sequence' => $matches[2],
+                'full' => $memberNumber
+            ];
+        }
+
+        if (preg_match('/^(SHENA|SHA)-(\d{4})-([A-Z0-9]{4,})$/', $memberNumber, $matches)) {
             return [
                 'prefix' => $matches[1],
                 'year' => $matches[2],
@@ -70,6 +66,7 @@ class MemberNumberHelper
                 'full' => $memberNumber
             ];
         }
+
         return null;
     }
 
@@ -83,8 +80,7 @@ class MemberNumberHelper
     {
         $parsed = self::parse($memberNumber);
         if ($parsed) {
-            $seq = str_pad($parsed['sequence'], 6, '0', STR_PAD_LEFT);
-            return self::PREFIX . '-' . $parsed['year'] . '-' . $seq;
+            return self::PREFIX . strtoupper($parsed['sequence']);
         }
         return $memberNumber;
     }

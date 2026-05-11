@@ -60,7 +60,9 @@ class PaymentController extends BaseController
                     return;
                 }
             }
-            
+
+            $amount = $this->resolveMemberPaymentAmount($paymentType, $member, $amount);
+
             // Format phone number
             $phoneNumber = $this->formatPhoneNumber($phoneNumber);
             if (!$phoneNumber) {
@@ -83,7 +85,8 @@ class PaymentController extends BaseController
                     $amount,
                     $phoneNumber,
                     $response['CheckoutRequestID'],
-                    $paymentType
+                    $paymentType,
+                    $response['MerchantRequestID'] ?? null
                 );
                 
                 $this->json([
@@ -146,6 +149,8 @@ class PaymentController extends BaseController
             $response = $this->paymentService->queryTransactionStatus($checkoutRequestId);
             
             if ($response) {
+                $this->reconcileQueriedStkPayment($checkoutRequestId, $response);
+
                 $this->json([
                     'success' => true,
                     'status' => $response
@@ -209,6 +214,72 @@ class PaymentController extends BaseController
         }
         
         return false; // Invalid format
+    }
+
+    private function findPaymentByCheckoutRequestId($checkoutRequestId)
+    {
+        $db = Database::getInstance();
+
+        return $db->fetch(
+            "SELECT * FROM payments
+             WHERE transaction_reference = :checkout_id
+                OR checkout_request_id = :checkout_id_alt
+             ORDER BY id DESC
+             LIMIT 1",
+            [
+                'checkout_id' => $checkoutRequestId,
+                'checkout_id_alt' => $checkoutRequestId
+            ]
+        );
+    }
+
+    private function reconcileQueriedStkPayment($checkoutRequestId, array $status): void
+    {
+        if (!array_key_exists('ResultCode', $status)) {
+            return;
+        }
+
+        $payment = $this->findPaymentByCheckoutRequestId($checkoutRequestId);
+        if (!$payment) {
+            return;
+        }
+
+        $paymentModel = new Payment();
+        $resultCode = (string)$status['ResultCode'];
+        $updateData = [
+            'checkout_request_id' => $checkoutRequestId,
+            'result_code' => $status['ResultCode'],
+            'result_desc' => $status['ResultDesc'] ?? null,
+        ];
+
+        if (in_array($resultCode, ['0', '00'], true)) {
+            $paymentModel->confirmPayment($payment['id'], $payment['mpesa_receipt_number'] ?? null);
+            $paymentModel->update($payment['id'], $updateData + [
+                'reconciliation_status' => 'matched',
+                'auto_matched' => 1,
+                'reconciled_at' => date('Y-m-d H:i:s')
+            ]);
+            return;
+        }
+
+        if (($payment['status'] ?? '') !== 'completed') {
+            $paymentModel->failPayment($payment['id'], $status['ResultDesc'] ?? 'STK payment failed');
+            $paymentModel->update($payment['id'], $updateData);
+        }
+    }
+
+    private function resolveMemberPaymentAmount($paymentType, array $member, $requestedAmount)
+    {
+        switch ($paymentType) {
+            case 'registration':
+                return defined('REGISTRATION_FEE') ? REGISTRATION_FEE : 200;
+            case 'reactivation':
+                return defined('REACTIVATION_FEE') ? REACTIVATION_FEE : 100;
+            case 'monthly':
+                return $member['monthly_contribution'] ?? $requestedAmount;
+            default:
+                return $requestedAmount;
+        }
     }
 
     /**
@@ -409,7 +480,8 @@ class PaymentController extends BaseController
             }
 
             $paymentModel = new Payment();
-            $existing = $paymentModel->findAll(['transaction_reference' => $checkoutRequestId]);
+            $payment = $this->findPaymentByCheckoutRequestId($checkoutRequestId);
+            $existing = $payment ? [$payment] : [];
 
             if (!empty($existing)) {
                 $payment = $existing[0];
@@ -431,6 +503,14 @@ class PaymentController extends BaseController
                 }
 
                 $paymentModel->confirmPayment($payment['id'], $mpesaReceipt ?: null);
+                $paymentModel->update($payment['id'], [
+                    'checkout_request_id' => $checkoutRequestId,
+                    'result_code' => $status['ResultCode'] ?? null,
+                    'result_desc' => $status['ResultDesc'] ?? null,
+                    'reconciliation_status' => 'matched',
+                    'auto_matched' => 1,
+                    'reconciled_at' => date('Y-m-d H:i:s')
+                ]);
 
                 $this->json([
                     'success' => true,
@@ -452,6 +532,7 @@ class PaymentController extends BaseController
                 'payment_method' => 'mpesa',
                 'status' => 'pending',
                 'transaction_reference' => $checkoutRequestId,
+                'checkout_request_id' => $checkoutRequestId,
                 'transaction_id' => $mpesaReceipt ?: null,
                 'notes' => $notes
             ]);

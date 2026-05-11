@@ -11,6 +11,8 @@ require_once __DIR__ . '/../models/PayoutRequest.php';
 require_once __DIR__ . '/../models/Resource.php';
 require_once __DIR__ . '/../services/InAppNotificationService.php';
 require_once __DIR__ . '/../services/PaymentService.php';
+require_once __DIR__ . '/../services/ReportService.php';
+require_once __DIR__ . '/../helpers/ReportDocumentTemplate.php';
 
 
 
@@ -839,7 +841,8 @@ class AgentDashboardController extends BaseController
                     $amount,
                     $phoneNumber,
                     $response['CheckoutRequestID'],
-                    $paymentType
+                    $paymentType,
+                    $response['MerchantRequestID'] ?? null
                 );
 
                 echo json_encode([
@@ -988,27 +991,56 @@ class AgentDashboardController extends BaseController
             return;
         }
 
-        $payments = $this->memberModel->getMemberPaymentHistory($memberId);
-        $filename = 'member-statement-' . (int)$memberId . '-' . date('Ymd') . '.csv';
+        $reportService = new ReportService();
+        $payload = $reportService->getMemberStatementPayload((int)$memberId, '', '', [
+            'prepared_for' => trim(($agent['first_name'] ?? '') . ' ' . ($agent['last_name'] ?? '')) ?: 'Agent Portal',
+            'title' => 'Member Payment Statement',
+        ]);
+        $filenameBase = 'member-statement-' . (int)$memberId . '-' . date('Ymd');
 
-        header('Content-Type: text/csv');
-        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        if ($this->queryParam('format') === 'csv') {
+            $table = $payload['tables'][0] ?? ['headers' => [], 'rows' => []];
+            header('Content-Type: text/csv; charset=UTF-8');
+            header('Content-Disposition: attachment; filename="' . $filenameBase . '.csv"');
 
-        $output = fopen('php://output', 'w');
-        fputcsv($output, ['Payment Date', 'Description', 'Amount', 'Status', 'Reference']);
+            $output = fopen('php://output', 'w');
+            fputcsv($output, [$payload['title'] ?? 'Member Statement'], ',', '"', '\\', '');
+            fputcsv($output, ['Generated', $payload['generated_at'] ?? date('Y-m-d H:i')], ',', '"', '\\', '');
+            fputcsv($output, [], ',', '"', '\\', '');
+            fputcsv($output, $table['headers'] ?? [], ',', '"', '\\', '');
 
-        foreach ($payments as $payment) {
-            $paymentDate = $payment['payment_date'] ?? $payment['created_at'] ?? '';
-            $description = $payment['description'] ?? $payment['method'] ?? '';
-            $amount = $payment['amount'] ?? $payment['display_amount'] ?? '';
-            $status = $payment['status'] ?? '';
-            $reference = $payment['reference'] ?? ($payment['mpesa_receipt'] ?? '');
+            foreach (($table['rows'] ?? []) as $row) {
+                fputcsv($output, $row, ',', '"', '\\', '');
+            }
 
-            fputcsv($output, [$paymentDate, $description, $amount, $status, $reference]);
+            fclose($output);
+            exit;
         }
 
-        fclose($output);
+        $autoloadPath = ROOT_PATH . '/vendor/autoload.php';
+        if (!file_exists($autoloadPath)) {
+            $_SESSION['error'] = 'PDF library not installed.';
+            $this->redirect('/agent/member-details/' . (int)$memberId);
+            return;
+        }
+
+        require_once $autoloadPath;
+
+        $html = ReportDocumentTemplate::render($payload);
+        $dompdf = new \Dompdf\Dompdf([
+            'isRemoteEnabled' => true,
+            'isHtml5ParserEnabled' => true
+        ]);
+        $dompdf->loadHtml($html, 'UTF-8');
+        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->render();
+        $dompdf->stream($payload['pdf_filename'] ?? ($filenameBase . '.pdf'), ['Attachment' => true]);
         exit;
+    }
+
+    private function queryParam(string $key, $default = null)
+    {
+        return $_GET[$key] ?? $default;
     }
 
     /**

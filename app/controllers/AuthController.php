@@ -231,24 +231,17 @@ class AuthController extends BaseController
         try {
             $this->validateCsrf();
 
-            // Support lookup by National ID / Member Number (primary) or phone (legacy)
+            // Support lookup by National ID / Agent Number / Member Number (primary) or phone (legacy)
             $idInput    = $this->sanitizeInput($_POST['id_number'] ?? '');
             $phoneInput = $this->sanitizeInput($_POST['phone'] ?? '');
             $user = null;
             $phone = null;
 
             if (!empty($idInput)) {
-                // Look up member by national ID or member number, then get their user record
-                $member = $this->memberModel->findByNationalId($idInput);
-                if (!$member) {
-                    $member = $this->memberModel->findByMemberNumber($idInput);
-                }
-                if ($member) {
-                    $user  = $this->userModel->find((int)$member['user_id']);
-                    $phone = $user['phone'] ?? null;
-                }
+                $user = $this->userModel->findByAnyCredential($idInput);
+                $phone = $user['phone'] ?? null;
                 if (!$user || !$phone) {
-                    $this->json(['success' => false, 'message' => 'No account found for that ID. Please check and try again.'], 404);
+                    $this->json(['success' => false, 'message' => 'No account found for that identifier. Please check and try again.'], 404);
                     return;
                 }
             } else {
@@ -1563,31 +1556,33 @@ class AuthController extends BaseController
                     'maturity_ends' => $maturityEnds,
                     'created_at' => date('Y-m-d H:i:s')
                 ];
-                
+
                 $memberId = $this->memberModel->create($memberData);
-                
+
                 // Handle payment based on method
                 $paymentModel = new Payment();
-                
+                $paymentData = null;
+
                 if ($paymentMethod === 'mpesa') {
                     // Check if checkout_request_id was provided from STK push
                     $checkoutRequestId = $_POST['checkout_request_id'] ?? null;
                     $paymentPhone = $_POST['payment_phone'] ?? $phone;
-                    
-                    $paymentData = [
-                        'member_id' => $memberId,
-                        'amount' => REGISTRATION_FEE,
-                        'payment_type' => 'registration',
-                        'payment_method' => 'mpesa',
-                        'status' => 'pending',
-                        'phone_number' => $paymentPhone,
-                        'transaction_reference' => $checkoutRequestId ?? ('REG' . $phone . '_' . time()),
-                        'created_at' => date('Y-m-d H:i:s')
-                    ];
-                    
-                    // If checkout_request_id exists, it means STK push was initiated
+
+                    // Do not create a placeholder registration payment here.
+                    // Manual Paybill payments are posted by the C2B callback or receipt verification.
                     if ($checkoutRequestId) {
-                        $paymentData['notes'] = 'STK Push initiated - awaiting M-Pesa confirmation';
+                        $paymentData = [
+                            'member_id' => $memberId,
+                            'amount' => REGISTRATION_FEE,
+                            'payment_type' => 'registration',
+                            'payment_method' => 'mpesa',
+                            'status' => 'pending',
+                            'phone_number' => $paymentPhone,
+                            'transaction_reference' => $checkoutRequestId,
+                            'checkout_request_id' => $checkoutRequestId,
+                            'notes' => 'STK Push initiated - awaiting M-Pesa confirmation',
+                            'created_at' => date('Y-m-d H:i:s')
+                        ];
                     }
                 } else {
                     // Cash/office payment or manual M-Pesa
@@ -1601,8 +1596,10 @@ class AuthController extends BaseController
                         'created_at' => date('Y-m-d H:i:s')
                     ];
                 }
-                
-                $paymentModel->create($paymentData);
+
+                if ($paymentData !== null) {
+                    $paymentModel->create($paymentData);
+                }
 
                 $otpCode = $this->generateOtpCode();
                 $otpMessage = 'Your SHENA registration verification code is ' . $otpCode . '. It expires in 10 minutes.';
@@ -1876,24 +1873,6 @@ class AuthController extends BaseController
             }
 
             $this->userModel->updatePassword($userId, $password);
-
-            // Send welcome SMS now that account is fully set up
-            $memberNumber = (string) ($_SESSION['signup_password_setup']['member_number'] ?? '');
-            $phone        = (string) ($_SESSION['signup_password_setup']['phone'] ?? '');
-            if ($memberNumber && $phone) {
-                try {
-                    // Fetch national ID for payment account reference
-                    $memberRecord = $this->memberModel->findByUserId($userId);
-                    $nationalId   = (string) ($memberRecord['id_number'] ?? $memberNumber);
-                    $smsService   = new SmsService();
-                    $smsService->sendSms(
-                        $phone,
-                        'Welcome to SHENA! Mbr: ' . $memberNumber . '. Pay KES 200 reg fee via Paybill 4163987, Acct: ' . $nationalId . '. Login: shenacompanion.co.ke'
-                    );
-                } catch (Exception $smsEx) {
-                    error_log('Welcome SMS error for member ' . $memberNumber . ': ' . $smsEx->getMessage());
-                }
-            }
 
             unset($_SESSION['signup_password_setup']);
 

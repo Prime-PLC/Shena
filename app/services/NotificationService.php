@@ -48,6 +48,7 @@ class NotificationService
             if ($smsResult['success']) {
                 $result['success'] = true;
                 $result['method'] = 'sms';
+                $result['data'] = $smsResult['data'] ?? null;
                 $this->logNotification($recipient, 'sms', 'success', $message);
                 return $result;
             } else {
@@ -75,6 +76,7 @@ class NotificationService
                 $result['success'] = true;
                 $result['method'] = 'email';
                 $result['fallback_used'] = true;
+                $result['data'] = ['fallback' => 'email'];
                 $this->logNotification($recipient, 'email', 'success', $message, 'SMS failed, email fallback used');
                 return $result;
             } else {
