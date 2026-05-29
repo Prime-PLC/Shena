@@ -917,3 +917,4 @@ if ($notificationCount === null) {
 				</div>
 			</div>
 	<main>
+		<?php if (function_exists('renderFlashMessagesScript')) { renderFlashMessagesScript(5000); } ?>

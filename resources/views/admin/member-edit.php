@@ -247,22 +247,6 @@ $selectedPackageKey = $member['package_key'] ?? ($member['package'] ?? '');
         </a>
     </div>
 
-    <?php if (isset($_SESSION['success_message'])): ?>
-        <div class="alert alert-success">
-            <i class="fas fa-check-circle"></i>
-            <span><?= htmlspecialchars($_SESSION['success_message']) ?></span>
-        </div>
-        <?php unset($_SESSION['success_message']); ?>
-    <?php endif; ?>
-
-    <?php if (isset($_SESSION['error_message'])): ?>
-        <div class="alert alert-error">
-            <i class="fas fa-exclamation-circle"></i>
-            <span><?= htmlspecialchars($_SESSION['error_message']) ?></span>
-        </div>
-        <?php unset($_SESSION['error_message']); ?>
-    <?php endif; ?>
-
     <!-- Edit Form -->
     <form method="POST" action="/admin/members/update/<?= $member['id'] ?>" class="form-card">
         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">

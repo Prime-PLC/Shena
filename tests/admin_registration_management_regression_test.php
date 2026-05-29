@@ -22,7 +22,7 @@ $checks = [
     [
         'file' => 'app/models/Member.php',
         'mustContain' => [
-            'm.id_number LIKE :search',
+            'm.id_number LIKE :search_id_number',
             '(m.package = :package OR m.package_key = :package)',
         ],
     ],
@@ -167,7 +167,7 @@ foreach ($checks as $check) {
 }
 
 $memberModelContents = file_get_contents($root . '/app/models/Member.php');
-if (substr_count($memberModelContents, 'm.id_number LIKE :search') < 2) {
+if (substr_count($memberModelContents, 'm.id_number LIKE :search_id_number') < 2) {
     fwrite(STDERR, "Member search should include national ID in both member listing queries\n");
     $failed = true;
 }

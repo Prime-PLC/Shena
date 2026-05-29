@@ -294,11 +294,16 @@ class Dependent extends BaseModel
                 FROM {$this->table} d
                 JOIN members m ON d.member_id = m.id
                 JOIN users u ON m.user_id = u.id
-                WHERE d.full_name LIKE :search 
-                OR d.id_number LIKE :search
-                OR d.birth_certificate LIKE :search
+                WHERE d.full_name LIKE :dependent_name_search
+                OR d.id_number LIKE :dependent_id_search
+                OR d.birth_certificate LIKE :dependent_birth_cert_search
                 ORDER BY d.full_name";
-        
-        return $this->db->fetchAll($sql, ['search' => "%{$searchTerm}%"]);
+        $term = "%{$searchTerm}%";
+
+        return $this->db->fetchAll($sql, [
+            'dependent_name_search' => $term,
+            'dependent_id_search' => $term,
+            'dependent_birth_cert_search' => $term,
+        ]);
     }
 }

@@ -33,6 +33,76 @@ function setFlashMessage($key, $message)
 }
 
 /**
+ * Collect all legacy and current flash-message keys once.
+ */
+function collectFlashMessages()
+{
+    $messages = [];
+    $legacyKeys = [
+        'success' => 'success',
+        'error' => 'error',
+        'warning' => 'warning',
+        'info' => 'info',
+        'success_message' => 'success',
+        'error_message' => 'error',
+        'warning_message' => 'warning',
+        'info_message' => 'info',
+    ];
+
+    foreach ($legacyKeys as $key => $type) {
+        if (!empty($_SESSION[$key])) {
+            $messages[] = ['type' => $type, 'message' => (string)$_SESSION[$key]];
+            unset($_SESSION[$key]);
+        }
+    }
+
+    if (!empty($_SESSION['flash_message'])) {
+        $messages[] = [
+            'type' => $_SESSION['flash_type'] ?? 'info',
+            'message' => (string)$_SESSION['flash_message'],
+        ];
+        unset($_SESSION['flash_message'], $_SESSION['flash_type']);
+    }
+
+    return $messages;
+}
+
+/**
+ * Render queued flash messages immediately in the current layout.
+ */
+function renderFlashMessagesScript($duration = 5000)
+{
+    $messages = collectFlashMessages();
+    if (empty($messages)) {
+        return;
+    }
+    ?>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const flashMessages = <?php echo json_encode($messages); ?>;
+            window.__shenaFlashDispatched = window.__shenaFlashDispatched || {};
+
+            flashMessages.forEach(function(flash) {
+                const key = flash.type + ':' + flash.message;
+                if (window.__shenaFlashDispatched[key]) return;
+                window.__shenaFlashDispatched[key] = true;
+
+                if (window.ShenaApp && typeof ShenaApp.showNotification === 'function') {
+                    ShenaApp.showNotification(flash.message, flash.type, <?php echo (int)$duration; ?>);
+                    return;
+                }
+                if (window.ShenaApp && typeof ShenaApp.alert === 'function') {
+                    ShenaApp.alert(flash.message, flash.type);
+                    return;
+                }
+                console.warn(flash.message);
+            });
+        });
+    </script>
+    <?php
+}
+
+/**
  * Format currency
  */
 function formatCurrency($amount, $currency = 'KES')

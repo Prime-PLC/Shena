@@ -1064,6 +1064,7 @@ if ($notificationCount === null) {
 
     <!-- Main Content -->
     <div class="main-content">
+        <?php if (function_exists('renderFlashMessagesScript')) { renderFlashMessagesScript(5000); } ?>
 
     <script>
         // Sidebar Toggle Functionality

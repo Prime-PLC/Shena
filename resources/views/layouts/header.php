@@ -179,36 +179,6 @@
     </nav>
 
     <!-- Flash Messages -->
-    <?php 
-    $success = getFlashMessage('success');
-    $error = getFlashMessage('error');
-    $info = getFlashMessage('info');
-    $warning = getFlashMessage('warning');
-    ?>
-    
-    <?php if ($success || $error || $info || $warning): ?>
-        <script>
-            document.addEventListener('DOMContentLoaded', function() {
-                const flashMessages = [
-                    <?php if ($success): ?>{ type: 'success', message: <?php echo json_encode($success); ?> },<?php endif; ?>
-                    <?php if ($error): ?>{ type: 'error', message: <?php echo json_encode($error); ?> },<?php endif; ?>
-                    <?php if ($info): ?>{ type: 'info', message: <?php echo json_encode($info); ?> },<?php endif; ?>
-                    <?php if ($warning): ?>{ type: 'warning', message: <?php echo json_encode($warning); ?> },<?php endif; ?>
-                ];
-
-                flashMessages.forEach(function(flash) {
-                    if (window.ShenaApp && typeof ShenaApp.alert === 'function') {
-                        ShenaApp.alert(flash.message, flash.type);
-                        return;
-                    }
-                    if (window.ShenaApp && typeof ShenaApp.showNotification === 'function') {
-                        ShenaApp.showNotification(flash.message, flash.type, 5000);
-                        return;
-                    }
-                    console.warn(flash.message);
-                });
-            });
-        </script>
-    <?php endif; ?>
+    <?php if (function_exists('renderFlashMessagesScript')) { renderFlashMessagesScript(5000); } ?>
 
     <main>

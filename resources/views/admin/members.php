@@ -7,6 +7,10 @@ $packages = $packages ?? [];
 $search = $search ?? '';
 $status = $status ?? 'all';
 $package = $package ?? 'all';
+$pendingValidationError = $_SESSION['pending_validation_error'] ?? '';
+$pendingValidationMemberId = (int)($_SESSION['pending_validation_member_id'] ?? 0);
+$pendingValidationCode = $_SESSION['pending_validation_code'] ?? '';
+unset($_SESSION['pending_validation_error'], $_SESSION['pending_validation_member_id'], $_SESSION['pending_validation_code']);
 $pagination = $pagination ?? ['current_page' => 1, 'total_pages' => 1, 'total_items' => count($members), 'per_page' => 50];
 $buildMemberPageUrl = function (int $page) use ($search, $status, $package) {
     $query = array_filter([
@@ -351,6 +355,69 @@ $buildMemberPageUrl = function (int $page) use ($search, $status, $package) {
         filter: brightness(0) invert(1);
     }
 
+    .member-quick-panel .modal-content {
+        border: 0;
+        border-radius: 14px;
+        overflow: hidden;
+        box-shadow: 0 22px 70px rgba(17, 24, 39, 0.28);
+    }
+
+    .entity-modal .modal-body {
+        padding: 22px 24px;
+        background: #FFFFFF;
+    }
+
+    .entity-modal .modal-footer {
+        padding: 16px 24px;
+        background: #F9FAFB;
+        border-top: 1px solid #E5E7EB;
+    }
+
+    .entity-modal .form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 16px 18px;
+    }
+
+    .entity-modal .form-group {
+        margin: 0;
+        min-width: 0;
+    }
+
+    .entity-modal .form-label {
+        display: block;
+        margin-bottom: 7px;
+        color: #374151;
+        font-size: 12px;
+        font-weight: 800;
+    }
+
+    .entity-modal .form-input,
+    .entity-modal .form-select {
+        width: 100%;
+        min-height: 42px;
+        padding: 10px 12px;
+        border: 1px solid #D1D5DB;
+        border-radius: 8px;
+        background: #FFFFFF;
+        color: #111827;
+        font-size: 14px;
+        line-height: 1.4;
+        transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .entity-modal textarea.form-input {
+        min-height: 76px;
+        resize: vertical;
+    }
+
+    .entity-modal .form-input:focus,
+    .entity-modal .form-select:focus {
+        outline: none;
+        border-color: #7F3D9E;
+        box-shadow: 0 0 0 3px rgba(127, 61, 158, 0.12);
+    }
+
     .entity-profile {
         display: grid;
         grid-template-columns: 120px 1fr;
@@ -663,6 +730,20 @@ $buildMemberPageUrl = function (int $page) use ($search, $status, $package) {
         border-radius: 6px;
         font-size: 13px;
         margin-bottom: 12px;
+    }
+
+    .approval-error {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        margin: -4px 0 12px;
+        padding: 9px 10px;
+        border: 1px solid #FCA5A5;
+        border-radius: 6px;
+        background: #FEF2F2;
+        color: #B91C1C;
+        font-size: 12px;
+        line-height: 1.4;
     }
 
     .approval-actions {
@@ -1450,10 +1531,16 @@ $buildMemberPageUrl = function (int $page) use ($search, $status, $package) {
                         type="text"
                         class="approval-input"
                         name="mpesa_receipt_number"
-                        value="<?php echo htmlspecialchars($approval['code'] ?? ''); ?>"
+                        value="<?php echo htmlspecialchars($pendingValidationMemberId === (int)$approval['id'] ? $pendingValidationCode : ($approval['code'] ?? '')); ?>"
                         placeholder="Enter Ref Code"
                         required
                     >
+                    <?php if ($pendingValidationError && $pendingValidationMemberId === (int)$approval['id']): ?>
+                        <div class="approval-error">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <span><?php echo htmlspecialchars($pendingValidationError); ?></span>
+                        </div>
+                    <?php endif; ?>
                     <div class="approval-actions">
                         <button type="submit" class="btn-approve">
                             <?php echo $approval['action_text'] ?? 'Verify & Activate'; ?>
@@ -1486,7 +1573,7 @@ $buildMemberPageUrl = function (int $page) use ($search, $status, $package) {
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="form-grid" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;">
+                    <div class="form-grid">
                         <div class="form-group">
                             <label class="form-label" for="memberManageFirstName">First Name</label>
                             <input class="form-input" id="memberManageFirstName" name="first_name" required>

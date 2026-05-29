@@ -14,6 +14,10 @@ $checks = [
             'name="method" value="paybill"',
             'name="payment_type" value="registration"',
             'name="return_to" value="/admin/members"',
+            '$pendingValidationError',
+            '$pendingValidationMemberId',
+            '$pendingValidationCode',
+            'approval-error',
         ],
         'mustNotContain' => [
             "/admin/members/approve/",
@@ -24,6 +28,9 @@ $checks = [
         'mustContain' => [
             'wantsJsonResponse',
             '$returnTo = $input[\'return_to\'] ?? \'/admin/payments\'',
+            'pending_validation_error',
+            'pending_validation_member_id',
+            'pending_validation_code',
             '$_SESSION[\'success\'] = $result[\'message\']',
             '$_SESSION[\'error\'] = $result[\'message\'] ?? \'Verification failed\'',
             'header(\'Location: \' . $returnTo)',

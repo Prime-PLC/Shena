@@ -571,6 +571,9 @@ class PaymentController extends BaseController
                 $message = 'M-Pesa receipt number is required for Paybill verification';
                 if (!$wantsJson) {
                     $_SESSION['error'] = $message;
+                    $_SESSION['pending_validation_error'] = $message;
+                    $_SESSION['pending_validation_member_id'] = $memberId;
+                    $_SESSION['pending_validation_code'] = $mpesaReceipt;
                     header('Location: ' . $returnTo);
                     exit;
                 }
@@ -589,6 +592,7 @@ class PaymentController extends BaseController
             if ($result['success']) {
                 if (!$wantsJson) {
                     $_SESSION['success'] = $result['message'];
+                    unset($_SESSION['pending_validation_error'], $_SESSION['pending_validation_member_id'], $_SESSION['pending_validation_code']);
                     header('Location: ' . $returnTo);
                     exit;
                 }
@@ -596,6 +600,9 @@ class PaymentController extends BaseController
             } else {
                 if (!$wantsJson) {
                     $_SESSION['error'] = $result['message'] ?? 'Verification failed';
+                    $_SESSION['pending_validation_error'] = $_SESSION['error'];
+                    $_SESSION['pending_validation_member_id'] = $memberId;
+                    $_SESSION['pending_validation_code'] = $mpesaReceipt;
                     header('Location: ' . $returnTo);
                     exit;
                 }

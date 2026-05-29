@@ -31,13 +31,19 @@ class Member extends BaseModel
         }
         
         if (!empty($filters['search'])) {
-            $sql .= " AND (m.member_number LIKE :search
-                      OR m.id_number LIKE :search
-                      OR u.first_name LIKE :search
-                      OR u.last_name LIKE :search
-                      OR u.email LIKE :search
-                      OR u.phone LIKE :search)";
-            $params['search'] = '%' . $filters['search'] . '%';
+            $searchTerm = '%' . $filters['search'] . '%';
+            $sql .= " AND (m.member_number LIKE :search_member_number
+                      OR m.id_number LIKE :search_id_number
+                      OR u.first_name LIKE :search_first_name
+                      OR u.last_name LIKE :search_last_name
+                      OR u.email LIKE :search_email
+                      OR u.phone LIKE :search_phone)";
+            $params['search_member_number'] = $searchTerm;
+            $params['search_id_number'] = $searchTerm;
+            $params['search_first_name'] = $searchTerm;
+            $params['search_last_name'] = $searchTerm;
+            $params['search_email'] = $searchTerm;
+            $params['search_phone'] = $searchTerm;
         }
         
         if (!empty($filters['package'])) {
@@ -937,13 +943,19 @@ class Member extends BaseModel
         $params = [];
         
         if (!empty($search)) {
-            $sql .= " AND (m.member_number LIKE :search
-                      OR u.first_name LIKE :search
-                      OR u.last_name LIKE :search
-                      OR u.email LIKE :search
-                      OR u.phone LIKE :search
-                      OR m.id_number LIKE :search)";
-            $params['search'] = '%' . $search . '%';
+            $searchTerm = '%' . $search . '%';
+            $sql .= " AND (m.member_number LIKE :search_member_number
+                      OR u.first_name LIKE :search_first_name
+                      OR u.last_name LIKE :search_last_name
+                      OR u.email LIKE :search_email
+                      OR u.phone LIKE :search_phone
+                      OR m.id_number LIKE :search_id_number)";
+            $params['search_member_number'] = $searchTerm;
+            $params['search_first_name'] = $searchTerm;
+            $params['search_last_name'] = $searchTerm;
+            $params['search_email'] = $searchTerm;
+            $params['search_phone'] = $searchTerm;
+            $params['search_id_number'] = $searchTerm;
         }
         
         if ($status !== 'all' && !empty($status)) {
@@ -1009,14 +1021,21 @@ class Member extends BaseModel
         $query = "SELECT m.*, u.first_name, u.last_name, u.phone, u.email
                   FROM members m
                   JOIN users u ON m.user_id = u.id
-                  WHERE m.member_number LIKE :search
-                  OR m.id_number LIKE :search
-                  OR u.first_name LIKE :search
-                  OR u.last_name LIKE :search
-                  OR CONCAT(u.first_name, ' ', u.last_name) LIKE :search
+                  WHERE m.member_number LIKE :search_member_number
+                  OR m.id_number LIKE :search_id_number
+                  OR u.first_name LIKE :search_first_name
+                  OR u.last_name LIKE :search_last_name
+                  OR CONCAT(u.first_name, ' ', u.last_name) LIKE :search_full_name
                   LIMIT 10";
-        
-        return $this->db->fetchAll($query, ['search' => "%{$searchTerm}%"]);
+        $term = "%{$searchTerm}%";
+
+        return $this->db->fetchAll($query, [
+            'search_member_number' => $term,
+            'search_id_number' => $term,
+            'search_first_name' => $term,
+            'search_last_name' => $term,
+            'search_full_name' => $term,
+        ]);
     }
     
     /**
