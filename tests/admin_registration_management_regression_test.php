@@ -11,9 +11,19 @@ $checks = [
             "\$memberRecordData = [",
             "\$this->userModel->update(\$member['user_id'], \$memberUserData)",
             "\$this->memberModel->update(\$id, \$memberRecordData)",
+            'notifyMemberManagementChange',
+            "\$returnTo = \$_POST['return_to'] ?? '/admin/members'",
         ],
         'mustNotContain' => [
             "'sub_county' => \$_POST['sub_county']",
+            "'county' => \$_POST['county']",
+        ],
+    ],
+    [
+        'file' => 'app/models/Member.php',
+        'mustContain' => [
+            'm.id_number LIKE :search',
+            '(m.package = :package OR m.package_key = :package)',
         ],
     ],
     [
@@ -30,6 +40,7 @@ $checks = [
             '$agentUpdateData = [',
             '$this->userModel->update($agent[\'user_id\'], $userUpdateData)',
             '$this->agentModel->updateAgent($agentId, $agentUpdateData)',
+            'notifyAgentManagementChange',
         ],
     ],
     [
@@ -84,8 +95,20 @@ $checks = [
         'file' => 'resources/views/admin/members.php',
         'mustContain' => [
             'member-quick-panel',
-            'openMemberEditModal',
+            'openMemberManageModal',
             'memberStatusSelect',
+            'memberSearchForm',
+            'memberManageForm',
+            'name="search"',
+            'name="package"',
+            'name="return_to"',
+        ],
+        'mustNotContain' => [
+            '<i class="fas fa-edit"></i> Edit',
+            '<i class="fas fa-money-bill-wave"></i> Payments',
+            '<i class="fas fa-ban"></i> Suspend',
+            '<i class="fas fa-check"></i> Activate',
+            'filterMembers()',
         ],
     ],
     [
@@ -141,6 +164,12 @@ foreach ($checks as $check) {
             $failed = true;
         }
     }
+}
+
+$memberModelContents = file_get_contents($root . '/app/models/Member.php');
+if (substr_count($memberModelContents, 'm.id_number LIKE :search') < 2) {
+    fwrite(STDERR, "Member search should include national ID in both member listing queries\n");
+    $failed = true;
 }
 
 exit($failed ? 1 : 0);

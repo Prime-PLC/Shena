@@ -3,6 +3,23 @@ $members = $members ?? [];
 $stats = $stats ?? ['total_members' => 0, 'grace_period' => 0, 'default_rate' => 0];
 $recent_claim = $recent_claim ?? null;
 $pending_approvals = $pending_approvals ?? [];
+$packages = $packages ?? [];
+$search = $search ?? '';
+$status = $status ?? 'all';
+$package = $package ?? 'all';
+$pagination = $pagination ?? ['current_page' => 1, 'total_pages' => 1, 'total_items' => count($members), 'per_page' => 50];
+$buildMemberPageUrl = function (int $page) use ($search, $status, $package) {
+    $query = array_filter([
+        'search' => $search ?? '',
+        'status' => ($status ?? 'all') !== 'all' ? $status : '',
+        'package' => ($package ?? 'all') !== 'all' ? $package : '',
+        'page' => $page > 1 ? $page : '',
+    ], function ($value) {
+        return $value !== '' && $value !== null;
+    });
+
+    return '/admin/members' . (!empty($query) ? '?' . http_build_query($query) : '');
+};
 ?>
 <?php include_once __DIR__ . '/../layouts/admin-header.php'; ?>
 
@@ -1147,24 +1164,36 @@ $pending_approvals = $pending_approvals ?? [];
             </a>
         </div>
         
-        <div class="filter-bar">
+        <form class="filter-bar" id="memberSearchForm" method="GET" action="/admin/members">
             <div class="search-box">
                 <i class="fas fa-search"></i>
-                <input type="text" id="search-members" placeholder="Search by name, ID, phone..." onkeyup="filterMembers()">
+                <input type="text" id="search-members" name="search" value="<?php echo htmlspecialchars($search ?? ''); ?>" placeholder="Search by name, ID, phone...">
             </div>
-            <select class="filter-select" id="filter-package" onchange="filterMembers()">
-                <option value="all">All Packages</option>
-                <option value="individual">Individual</option>
-                <option value="family">Family</option>
-                <option value="extended_family_1">Extended Family 1</option>
-                <option value="extended_family_2">Extended Family 2</option>
-                <option value="executive">Executive</option>
+            <select class="filter-select" id="filter-status" name="status">
+                <option value="all" <?php echo (($status ?? 'all') === 'all') ? 'selected' : ''; ?>>All Statuses</option>
+                <option value="active" <?php echo (($status ?? '') === 'active') ? 'selected' : ''; ?>>Active</option>
+                <option value="inactive" <?php echo (($status ?? '') === 'inactive') ? 'selected' : ''; ?>>Inactive</option>
+                <option value="suspended" <?php echo (($status ?? '') === 'suspended') ? 'selected' : ''; ?>>Suspended</option>
+                <option value="grace_period" <?php echo (($status ?? '') === 'grace_period') ? 'selected' : ''; ?>>Grace Period</option>
+                <option value="defaulted" <?php echo (($status ?? '') === 'defaulted') ? 'selected' : ''; ?>>Defaulted</option>
             </select>
-            <button class="tab-action-btn" onclick="resetFilters()">
+            <select class="filter-select" id="filter-package" name="package">
+                <option value="all">All Packages</option>
+                <?php foreach ($packages as $packageKey => $packageOption): ?>
+                    <option value="<?php echo htmlspecialchars($packageKey); ?>" <?php echo (($package ?? 'all') === $packageKey) ? 'selected' : ''; ?>>
+                        <?php echo htmlspecialchars($packageOption['name'] ?? $packageKey); ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+            <button type="submit" class="tab-action-btn primary">
+                <i class="fas fa-search"></i>
+                Search
+            </button>
+            <a class="tab-action-btn" href="/admin/members">
                 <i class="fas fa-redo"></i>
                 Reset
-            </button>
-        </div>
+            </a>
+        </form>
     </div>
 
     <!-- Pending Approvals Tab -->
@@ -1197,7 +1226,7 @@ $pending_approvals = $pending_approvals ?? [];
         <div class="filter-bar">
             <div class="search-box">
                 <i class="fas fa-search"></i>
-                <input type="text" placeholder="Search active members..." onkeyup="filterMembers()">
+                <input type="text" placeholder="Use the main search above to filter active members" disabled>
             </div>
         </div>
     </div>
@@ -1307,9 +1336,18 @@ $pending_approvals = $pending_approvals ?? [];
                                 'national_id' => $member['id_number'] ?? $member['national_id'] ?? 'N/A',
                                 'phone' => $member['phone'] ?? 'N/A',
                                 'email' => $member['email'] ?? 'N/A',
-                                'county' => $member['county'] ?? 'N/A',
+                                'first_name' => $member['first_name'] ?? '',
+                                'last_name' => $member['last_name'] ?? '',
                                 'package' => $member['package'] ?? 'Standard',
+                                'package_key' => $member['package_key'] ?? ($member['package'] ?? ''),
+                                'corporate_couple_count' => (int)($member['corporate_couple_count'] ?? 0),
                                 'status' => $member['status'] ?? 'active',
+                                'date_of_birth' => $member['date_of_birth'] ?? '',
+                                'gender' => $member['gender'] ?? '',
+                                'address' => $member['address'] ?? '',
+                                'next_of_kin' => $member['next_of_kin'] ?? '',
+                                'next_of_kin_relationship' => $member['next_of_kin_relationship'] ?? '',
+                                'next_of_kin_phone' => $member['next_of_kin_phone'] ?? '',
                                 'last_payment_amount' => 'KES ' . number_format($member['last_payment_amount'] ?? 0, 2),
                                 'last_payment_date' => $lastPaymentDate,
                                 'agent_number' => $member['agent_number'] ?? 'N/A',
@@ -1360,30 +1398,9 @@ $pending_approvals = $pending_approvals ?? [];
                                     <button type="button" class="row-action primary" data-member="<?php echo $memberModalJson; ?>" onclick="openMemberModal(this)" aria-label="View member details">
                                         <i class="fas fa-eye"></i> View
                                     </button>
-                                    <a class="row-action" href="/admin/members/edit/<?php echo (int)$member['id']; ?>">
-                                        <i class="fas fa-edit"></i> Edit
-                                    </a>
-                                    <a class="row-action" href="/admin/payments?member_id=<?php echo (int)$member['id']; ?>">
-                                        <i class="fas fa-money-bill-wave"></i> Payments
-                                    </a>
-                                    <button type="button" class="row-action success" data-member="<?php echo $memberModalJson; ?>" onclick="openMemberEditModal(this)">
+                                    <button type="button" class="row-action success" data-member="<?php echo $memberModalJson; ?>" onclick="openMemberManageModal(this)">
                                         <i class="fas fa-sliders-h"></i> Manage
                                     </button>
-                                    <?php if (($member['status'] ?? 'active') === 'active'): ?>
-                                        <form method="POST" action="/admin/members/suspend/<?php echo (int)$member['id']; ?>" style="display:inline;">
-                                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
-                                            <button type="button" class="row-action warning" onclick="confirmMemberStatus(event, 'Suspend this member?', 'danger')">
-                                                <i class="fas fa-ban"></i> Suspend
-                                            </button>
-                                        </form>
-                                    <?php elseif (($member['status'] ?? '') === 'suspended'): ?>
-                                        <form method="POST" action="/admin/members/activate/<?php echo (int)$member['id']; ?>" style="display:inline;">
-                                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
-                                            <button type="button" class="row-action success" onclick="confirmMemberStatus(event, 'Activate this member?', 'success')">
-                                                <i class="fas fa-check"></i> Activate
-                                            </button>
-                                        </form>
-                                    <?php endif; ?>
                                 </div>
                             </td>
                         </tr>
@@ -1394,14 +1411,15 @@ $pending_approvals = $pending_approvals ?? [];
             </div><!-- /.table-scroll-wrap -->
 
             <div class="table-pagination">
-                <div>VIEWING <?php echo count($members); ?> OF <?php echo $stats['total_members'] ?? 0; ?> MEMBERS</div>
+                <div>VIEWING <?php echo count($members); ?> OF <?php echo (int)($pagination['total_items'] ?? 0); ?> MATCHING MEMBERS</div>
                 <div class="pagination-buttons">
-                    <button class="pagination-btn" <?= (!isset($_GET['page']) || $_GET['page'] <= 1) ? 'disabled' : '' ?> 
-                        onclick="window.location.href='?page=<?= max(1, ($_GET['page'] ?? 1) - 1) ?>'">
+                    <button class="pagination-btn" <?= ((int)($pagination['current_page'] ?? 1) <= 1) ? 'disabled' : '' ?>
+                        onclick="window.location.href='<?php echo htmlspecialchars($buildMemberPageUrl(max(1, (int)($pagination['current_page'] ?? 1) - 1))); ?>'">
                         <i class="fas fa-chevron-left"></i> Previous
                     </button>
-                    <span style="padding: 0 12px; color: #6B7280;">Page <?= $_GET['page'] ?? 1 ?></span>
-                    <button class="pagination-btn" onclick="window.location.href='?page=<?= ($_GET['page'] ?? 1) + 1 ?>'">
+                    <span style="padding: 0 12px; color: #6B7280;">Page <?php echo (int)($pagination['current_page'] ?? 1); ?> of <?php echo max(1, (int)($pagination['total_pages'] ?? 1)); ?></span>
+                    <button class="pagination-btn" <?= ((int)($pagination['current_page'] ?? 1) >= (int)($pagination['total_pages'] ?? 1)) ? 'disabled' : '' ?>
+                        onclick="window.location.href='<?php echo htmlspecialchars($buildMemberPageUrl((int)($pagination['current_page'] ?? 1) + 1)); ?>'">
                         Next <i class="fas fa-chevron-right"></i>
                     </button>
                 </div>
@@ -1449,11 +1467,11 @@ $pending_approvals = $pending_approvals ?? [];
 
 <!-- Member Quick Management Panel -->
 <div class="modal fade entity-modal member-quick-panel" id="memberQuickPanel" tabindex="-1" aria-labelledby="memberQuickPanelLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
-            <form method="POST" id="memberQuickStatusForm">
+            <form method="POST" id="memberManageForm">
                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
-                <input type="hidden" name="member_id" id="memberQuickId">
+                <input type="hidden" name="return_to" value="/admin/members">
                 <div class="modal-header">
                     <div>
                         <h5 class="modal-title" id="memberQuickPanelLabel">Manage Member</h5>
@@ -1462,32 +1480,91 @@ $pending_approvals = $pending_approvals ?? [];
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="form-group" style="margin-bottom:16px;">
-                        <label for="memberStatusSelect" class="form-label">Member Status</label>
-                        <select name="status" id="memberStatusSelect" class="form-select">
-                            <option value="active">Active</option>
-                            <option value="inactive">Inactive</option>
-                            <option value="suspended">Suspended</option>
-                        </select>
-                        <small class="form-help">Active status still requires registration fee confirmation.</small>
-                    </div>
-                    <div class="entity-fields" style="grid-template-columns:1fr;">
-                        <div>
-                            <div class="entity-field-label">Current Plan</div>
-                            <div class="entity-field-value" id="memberQuickPackage">N/A</div>
+                    <div class="form-grid" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;">
+                        <div class="form-group">
+                            <label class="form-label" for="memberManageFirstName">First Name</label>
+                            <input class="form-input" id="memberManageFirstName" name="first_name" required>
                         </div>
-                        <div>
-                            <div class="entity-field-label">Phone</div>
-                            <div class="entity-field-value" id="memberQuickPhone">N/A</div>
+                        <div class="form-group">
+                            <label class="form-label" for="memberManageLastName">Last Name</label>
+                            <input class="form-input" id="memberManageLastName" name="last_name" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="memberManageIdNumber">National ID</label>
+                            <input class="form-input" id="memberManageIdNumber" name="id_number" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="memberManagePhone">Phone</label>
+                            <input class="form-input" id="memberManagePhone" name="phone" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="memberManageEmail">Email</label>
+                            <input class="form-input" id="memberManageEmail" name="email" type="email">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="memberManageDateOfBirth">Date of Birth</label>
+                            <input class="form-input" id="memberManageDateOfBirth" name="date_of_birth" type="date">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="memberManageGender">Gender</label>
+                            <select class="form-select" id="memberManageGender" name="gender">
+                                <option value="">Not set</option>
+                                <option value="male">Male</option>
+                                <option value="female">Female</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="memberStatusSelect">Member Status</label>
+                            <select name="status" id="memberStatusSelect" class="form-select">
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                                <option value="suspended">Suspended</option>
+                                <option value="grace_period">Grace Period</option>
+                                <option value="defaulted">Defaulted</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="memberManagePackage">Package</label>
+                            <select class="form-select" id="memberManagePackage" name="package_key" required>
+                                <?php foreach ($packages as $packageKey => $packageOption): ?>
+                                    <option value="<?php echo htmlspecialchars($packageKey); ?>">
+                                        <?php echo htmlspecialchars($packageOption['name'] ?? $packageKey); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="memberManageCorporateCount">Corporate Couple Count</label>
+                            <select class="form-select" id="memberManageCorporateCount" name="corporate_couple_count">
+                                <?php for ($i = 0; $i <= 5; $i++): ?>
+                                    <option value="<?php echo $i; ?>"><?php echo $i === 0 ? 'None' : $i . ' additional'; ?></option>
+                                <?php endfor; ?>
+                            </select>
+                        </div>
+                        <div class="form-group" style="grid-column:1 / -1;">
+                            <label class="form-label" for="memberManageAddress">Address</label>
+                            <textarea class="form-input" id="memberManageAddress" name="address" rows="2"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="memberManageNokName">Next of Kin</label>
+                            <input class="form-input" id="memberManageNokName" name="nok_name">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="memberManageNokPhone">Next of Kin Phone</label>
+                            <input class="form-input" id="memberManageNokPhone" name="nok_phone">
+                        </div>
+                        <div class="form-group" style="grid-column:1 / -1;">
+                            <label class="form-label" for="memberManageNokRelationship">Next of Kin Relationship</label>
+                            <input class="form-input" id="memberManageNokRelationship" name="nok_relationship">
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <a href="#" class="btn btn-outline-secondary" id="memberQuickEditLink">
-                        <i class="fas fa-edit"></i> Open Edit Form
+                    <a href="#" class="btn btn-outline-secondary" id="memberManagePaymentsLink">
+                        <i class="fas fa-credit-card"></i> Payments
                     </a>
                     <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-save"></i> Update Status
+                        <i class="fas fa-save"></i> Save Member
                     </button>
                 </div>
             </form>
@@ -1535,10 +1612,6 @@ $pending_approvals = $pending_approvals ?? [];
                             <div class="entity-field-value" id="memberModalEmail">N/A</div>
                         </div>
                         <div>
-                            <div class="entity-field-label">County</div>
-                            <div class="entity-field-value" id="memberModalCounty">N/A</div>
-                        </div>
-                        <div>
                             <div class="entity-field-label">Recruited By</div>
                             <div class="entity-field-value" id="memberModalAgent">N/A</div>
                         </div>
@@ -1555,12 +1628,6 @@ $pending_approvals = $pending_approvals ?? [];
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                <a href="#" class="btn btn-outline-secondary" id="memberModalPaymentsLink">
-                    <i class="fas fa-money-bill-wave"></i> Payments
-                </a>
-                <a href="#" class="btn btn-primary" id="memberModalEditLink">
-                    <i class="fas fa-edit"></i> Edit Member
-                </a>
             </div>
         </div>
     </div>
@@ -1582,43 +1649,40 @@ function openMemberModal(button) {
     setText('memberModalPackage', member.package);
     setText('memberModalPhone', member.phone);
     setText('memberModalEmail', member.email);
-    setText('memberModalCounty', member.county);
     setText('memberModalAgent', member.agent_number);
     setText('memberModalPaymentAmount', member.last_payment_amount);
     setText('memberModalPaymentDate', member.last_payment_date);
 
-    document.getElementById('memberModalEditLink').href = member.edit_url || '#';
-    document.getElementById('memberModalPaymentsLink').href = member.payments_url || '#';
-
     new bootstrap.Modal(document.getElementById('memberDetailModal')).show();
 }
 
-function openMemberEditModal(button) {
-    const member = JSON.parse(button.getAttribute('data-member') || '{}');
-    setText('memberQuickSubtitle', (member.name || 'N/A') + ' | ' + (member.member_number || 'N/A'));
-    setText('memberQuickPackage', member.package);
-    setText('memberQuickPhone', member.phone);
-    document.getElementById('memberQuickId').value = member.id || '';
-    document.getElementById('memberStatusSelect').value = member.status === 'active' ? 'active' : (member.status === 'suspended' ? 'suspended' : 'inactive');
-    document.getElementById('memberQuickEditLink').href = member.edit_url || '#';
-    new bootstrap.Modal(document.getElementById('memberQuickPanel')).show();
+function setFormValue(id, value) {
+    const field = document.getElementById(id);
+    if (field) field.value = value || '';
 }
 
-document.getElementById('memberQuickStatusForm')?.addEventListener('submit', function (event) {
-    const memberId = document.getElementById('memberQuickId').value;
-    const status = document.getElementById('memberStatusSelect').value;
-    if (!memberId) {
-        event.preventDefault();
-        return;
-    }
-    if (status === 'active') {
-        this.action = '/admin/members/activate/' + encodeURIComponent(memberId);
-    } else if (status === 'suspended') {
-        this.action = '/admin/members/suspend/' + encodeURIComponent(memberId);
-    } else {
-        this.action = '/admin/member/' + encodeURIComponent(memberId) + '/deactivate';
-    }
-});
+function openMemberManageModal(button) {
+    const member = JSON.parse(button.getAttribute('data-member') || '{}');
+    setText('memberQuickSubtitle', (member.name || 'N/A') + ' | ' + (member.member_number || 'N/A'));
+    const form = document.getElementById('memberManageForm');
+    form.action = '/admin/members/update/' + encodeURIComponent(member.id || '');
+    setFormValue('memberManageFirstName', member.first_name);
+    setFormValue('memberManageLastName', member.last_name);
+    setFormValue('memberManageIdNumber', member.national_id);
+    setFormValue('memberManagePhone', member.phone);
+    setFormValue('memberManageEmail', member.email === 'N/A' ? '' : member.email);
+    setFormValue('memberManageDateOfBirth', member.date_of_birth);
+    setFormValue('memberManageGender', member.gender);
+    setFormValue('memberStatusSelect', member.status || 'inactive');
+    setFormValue('memberManagePackage', member.package_key || '');
+    setFormValue('memberManageCorporateCount', String(member.corporate_couple_count || 0));
+    setFormValue('memberManageAddress', member.address);
+    setFormValue('memberManageNokName', member.next_of_kin);
+    setFormValue('memberManageNokPhone', member.next_of_kin_phone);
+    setFormValue('memberManageNokRelationship', member.next_of_kin_relationship);
+    document.getElementById('memberManagePaymentsLink').href = member.payments_url || '#';
+    new bootstrap.Modal(document.getElementById('memberQuickPanel')).show();
+}
 
 function confirmMemberStatus(event, message, type) {
     const form = event.currentTarget.closest('form');
@@ -1678,38 +1742,6 @@ function filterMembersByStatus(status) {
             window.location.href = '/admin/members?status=' + targetStatus;
         }
     }
-}
-
-// Search and filter members
-function filterMembers() {
-    const searchValue = document.getElementById('search-members')?.value.toLowerCase() || '';
-    const packageFilter = document.getElementById('filter-package')?.value || 'all';
-    
-    const rows = document.querySelectorAll('.members-table tbody tr');
-    
-    rows.forEach(row => {
-        const memberName = row.querySelector('.member-name')?.textContent.toLowerCase() || '';
-        const nationalId = row.cells[1]?.textContent.toLowerCase() || '';
-        const packageBadge = row.querySelector('.package-badge')?.textContent.toLowerCase() || '';
-        
-        const matchesSearch = !searchValue || 
-            memberName.includes(searchValue) || 
-            nationalId.includes(searchValue);
-        
-        const matchesPackage = packageFilter === 'all' || 
-            packageBadge.includes(packageFilter.toLowerCase());
-        
-        if (matchesSearch && matchesPackage) {
-            row.style.display = '';
-        } else {
-            row.style.display = 'none';
-        }
-    });
-}
-
-// Reset filters
-function resetFilters() {
-    window.location.href = '/admin/members';
 }
 
 // Bulk approve - IMPLEMENTED

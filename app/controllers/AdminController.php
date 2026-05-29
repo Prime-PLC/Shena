@@ -4,6 +4,7 @@
  */
 require_once __DIR__ . '/../services/ReportService.php';
 require_once __DIR__ . '/../services/PaymentReconciliationService.php';
+require_once __DIR__ . '/../services/InAppNotificationService.php';
 require_once __DIR__ . '/../helpers/ReportDocumentTemplate.php';
 
 class AdminController extends BaseController
@@ -274,6 +275,8 @@ class AdminController extends BaseController
             'search' => $search,
             'status' => $status,
             'package' => $package,
+            'packages' => $GLOBALS['membership_packages'] ?? [],
+            'csrf_token' => $this->generateCsrfToken(),
             'pagination' => [
                 'current_page' => $page,
                 'total_pages' => $totalPages,
@@ -954,10 +957,15 @@ class AdminController extends BaseController
             return;
         }
 
+        $returnTo = $_POST['return_to'] ?? '/admin/members';
+        if (!is_string($returnTo) || strpos($returnTo, '/admin/') !== 0) {
+            $returnTo = '/admin/members';
+        }
+
         $phone = formatKenyanPhone($_POST['phone'] ?? '');
         if (!$phone) {
             $_SESSION['error_message'] = 'Invalid phone number format.';
-            $this->redirect('/admin/members/edit/' . $id);
+            $this->redirect($returnTo);
             return;
         }
 
@@ -965,7 +973,7 @@ class AdminController extends BaseController
         $packageKey = $_POST['package_key'] ?? ($_POST['package'] ?? ($member['package_key'] ?? 'individual_below_70'));
         if (!isset($membership_packages[$packageKey])) {
             $_SESSION['error_message'] = 'Invalid membership package selected.';
-            $this->redirect('/admin/members/edit/' . $id);
+            $this->redirect($returnTo);
             return;
         }
 
@@ -980,6 +988,7 @@ class AdminController extends BaseController
         $monthlyContribution = $this->memberModel->calculateMonthlyContribution($memberForCalc, []);
 
         $memberStatus = $_POST['status'] ?? 'active';
+        $previousStatus = $member['status'] ?? '';
         $userStatus = in_array($memberStatus, ['active', 'inactive', 'suspended'], true) ? $memberStatus : 'inactive';
 
         $memberUserData = [
@@ -992,7 +1001,6 @@ class AdminController extends BaseController
 
         $memberRecordData = [
             'id_number' => $_POST['id_number'] ?? '',
-            'county' => $_POST['county'] ?? '',
             'address' => $_POST['address'] ?? '',
             'package' => $normalizedPackage,
             'package_key' => $packageKey,
@@ -1014,6 +1022,7 @@ class AdminController extends BaseController
             if ($updatedUser && $updatedMember) {
                 $this->db->getConnection()->commit();
                 $_SESSION['success_message'] = 'Member updated successfully!';
+                $this->notifyMemberManagementChange($member, $memberStatus, $previousStatus);
             } else {
                 $this->db->getConnection()->rollBack();
                 $_SESSION['error_message'] = 'Failed to update member.';
@@ -1026,7 +1035,32 @@ class AdminController extends BaseController
             $_SESSION['error_message'] = 'Failed to update member: ' . $e->getMessage();
         }
         
-        $this->redirect('/admin/members/view/' . $id);
+        $this->redirect($returnTo);
+    }
+
+    private function notifyMemberManagementChange(array $member, string $newStatus, string $previousStatus): void
+    {
+        if (empty($member['user_id'])) {
+            return;
+        }
+
+        try {
+            $subject = $newStatus !== $previousStatus ? 'Membership status updated' : 'Member profile updated';
+            $statusText = ucwords(str_replace('_', ' ', $newStatus));
+            $message = $newStatus !== $previousStatus
+                ? "Your SHENA membership status has been updated to {$statusText}."
+                : 'Your SHENA member profile details have been updated by the admin team.';
+
+            $notification = new InAppNotificationService();
+            $notification->notifyUser((int)$member['user_id'], [
+                'subject' => $subject,
+                'message' => $message,
+                'action_url' => '/member/dashboard',
+                'action_text' => 'Open Dashboard',
+            ], $_SESSION['user_id'] ?? null);
+        } catch (Throwable $e) {
+            error_log('Member management notification failed: ' . $e->getMessage());
+        }
     }
 
     /**

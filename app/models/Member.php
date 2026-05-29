@@ -31,10 +31,11 @@ class Member extends BaseModel
         }
         
         if (!empty($filters['search'])) {
-            $sql .= " AND (m.member_number LIKE :search 
-                      OR u.first_name LIKE :search 
-                      OR u.last_name LIKE :search 
-                      OR u.email LIKE :search 
+            $sql .= " AND (m.member_number LIKE :search
+                      OR m.id_number LIKE :search
+                      OR u.first_name LIKE :search
+                      OR u.last_name LIKE :search
+                      OR u.email LIKE :search
                       OR u.phone LIKE :search)";
             $params['search'] = '%' . $filters['search'] . '%';
         }
@@ -936,11 +937,12 @@ class Member extends BaseModel
         $params = [];
         
         if (!empty($search)) {
-            $sql .= " AND (m.member_number LIKE :search 
-                      OR u.first_name LIKE :search 
-                      OR u.last_name LIKE :search 
-                      OR u.email LIKE :search 
-                      OR u.phone LIKE :search)";
+            $sql .= " AND (m.member_number LIKE :search
+                      OR u.first_name LIKE :search
+                      OR u.last_name LIKE :search
+                      OR u.email LIKE :search
+                      OR u.phone LIKE :search
+                      OR m.id_number LIKE :search)";
             $params['search'] = '%' . $search . '%';
         }
         
@@ -950,7 +952,7 @@ class Member extends BaseModel
         }
         
         if ($package !== 'all' && !empty($package)) {
-            $sql .= " AND m.package = :package";
+            $sql .= " AND (m.package = :package OR m.package_key = :package)";
             $params['package'] = $package;
         }
         

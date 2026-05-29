@@ -382,6 +382,7 @@ class AgentController extends BaseController
         }
 
         $status = $_POST['status'] ?? ($agent['status'] ?? 'active');
+        $previousStatus = $agent['status'] ?? '';
         $allowedStatuses = ['active', 'suspended', 'inactive'];
         if (!in_array($status, $allowedStatuses, true)) {
             $this->setFlashMessage('Invalid agent status', 'error');
@@ -416,6 +417,7 @@ class AgentController extends BaseController
             if ($updatedUser && $updatedAgent && $updatedStatus) {
                 $this->db->getConnection()->commit();
                 $this->setFlashMessage('Agent updated successfully', 'success');
+                $this->notifyAgentManagementChange($agent, $status, $previousStatus);
             } else {
                 $this->db->getConnection()->rollBack();
                 $this->setFlashMessage('Failed to update agent', 'error');
@@ -459,6 +461,7 @@ class AgentController extends BaseController
             return;
         }
 
+        $previousStatus = $agent['status'] ?? '';
         try {
             $this->db->getConnection()->beginTransaction();
             $updatedAgent = $this->agentModel->updateStatus($agentId, $status);
@@ -467,6 +470,7 @@ class AgentController extends BaseController
             if ($updatedAgent && $updatedUser) {
                 $this->db->getConnection()->commit();
                 $this->setFlashMessage('Agent status updated successfully', 'success');
+                $this->notifyAgentManagementChange($agent, $status, $previousStatus);
             } else {
                 $this->db->getConnection()->rollBack();
                 $this->setFlashMessage('Failed to update agent status', 'error');
@@ -480,6 +484,31 @@ class AgentController extends BaseController
         }
         
         redirect('/admin/agents/view/' . $agentId);
+    }
+
+    private function notifyAgentManagementChange(array $agent, string $newStatus, string $previousStatus): void
+    {
+        if (empty($agent['user_id'])) {
+            return;
+        }
+
+        try {
+            $subject = $newStatus !== $previousStatus ? 'Agent status updated' : 'Agent profile updated';
+            $statusText = ucwords(str_replace('_', ' ', $newStatus));
+            $message = $newStatus !== $previousStatus
+                ? "Your SHENA agent account status has been updated to {$statusText}."
+                : 'Your SHENA agent profile details have been updated by the admin team.';
+
+            $notification = new InAppNotificationService();
+            $notification->notifyUser((int)$agent['user_id'], [
+                'subject' => $subject,
+                'message' => $message,
+                'action_url' => '/agent/dashboard',
+                'action_text' => 'Open Dashboard',
+            ], $_SESSION['user_id'] ?? null);
+        } catch (Throwable $e) {
+            error_log('Agent management notification failed: ' . $e->getMessage());
+        }
     }
     
     /**
