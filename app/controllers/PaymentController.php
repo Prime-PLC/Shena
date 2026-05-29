@@ -317,6 +317,7 @@ class PaymentController extends BaseController
 
         $stats = $this->reconciliationService->getReconciliationStats();
         $unmatchedPayments = $this->reconciliationService->getUnmatchedPayments();
+        $auditLogs = $this->reconciliationService->getRecentReconciliationLogs(8);
 
         // Today's collections
         $db = Database::getInstance();
@@ -337,6 +338,7 @@ class PaymentController extends BaseController
         $this->view('admin/payments-reconciliation', [
             'recon_stats'         => $stats ?? [],
             'unmatched_payments'  => $unmatchedPayments ?? [],
+            'audit_logs'          => $auditLogs ?? [],
             'today_collections'   => (float)($todayStats['total'] ?? 0),
             'defaulters_count'    => (int)($defaultersRow['cnt'] ?? 0),
         ]);
@@ -348,15 +350,27 @@ class PaymentController extends BaseController
      */
     public function viewUnmatchedPayments()
     {
-        // Require admin access
-        if (!isset($_SESSION['user_role']) || !in_array($_SESSION['user_role'], ['super_admin', 'manager'])) {
-            $this->json(['error' => 'Unauthorized'], 403);
-            return;
-        }
-        
-        $unmatchedPayments = $this->reconciliationService->getUnmatchedPayments();
-        
-        $this->json($unmatchedPayments);
+        $this->requireRole(['super_admin', 'manager']);
+
+        $filters = [
+            'search' => trim($_GET['search'] ?? ''),
+            'date_from' => trim($_GET['date_from'] ?? ''),
+            'date_to' => trim($_GET['date_to'] ?? ''),
+            'amount_min' => trim($_GET['amount_min'] ?? ''),
+            'amount_max' => trim($_GET['amount_max'] ?? ''),
+        ];
+
+        $unmatchedPayments = $this->reconciliationService->getUnmatchedPayments($filters);
+        $stats = $this->reconciliationService->getReconciliationStats();
+        $auditLogs = $this->reconciliationService->getRecentReconciliationLogs(10);
+
+        $this->view('admin/payments-unmatched', [
+            'title' => 'Unmatched Payments - Admin',
+            'unmatched_payments' => $unmatchedPayments ?? [],
+            'recon_stats' => $stats ?? [],
+            'audit_logs' => $auditLogs ?? [],
+            'reconciliation_filters' => $filters,
+        ]);
     }
     
     /**
@@ -604,18 +618,41 @@ class PaymentController extends BaseController
                 INNER JOIN users u ON m.user_id = u.id
                 WHERE 
                     (
-                        m.member_number LIKE :query
-                        OR u.first_name LIKE :query
-                        OR u.last_name LIKE :query
-                        OR m.id_number LIKE :query
-                        OR u.phone LIKE :query
-                        OR CONCAT(u.first_name, ' ', u.last_name) LIKE :query
+                        m.member_number LIKE :member_number_query
+                        OR u.first_name LIKE :first_name_query
+                        OR u.last_name LIKE :last_name_query
+                        OR m.id_number LIKE :id_number_query
+                        OR u.phone LIKE :phone_query
+                        OR RIGHT(REPLACE(u.phone, '+', ''), 9) = :phone_tail
+                        OR CONCAT(u.first_name, ' ', u.last_name) LIKE :full_name_query
                     )
-                LIMIT 15
+                ORDER BY
+                    CASE
+                        WHEN m.member_number = :exact_query THEN 1
+                        WHEN m.id_number = :exact_query_id THEN 2
+                        WHEN RIGHT(REPLACE(u.phone, '+', ''), 9) = :exact_phone_tail THEN 3
+                        ELSE 4
+                    END,
+                    u.first_name ASC,
+                    u.last_name ASC
+                LIMIT 20
             ");
-            
+
             $searchTerm = '%' . $query . '%';
-            $stmt->execute(['query' => $searchTerm]);
+            $queryDigits = preg_replace('/[^0-9]/', '', $query);
+            $phoneTail = substr($queryDigits, -9);
+            $stmt->execute([
+                'member_number_query' => $searchTerm,
+                'first_name_query' => $searchTerm,
+                'last_name_query' => $searchTerm,
+                'id_number_query' => $searchTerm,
+                'phone_query' => $searchTerm,
+                'phone_tail' => $phoneTail,
+                'full_name_query' => $searchTerm,
+                'exact_query' => $query,
+                'exact_query_id' => preg_replace('/[^A-Za-z0-9]/', '', $query),
+                'exact_phone_tail' => $phoneTail,
+            ]);
             $members = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             $results = array_map(function($member) {

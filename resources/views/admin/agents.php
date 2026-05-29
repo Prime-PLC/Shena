@@ -1275,6 +1275,9 @@ $top_performers = $top_performers ?? [];
                                 <a class="row-action" href="/admin/commissions?agent_id=<?php echo (int)$agent['id']; ?>">
                                     <i class="fas fa-coins"></i> Commissions
                                 </a>
+                                <button type="button" class="row-action success" data-agent="<?php echo $agentModalJson; ?>" onclick="openAgentEditModal(this)">
+                                    <i class="fas fa-sliders-h"></i> Manage
+                                </button>
                                 <?php if ($status === 'active'): ?>
                                     <form method="POST" action="/admin/agents/status/<?php echo (int)$agent['id']; ?>" style="display:inline;">
                                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
@@ -1496,6 +1499,53 @@ $top_performers = $top_performers ?? [];
     </div>
 </div>
 
+<!-- Agent Quick Management Panel -->
+<div class="modal fade entity-modal agent-quick-panel" id="agentQuickPanel" tabindex="-1" aria-labelledby="agentQuickPanelLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="POST" id="agentQuickStatusForm">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
+                <input type="hidden" name="agent_id" id="agentQuickId">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title" id="agentQuickPanelLabel">Manage Agent</h5>
+                        <div id="agentQuickSubtitle" style="font-size:13px;opacity:.85;margin-top:2px;"></div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group" style="margin-bottom:16px;">
+                        <label for="agentStatusSelect" class="form-label">Agent Status</label>
+                        <select name="status" id="agentStatusSelect" class="form-select">
+                            <option value="active">Active</option>
+                            <option value="suspended">Suspended</option>
+                            <option value="inactive">Inactive</option>
+                        </select>
+                    </div>
+                    <div class="entity-fields" style="grid-template-columns:1fr;">
+                        <div>
+                            <div class="entity-field-label">Commission Rate</div>
+                            <div class="entity-field-value" id="agentQuickRate">N/A</div>
+                        </div>
+                        <div>
+                            <div class="entity-field-label">Phone</div>
+                            <div class="entity-field-value" id="agentQuickPhone">N/A</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <a href="#" class="btn btn-outline-secondary" id="agentQuickEditLink">
+                        <i class="fas fa-edit"></i> Open Edit Form
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Update Status
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- Agent Detail Modal -->
 <div class="modal fade entity-modal" id="agentDetailModal" tabindex="-1" aria-labelledby="agentDetailModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
@@ -1598,6 +1648,26 @@ function openAgentModal(button) {
 
     new bootstrap.Modal(document.getElementById('agentDetailModal')).show();
 }
+
+function openAgentEditModal(button) {
+    const agent = JSON.parse(button.getAttribute('data-agent') || '{}');
+    setAgentText('agentQuickSubtitle', (agent.name || 'N/A') + ' | ' + (agent.agent_number || 'N/A'));
+    setAgentText('agentQuickRate', agent.commission_rate);
+    setAgentText('agentQuickPhone', agent.phone);
+    document.getElementById('agentQuickId').value = agent.id || '';
+    document.getElementById('agentStatusSelect').value = agent.status || 'active';
+    document.getElementById('agentQuickEditLink').href = agent.edit_url || '#';
+    new bootstrap.Modal(document.getElementById('agentQuickPanel')).show();
+}
+
+document.getElementById('agentQuickStatusForm')?.addEventListener('submit', function (event) {
+    const agentId = document.getElementById('agentQuickId').value;
+    if (!agentId) {
+        event.preventDefault();
+        return;
+    }
+    this.action = '/admin/agents/status/' + encodeURIComponent(agentId);
+});
 
 function confirmAgentStatus(event, message, type) {
     const form = event.currentTarget.closest('form');

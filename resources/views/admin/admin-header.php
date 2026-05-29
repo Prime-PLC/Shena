@@ -196,6 +196,11 @@
                                             <i class="fas fa-exclamation-triangle"></i> Failed Payments
                                         </a>
                                     </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link <?php echo (strpos($_SERVER['REQUEST_URI'], '/admin/plan-upgrades') !== false) ? 'active' : ''; ?>" href="/admin/plan-upgrades">
+                                            <i class="fas fa-arrow-up-right-dots"></i> Plan Upgrades
+                                        </a>
+                                    </li>
                                 </ul>
                             </div>
                         </li>

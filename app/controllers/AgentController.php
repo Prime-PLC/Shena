@@ -374,20 +374,58 @@ class AgentController extends BaseController
             return;
         }
         
-        $updateData = [
-            'first_name' => $_POST['first_name'],
-            'last_name' => $_POST['last_name'],
-            'phone' => $_POST['phone'],
-            'email' => $_POST['email'],
+        $formattedPhone = formatKenyanPhone($_POST['phone'] ?? '');
+        if (!$formattedPhone) {
+            $this->setFlashMessage('Invalid phone number format', 'error');
+            redirect('/admin/agents/edit/' . $agentId);
+            return;
+        }
+
+        $status = $_POST['status'] ?? ($agent['status'] ?? 'active');
+        $allowedStatuses = ['active', 'suspended', 'inactive'];
+        if (!in_array($status, $allowedStatuses, true)) {
+            $this->setFlashMessage('Invalid agent status', 'error');
+            redirect('/admin/agents/edit/' . $agentId);
+            return;
+        }
+
+        $userUpdateData = [
+            'first_name' => $_POST['first_name'] ?? '',
+            'last_name' => $_POST['last_name'] ?? '',
+            'phone' => $formattedPhone,
+            'email' => $_POST['email'] ?? '',
+            'status' => $status,
+        ];
+
+        $agentUpdateData = [
+            'first_name' => $_POST['first_name'] ?? '',
+            'last_name' => $_POST['last_name'] ?? '',
+            'phone' => $formattedPhone,
+            'email' => $_POST['email'] ?? '',
             'address' => $_POST['address'] ?? '',
             'county' => $_POST['county'] ?? '',
             'commission_rate' => $_POST['commission_rate'] ?? 10.00
         ];
         
-        if ($this->agentModel->updateAgent($agentId, $updateData)) {
-            $this->setFlashMessage('Agent updated successfully', 'success');
-        } else {
-            $this->setFlashMessage('Failed to update agent', 'error');
+        try {
+            $this->db->getConnection()->beginTransaction();
+            $updatedUser = $this->userModel->update($agent['user_id'], $userUpdateData);
+            $updatedAgent = $this->agentModel->updateAgent($agentId, $agentUpdateData);
+            $updatedStatus = $this->agentModel->updateStatus($agentId, $status);
+
+            if ($updatedUser && $updatedAgent && $updatedStatus) {
+                $this->db->getConnection()->commit();
+                $this->setFlashMessage('Agent updated successfully', 'success');
+            } else {
+                $this->db->getConnection()->rollBack();
+                $this->setFlashMessage('Failed to update agent', 'error');
+            }
+        } catch (Throwable $e) {
+            if ($this->db->getConnection()->inTransaction()) {
+                $this->db->getConnection()->rollBack();
+            }
+            error_log('Agent update error: ' . $e->getMessage());
+            $this->setFlashMessage('Failed to update agent: ' . $e->getMessage(), 'error');
         }
         
         redirect('/admin/agents/view/' . $agentId);
@@ -414,10 +452,31 @@ class AgentController extends BaseController
             return;
         }
         
-        if ($this->agentModel->updateStatus($agentId, $status)) {
-            $this->setFlashMessage('Agent status updated successfully', 'success');
-        } else {
-            $this->setFlashMessage('Failed to update agent status', 'error');
+        $agent = $this->agentModel->getAgentById($agentId);
+        if (!$agent) {
+            $this->setFlashMessage('Agent not found', 'error');
+            redirect('/admin/agents');
+            return;
+        }
+
+        try {
+            $this->db->getConnection()->beginTransaction();
+            $updatedAgent = $this->agentModel->updateStatus($agentId, $status);
+            $updatedUser = $this->userModel->update($agent['user_id'], ['status' => $status]);
+
+            if ($updatedAgent && $updatedUser) {
+                $this->db->getConnection()->commit();
+                $this->setFlashMessage('Agent status updated successfully', 'success');
+            } else {
+                $this->db->getConnection()->rollBack();
+                $this->setFlashMessage('Failed to update agent status', 'error');
+            }
+        } catch (Throwable $e) {
+            if ($this->db->getConnection()->inTransaction()) {
+                $this->db->getConnection()->rollBack();
+            }
+            error_log('Agent status update error: ' . $e->getMessage());
+            $this->setFlashMessage('Failed to update agent status: ' . $e->getMessage(), 'error');
         }
         
         redirect('/admin/agents/view/' . $agentId);

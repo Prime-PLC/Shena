@@ -402,19 +402,12 @@ include_once __DIR__ . '/../layouts/admin-header.php';
             </div>
 
             <div class="row">
-                <div class="col-md-6 mb-3">
+                <div class="col-md-12 mb-3">
                     <label for="county" class="form-label">
                         County <span class="required">*</span>
                     </label>
                     <input type="text" class="form-control" id="county" name="county" 
                            placeholder="Enter county" value="<?= htmlspecialchars($_SESSION['old_input']['county'] ?? '') ?>" required>
-                </div>
-                <div class="col-md-6 mb-3">
-                    <label for="sub_county" class="form-label">
-                        Sub-County
-                    </label>
-                    <input type="text" class="form-control" id="sub_county" name="sub_county" 
-                           placeholder="Enter sub-county" value="<?= htmlspecialchars($_SESSION['old_input']['sub_county'] ?? '') ?>">
                 </div>
             </div>
 

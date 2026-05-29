@@ -419,7 +419,12 @@ class AgentDashboardController extends BaseController
                 error_log('Agent reg age calc error: ' . $e->getMessage());
             }
 
-            $memberForCalc = ['date_of_birth' => $_POST['date_of_birth'] ?? null, 'package' => $packageKey];
+            $memberForCalc = [
+                'date_of_birth' => $_POST['date_of_birth'] ?? null,
+                'package' => $packageKey,
+                'package_key' => $packageKey,
+                'corporate_couple_count' => $corporateCoupleCount
+            ];
             $monthlyContribution = $this->memberModel->calculateMonthlyContribution($memberForCalc, []);
 
             $memberStmt->execute([

@@ -227,7 +227,7 @@ $agent = $agent ?? [];
     }
 </style>
 
-<div class="agent-edit-container">
+<div class="agent-edit-container profile-edit-shell">
     <!-- Page Header -->
     <div class="page-header">
         <h1 class="page-title">
@@ -344,12 +344,14 @@ $agent = $agent ?? [];
                         </select>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Status</label>
+                        <label class="form-label">Agent Status</label>
+                        <span class="form-help" style="display:block;margin-bottom:6px;">agent status</span>
                         <select name="status" class="form-select">
                             <option value="active" <?= ($agent['status'] ?? 'active') === 'active' ? 'selected' : '' ?>>Active</option>
                             <option value="suspended" <?= ($agent['status'] ?? '') === 'suspended' ? 'selected' : '' ?>>Suspended</option>
                             <option value="inactive" <?= ($agent['status'] ?? '') === 'inactive' ? 'selected' : '' ?>>Inactive</option>
                         </select>
+                        <p class="form-help">Update agent status here without opening a separate action screen.</p>
                     </div>
                 </div>
 

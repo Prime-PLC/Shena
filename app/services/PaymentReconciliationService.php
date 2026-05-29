@@ -532,10 +532,79 @@ class PaymentReconciliationService
     /**
      * Get all unmatched payments for manual reconciliation
      */
-    public function getUnmatchedPayments()
+    public function getUnmatchedPayments(array $filters = [])
     {
-        $query = "SELECT * FROM vw_unmatched_payments ORDER BY transaction_date DESC";
-        return $this->db->fetchAll($query);
+        $query = "SELECT * FROM vw_unmatched_payments";
+        $where = [];
+        $params = [];
+
+        $search = trim((string)($filters['search'] ?? ''));
+        if ($search !== '') {
+            $where[] = "(mpesa_receipt_number LIKE :search_receipt
+                OR paybill_account LIKE :search_account
+                OR sender_name LIKE :search_sender
+                OR sender_phone LIKE :search_phone)";
+            $searchTerm = '%' . $search . '%';
+            $params['search_receipt'] = $searchTerm;
+            $params['search_account'] = $searchTerm;
+            $params['search_sender'] = $searchTerm;
+            $params['search_phone'] = $searchTerm;
+        }
+
+        $dateFrom = trim((string)($filters['date_from'] ?? ''));
+        if ($dateFrom !== '') {
+            $where[] = "DATE(transaction_date) >= :date_from";
+            $params['date_from'] = $dateFrom;
+        }
+
+        $dateTo = trim((string)($filters['date_to'] ?? ''));
+        if ($dateTo !== '') {
+            $where[] = "DATE(transaction_date) <= :date_to";
+            $params['date_to'] = $dateTo;
+        }
+
+        $amountMin = trim((string)($filters['amount_min'] ?? ''));
+        if ($amountMin !== '' && is_numeric($amountMin)) {
+            $where[] = "amount >= :amount_min";
+            $params['amount_min'] = (float)$amountMin;
+        }
+
+        $amountMax = trim((string)($filters['amount_max'] ?? ''));
+        if ($amountMax !== '' && is_numeric($amountMax)) {
+            $where[] = "amount <= :amount_max";
+            $params['amount_max'] = (float)$amountMax;
+        }
+
+        if (!empty($where)) {
+            $query .= " WHERE " . implode(" AND ", $where);
+        }
+
+        $query .= " ORDER BY transaction_date DESC";
+        return $this->db->fetchAll($query, $params);
+    }
+
+    public function getRecentReconciliationLogs($limit = 10)
+    {
+        $query = "SELECT
+                l.*,
+                p.mpesa_receipt_number,
+                p.amount,
+                p.reconciliation_notes,
+                p.reconciled_at,
+                m.member_number,
+                u.first_name,
+                u.last_name,
+                admin.first_name AS admin_first_name,
+                admin.last_name AS admin_last_name
+            FROM payment_reconciliation_log l
+            LEFT JOIN payments p ON l.payment_id = p.id
+            LEFT JOIN members m ON l.matched_member_id = m.id
+            LEFT JOIN users u ON m.user_id = u.id
+            LEFT JOIN users admin ON l.reconciled_by = admin.id
+            ORDER BY l.created_at DESC
+            LIMIT :limit";
+
+        return $this->db->fetchAll($query, ['limit' => (int)$limit]);
     }
     
     /**

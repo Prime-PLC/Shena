@@ -2,10 +2,15 @@ node_modules/
 .env
 .env.local
 .env.production
+*.zip
 config/local_config.php
 vendor/
 storage/logs/*.log
 storage/uploads/
+storage/imports/
+storage/tmp_xlsx_inspect/
+project_presentation/*.pptx
+project_presentation/*.zip
 *.sql.bak
 tmp_*.html
 archives/

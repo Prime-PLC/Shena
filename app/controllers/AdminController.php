@@ -3,6 +3,7 @@
  * Admin Controller - Handles administrative functions
  */
 require_once __DIR__ . '/../services/ReportService.php';
+require_once __DIR__ . '/../services/PaymentReconciliationService.php';
 require_once __DIR__ . '/../helpers/ReportDocumentTemplate.php';
 
 class AdminController extends BaseController
@@ -468,7 +469,12 @@ class AdminController extends BaseController
             $normalizedPackage = $this->memberModel->normalizePackageTier($packageKey, $membership_packages[$packageKey]);
 
             // Calculate monthly contribution centrally
-            $memberForCalc = ['date_of_birth' => $dateOfBirth, 'package' => $packageKey];
+            $memberForCalc = [
+                'date_of_birth' => $dateOfBirth,
+                'package' => $packageKey,
+                'package_key' => $packageKey,
+                'corporate_couple_count' => $corporateCoupleCount
+            ];
             $monthlyContribution = $this->memberModel->calculateMonthlyContribution($memberForCalc, []);
 
             // Maturity ends default
@@ -911,7 +917,7 @@ class AdminController extends BaseController
     {
         $this->requireAdminAccess();
         
-        $member = $this->memberModel->find($id);
+        $member = $this->memberModel->getMemberById($id);
         
         if (!$member) {
             $_SESSION['error'] = 'Member not found.';
@@ -921,7 +927,9 @@ class AdminController extends BaseController
         
         $data = [
             'title' => 'Edit Member - Admin',
-            'member' => $member
+            'member' => $member,
+            'packages' => $GLOBALS['membership_packages'] ?? [],
+            'csrf_token' => $this->generateCsrfToken()
         ];
         
         $this->view('admin.member-edit', $data);
@@ -939,29 +947,83 @@ class AdminController extends BaseController
             return;
         }
         
-        $data = [
+        $member = $this->memberModel->getMemberById($id);
+        if (!$member) {
+            $_SESSION['error_message'] = 'Member not found.';
+            $this->redirect('/admin/members');
+            return;
+        }
+
+        $phone = formatKenyanPhone($_POST['phone'] ?? '');
+        if (!$phone) {
+            $_SESSION['error_message'] = 'Invalid phone number format.';
+            $this->redirect('/admin/members/edit/' . $id);
+            return;
+        }
+
+        global $membership_packages;
+        $packageKey = $_POST['package_key'] ?? ($_POST['package'] ?? ($member['package_key'] ?? 'individual_below_70'));
+        if (!isset($membership_packages[$packageKey])) {
+            $_SESSION['error_message'] = 'Invalid membership package selected.';
+            $this->redirect('/admin/members/edit/' . $id);
+            return;
+        }
+
+        $corporateCoupleCount = max(0, min(5, (int)($_POST['corporate_couple_count'] ?? ($member['corporate_couple_count'] ?? 0))));
+        $normalizedPackage = $this->memberModel->normalizePackageTier($packageKey, $membership_packages[$packageKey]);
+        $memberForCalc = [
+            'date_of_birth' => $_POST['date_of_birth'] ?? ($member['date_of_birth'] ?? null),
+            'package' => $packageKey,
+            'package_key' => $packageKey,
+            'corporate_couple_count' => $corporateCoupleCount
+        ];
+        $monthlyContribution = $this->memberModel->calculateMonthlyContribution($memberForCalc, []);
+
+        $memberStatus = $_POST['status'] ?? 'active';
+        $userStatus = in_array($memberStatus, ['active', 'inactive', 'suspended'], true) ? $memberStatus : 'inactive';
+
+        $memberUserData = [
             'first_name' => $_POST['first_name'] ?? '',
             'last_name' => $_POST['last_name'] ?? '',
-            'id_number' => $_POST['id_number'] ?? '',
-            'phone' => $_POST['phone'] ?? '',
+            'phone' => $phone,
             'email' => $_POST['email'] ?? '',
+            'status' => $userStatus,
+        ];
+
+        $memberRecordData = [
+            'id_number' => $_POST['id_number'] ?? '',
             'county' => $_POST['county'] ?? '',
-            'sub_county' => $_POST['sub_county'] ?? '',
             'address' => $_POST['address'] ?? '',
-            'package' => $_POST['package'] ?? 'basic',
-            'status' => $_POST['status'] ?? 'active',
+            'package' => $normalizedPackage,
+            'package_key' => $packageKey,
+            'corporate_couple_count' => $corporateCoupleCount,
+            'monthly_contribution' => $monthlyContribution,
+            'status' => $memberStatus,
             'date_of_birth' => $_POST['date_of_birth'] ?? null,
             'gender' => $_POST['gender'] ?? null,
-            'nok_name' => $_POST['nok_name'] ?? '',
-            'nok_relationship' => $_POST['nok_relationship'] ?? '',
-            'nok_phone' => $_POST['nok_phone'] ?? '',
-            'nok_id_number' => $_POST['nok_id_number'] ?? ''
+            'next_of_kin' => $_POST['nok_name'] ?? '',
+            'next_of_kin_relationship' => $_POST['nok_relationship'] ?? '',
+            'next_of_kin_phone' => !empty($_POST['nok_phone']) ? formatKenyanPhone($_POST['nok_phone']) : null
         ];
-        
-        if ($this->memberModel->update($id, $data)) {
-            $_SESSION['success_message'] = 'Member updated successfully!';
-        } else {
-            $_SESSION['error_message'] = 'Failed to update member.';
+
+        try {
+            $this->db->getConnection()->beginTransaction();
+            $updatedUser = $this->userModel->update($member['user_id'], $memberUserData);
+            $updatedMember = $this->memberModel->update($id, $memberRecordData);
+
+            if ($updatedUser && $updatedMember) {
+                $this->db->getConnection()->commit();
+                $_SESSION['success_message'] = 'Member updated successfully!';
+            } else {
+                $this->db->getConnection()->rollBack();
+                $_SESSION['error_message'] = 'Failed to update member.';
+            }
+        } catch (Throwable $e) {
+            if ($this->db->getConnection()->inTransaction()) {
+                $this->db->getConnection()->rollBack();
+            }
+            error_log('Admin member update error: ' . $e->getMessage());
+            $_SESSION['error_message'] = 'Failed to update member: ' . $e->getMessage();
         }
         
         $this->redirect('/admin/members/view/' . $id);
@@ -1018,11 +1080,19 @@ class AdminController extends BaseController
             $conditions['member_id'] = $memberId;
         }
         
+        $reconciliationService = new PaymentReconciliationService();
+        $reconStats = $reconciliationService->getReconciliationStats();
+        $unmatchedPayments = $reconciliationService->getUnmatchedPayments();
+        $auditLogs = $reconciliationService->getRecentReconciliationLogs(5);
+
         $data = [
             'title' => 'Payments - Admin',
             'payments' => $this->paymentModel->getAllPaymentsWithDetails($conditions),
             'status' => $status,
             'member_id' => $memberId,
+            'recon_stats' => $reconStats ?? [],
+            'unmatched_payments' => $unmatchedPayments ?? [],
+            'audit_logs' => $auditLogs ?? [],
         ];
         
         $this->view('admin.payments', $data);

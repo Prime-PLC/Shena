@@ -10,6 +10,13 @@ $getOldValue = function($field) {
     $old = $_SESSION['form_data'][$field] ?? '';
     return htmlspecialchars($old);
 };
+$membershipPlanData = [];
+foreach (($packages ?? []) as $packageKey => $package) {
+    $membershipPlanData[$packageKey] = [
+        'name' => $package['name'] ?? $packageKey,
+        'monthly_contribution' => (float)($package['monthly_contribution'] ?? 0),
+    ];
+}
 ?>
 
 <style>
@@ -588,6 +595,7 @@ $getOldValue = function($field) {
                                 id="package_<?php echo htmlspecialchars($packageKey); ?>"
                                 name="package"
                                 value="<?php echo htmlspecialchars($packageKey); ?>"
+                                data-monthly-contribution="<?php echo htmlspecialchars((string)($package['monthly_contribution'] ?? 0)); ?>"
                                 required
                                 <?php echo $getOldValue('package') === $packageKey ? 'checked' : ''; ?>
                             >
@@ -611,9 +619,17 @@ $getOldValue = function($field) {
                         <label for="corporate_couple_count" class="form-label">Corporate Couple Count</label>
                         <select class="form-select" id="corporate_couple_count" name="corporate_couple_count">
                             <option value="0" <?php echo $getOldValue('corporate_couple_count') === '0' ? 'selected' : ''; ?>>None</option>
-                            <option value="1" <?php echo $getOldValue('corporate_couple_count') === '1' ? 'selected' : ''; ?>>1 Additional Couple (+KES 150)</option>
-                            <option value="2" <?php echo $getOldValue('corporate_couple_count') === '2' ? 'selected' : ''; ?>>2 Additional Couples (+KES 300)</option>
+                            <option value="1" <?php echo $getOldValue('corporate_couple_count') === '1' ? 'selected' : ''; ?>>1 Additional Corporate Couple</option>
+                            <option value="2" <?php echo $getOldValue('corporate_couple_count') === '2' ? 'selected' : ''; ?>>2 Additional Corporate Couples</option>
+                            <option value="3" <?php echo $getOldValue('corporate_couple_count') === '3' ? 'selected' : ''; ?>>3 Additional Corporate Couples</option>
+                            <option value="4" <?php echo $getOldValue('corporate_couple_count') === '4' ? 'selected' : ''; ?>>4 Additional Corporate Couples</option>
+                            <option value="5" <?php echo $getOldValue('corporate_couple_count') === '5' ? 'selected' : ''; ?>>5 Additional Corporate Couples</option>
                         </select>
+                        <small class="form-hint">Each corporate couple is charged at the selected plan amount.</small>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Expected Monthly Contribution</label>
+                        <div class="form-input corporate-total-preview" id="corporateTotalPreview" aria-live="polite">KES 0/month</div>
                     </div>
                 </div>
             </div>
@@ -679,6 +695,25 @@ const memberNextBtn = memberForm.querySelector('.step-next');
 const memberSubmitBtn = memberForm.querySelector('.step-submit');
 let memberCurrentStep = 1;
 const memberInitialStep = <?php echo json_encode(max(1, min(6, $initialStep))); ?>;
+const membershipPlanData = <?php echo json_encode($membershipPlanData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
+const memberCorporateSelect = document.getElementById('corporate_couple_count');
+const memberCorporateTotalPreview = document.getElementById('corporateTotalPreview');
+
+function updateMemberContributionPreview() {
+    if (!memberCorporateSelect || !memberCorporateTotalPreview) return;
+    const selectedPackage = memberForm.querySelector('input[name="package"]:checked');
+    const packageKey = selectedPackage ? selectedPackage.value : '';
+    const baseAmount = Number(selectedPackage?.dataset.monthlyContribution || membershipPlanData[packageKey]?.monthly_contribution || 0);
+    const corporateCount = Number(memberCorporateSelect.value || 0);
+    const total = baseAmount * (1 + corporateCount);
+    memberCorporateTotalPreview.textContent = 'KES ' + total.toLocaleString() + '/month';
+}
+
+memberForm.querySelectorAll('input[name="package"]').forEach(function (field) {
+    field.addEventListener('change', updateMemberContributionPreview);
+});
+memberCorporateSelect?.addEventListener('change', updateMemberContributionPreview);
+updateMemberContributionPreview();
 
 function showMemberStep(step) {
     memberCurrentStep = step;

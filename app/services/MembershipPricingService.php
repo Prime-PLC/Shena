@@ -12,8 +12,6 @@ class MembershipPricingService
     const TIER_EXTENDED_FAMILY_2 = 'extended_family_2';
     const TIER_EXECUTIVE = 'executive';
 
-    const CORPORATE_COUPLE_PRICE = 150;
-
     /**
      * Canonical tier metadata used by forms/cards/help text.
      *
@@ -182,7 +180,7 @@ class MembershipPricingService
         $ageBand = self::resolveAgeBand($anchorAge);
 
         $basePrice = self::resolveBasePrice($tier, $ageBand);
-        $corporateAddon = $corporateCouples * self::CORPORATE_COUPLE_PRICE;
+        $corporateAddon = $corporateCouples * $basePrice;
 
         return [
             'tier' => $tier,

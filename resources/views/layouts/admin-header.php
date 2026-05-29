@@ -913,7 +913,7 @@ if ($notificationCount === null) {
 
                     <!-- Payments -->
                     <li class="nav-item">
-                        <a class="nav-link has-submenu <?php echo (strpos($_SERVER['REQUEST_URI'], '/admin/payments') !== false || strpos($_SERVER['REQUEST_URI'], '/admin/financial') !== false) ? 'active' : ''; ?>" href="#" onclick="toggleSubmenu(event, 'payments-submenu')">
+                        <a class="nav-link has-submenu <?php echo (strpos($_SERVER['REQUEST_URI'], '/admin/payments') !== false || strpos($_SERVER['REQUEST_URI'], '/admin/financial') !== false || strpos($_SERVER['REQUEST_URI'], '/admin/plan-upgrades') !== false) ? 'active' : ''; ?>" href="#" onclick="toggleSubmenu(event, 'payments-submenu')">
                             <i class="fas fa-money-bill-wave"></i>
                             <span>Payments</span>
                         </a>
@@ -934,6 +934,12 @@ if ($notificationCount === null) {
                                 <a class="nav-link <?php echo (strpos($_SERVER['REQUEST_URI'], 'financial-dashboard') !== false) ? 'active' : ''; ?>" href="/admin/financial-dashboard">
                                     <i class="fas fa-chart-line"></i>
                                     <span>Financial Dashboard</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link <?php echo (strpos($_SERVER['REQUEST_URI'], 'plan-upgrades') !== false) ? 'active' : ''; ?>" href="/admin/plan-upgrades">
+                                    <i class="fas fa-arrow-up-right-dots"></i>
+                                    <span>Plan Upgrades</span>
                                 </a>
                             </li>
                         </ul>

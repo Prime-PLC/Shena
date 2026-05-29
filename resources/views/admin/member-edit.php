@@ -1,5 +1,14 @@
 <?php 
 $member = $member ?? [];
+$packages = $packages ?? [];
+$membershipPlanData = [];
+foreach ($packages as $packageKey => $package) {
+    $membershipPlanData[$packageKey] = [
+        'name' => $package['name'] ?? $packageKey,
+        'monthly_contribution' => (float)($package['monthly_contribution'] ?? 0),
+    ];
+}
+$selectedPackageKey = $member['package_key'] ?? ($member['package'] ?? '');
 ?>
 <?php include_once __DIR__ . '/../layouts/admin-header.php'; ?>
 
@@ -227,7 +236,7 @@ $member = $member ?? [];
     }
 </style>
 
-<div class="member-edit-container">
+<div class="member-edit-container profile-edit-shell">
     <!-- Page Header -->
     <div class="page-header">
         <h1 class="page-title">
@@ -359,11 +368,6 @@ $member = $member ?? [];
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">Sub-County</label>
-                        <input type="text" name="sub_county" class="form-control" 
-                               value="<?= htmlspecialchars($member['sub_county'] ?? '') ?>">
-                    </div>
                 </div>
 
                 <div class="form-group full-width">
@@ -382,20 +386,43 @@ $member = $member ?? [];
                         <label class="form-label">
                             Package <span class="required">*</span>
                         </label>
-                        <select name="package" class="form-select" required>
-                            <option value="basic" <?= ($member['package'] ?? 'basic') === 'basic' ? 'selected' : '' ?>>Basic</option>
-                            <option value="standard" <?= ($member['package'] ?? '') === 'standard' ? 'selected' : '' ?>>Standard</option>
-                            <option value="premium" <?= ($member['package'] ?? '') === 'premium' ? 'selected' : '' ?>>Premium</option>
+                        <select name="package_key" class="form-select" id="memberPackageKey" required>
+                            <option value="">Select Package</option>
+                            <?php foreach ($packages as $packageKey => $package): ?>
+                                <option value="<?= htmlspecialchars($packageKey) ?>" data-monthly-contribution="<?= htmlspecialchars((string)($package['monthly_contribution'] ?? 0)) ?>" <?= $selectedPackageKey === $packageKey ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars(($package['name'] ?? $packageKey) . ' - KES ' . number_format((float)($package['monthly_contribution'] ?? 0), 0) . '/month') ?>
+                                </option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Status</label>
+                        <label class="form-label">Member Status</label>
+                        <span class="form-help" style="display:block;margin-bottom:6px;">member status</span>
                         <select name="status" class="form-select">
                             <option value="active" <?= ($member['status'] ?? 'active') === 'active' ? 'selected' : '' ?>>Active</option>
                             <option value="suspended" <?= ($member['status'] ?? '') === 'suspended' ? 'selected' : '' ?>>Suspended</option>
                             <option value="grace_period" <?= ($member['status'] ?? '') === 'grace_period' ? 'selected' : '' ?>>Grace Period</option>
                             <option value="inactive" <?= ($member['status'] ?? '') === 'inactive' ? 'selected' : '' ?>>Inactive</option>
                         </select>
+                        <p class="form-help">Change member status here without using the full activation page.</p>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Corporate Couple Count</label>
+                        <select name="corporate_couple_count" class="form-select" id="memberCorporateCoupleCount">
+                            <?php for ($i = 0; $i <= 5; $i++): ?>
+                                <option value="<?= $i ?>" <?= (int)($member['corporate_couple_count'] ?? 0) === $i ? 'selected' : '' ?>>
+                                    <?= $i === 0 ? 'None' : $i . ' Additional Corporate ' . ($i === 1 ? 'Couple' : 'Couples') ?>
+                                </option>
+                            <?php endfor; ?>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Monthly Contribution</label>
+                        <div class="form-control corporate-total-preview" id="memberContributionPreview" data-monthly-contribution="<?= htmlspecialchars((string)($member['monthly_contribution'] ?? 0)) ?>">
+                            KES <?= number_format((float)($member['monthly_contribution'] ?? 0), 0) ?>/month
+                        </div>
                     </div>
                 </div>
             </div>
@@ -444,5 +471,28 @@ $member = $member ?? [];
         </div>
     </form>
 </div>
+
+<script>
+(function () {
+    const membershipPlanData = <?php echo json_encode($membershipPlanData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
+    const packageSelect = document.getElementById('memberPackageKey');
+    const corporateSelect = document.getElementById('memberCorporateCoupleCount');
+    const preview = document.getElementById('memberContributionPreview');
+
+    function updatePreview() {
+        if (!packageSelect || !corporateSelect || !preview) return;
+        const selectedOption = packageSelect.options[packageSelect.selectedIndex];
+        const packageKey = packageSelect.value;
+        const baseAmount = Number(selectedOption?.dataset.monthlyContribution || membershipPlanData[packageKey]?.monthly_contribution || 0);
+        const corporateCount = Number(corporateSelect.value || 0);
+        const total = baseAmount * (1 + corporateCount);
+        preview.textContent = 'KES ' + total.toLocaleString() + '/month';
+    }
+
+    packageSelect?.addEventListener('change', updatePreview);
+    corporateSelect?.addEventListener('change', updatePreview);
+    updatePreview();
+})();
+</script>
 
 <?php include_once __DIR__ . '/../layouts/admin-footer.php'; ?>

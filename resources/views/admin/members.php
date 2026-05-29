@@ -1366,6 +1366,9 @@ $pending_approvals = $pending_approvals ?? [];
                                     <a class="row-action" href="/admin/payments?member_id=<?php echo (int)$member['id']; ?>">
                                         <i class="fas fa-money-bill-wave"></i> Payments
                                     </a>
+                                    <button type="button" class="row-action success" data-member="<?php echo $memberModalJson; ?>" onclick="openMemberEditModal(this)">
+                                        <i class="fas fa-sliders-h"></i> Manage
+                                    </button>
                                     <?php if (($member['status'] ?? 'active') === 'active'): ?>
                                         <form method="POST" action="/admin/members/suspend/<?php echo (int)$member['id']; ?>" style="display:inline;">
                                             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
@@ -1440,6 +1443,54 @@ $pending_approvals = $pending_approvals ?? [];
                     <p>No pending approvals</p>
                 </div>
             <?php endif; ?>
+        </div>
+    </div>
+</div>
+
+<!-- Member Quick Management Panel -->
+<div class="modal fade entity-modal member-quick-panel" id="memberQuickPanel" tabindex="-1" aria-labelledby="memberQuickPanelLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="POST" id="memberQuickStatusForm">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
+                <input type="hidden" name="member_id" id="memberQuickId">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title" id="memberQuickPanelLabel">Manage Member</h5>
+                        <div id="memberQuickSubtitle" style="font-size:13px;opacity:.85;margin-top:2px;"></div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group" style="margin-bottom:16px;">
+                        <label for="memberStatusSelect" class="form-label">Member Status</label>
+                        <select name="status" id="memberStatusSelect" class="form-select">
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                            <option value="suspended">Suspended</option>
+                        </select>
+                        <small class="form-help">Active status still requires registration fee confirmation.</small>
+                    </div>
+                    <div class="entity-fields" style="grid-template-columns:1fr;">
+                        <div>
+                            <div class="entity-field-label">Current Plan</div>
+                            <div class="entity-field-value" id="memberQuickPackage">N/A</div>
+                        </div>
+                        <div>
+                            <div class="entity-field-label">Phone</div>
+                            <div class="entity-field-value" id="memberQuickPhone">N/A</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <a href="#" class="btn btn-outline-secondary" id="memberQuickEditLink">
+                        <i class="fas fa-edit"></i> Open Edit Form
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Update Status
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -1541,6 +1592,33 @@ function openMemberModal(button) {
 
     new bootstrap.Modal(document.getElementById('memberDetailModal')).show();
 }
+
+function openMemberEditModal(button) {
+    const member = JSON.parse(button.getAttribute('data-member') || '{}');
+    setText('memberQuickSubtitle', (member.name || 'N/A') + ' | ' + (member.member_number || 'N/A'));
+    setText('memberQuickPackage', member.package);
+    setText('memberQuickPhone', member.phone);
+    document.getElementById('memberQuickId').value = member.id || '';
+    document.getElementById('memberStatusSelect').value = member.status === 'active' ? 'active' : (member.status === 'suspended' ? 'suspended' : 'inactive');
+    document.getElementById('memberQuickEditLink').href = member.edit_url || '#';
+    new bootstrap.Modal(document.getElementById('memberQuickPanel')).show();
+}
+
+document.getElementById('memberQuickStatusForm')?.addEventListener('submit', function (event) {
+    const memberId = document.getElementById('memberQuickId').value;
+    const status = document.getElementById('memberStatusSelect').value;
+    if (!memberId) {
+        event.preventDefault();
+        return;
+    }
+    if (status === 'active') {
+        this.action = '/admin/members/activate/' + encodeURIComponent(memberId);
+    } else if (status === 'suspended') {
+        this.action = '/admin/members/suspend/' + encodeURIComponent(memberId);
+    } else {
+        this.action = '/admin/member/' + encodeURIComponent(memberId) + '/deactivate';
+    }
+});
 
 function confirmMemberStatus(event, message, type) {
     const form = event.currentTarget.closest('form');

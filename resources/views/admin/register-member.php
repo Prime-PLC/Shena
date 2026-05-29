@@ -7,6 +7,13 @@ include_once __DIR__ . '/../layouts/admin-header.php';
 $oldValue = function ($field, $default = '') use ($old) {
     return htmlspecialchars((string)($old[$field] ?? $default), ENT_QUOTES);
 };
+$membershipPlanData = [];
+foreach (($packages ?? []) as $packageKey => $package) {
+    $membershipPlanData[$packageKey] = [
+        'name' => $package['name'] ?? $packageKey,
+        'monthly_contribution' => (float)($package['monthly_contribution'] ?? 0),
+    ];
+}
 ?>
 
 <style>
@@ -268,10 +275,6 @@ $oldValue = function ($field, $default = '') use ($old) {
                     <label class="form-label">County</label>
                     <input type="text" name="county" class="form-input" value="<?php echo $oldValue('county'); ?>">
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Sub-County</label>
-                    <input type="text" name="sub_county" class="form-input" value="<?php echo $oldValue('sub_county'); ?>">
-                </div>
             </div>
         </div>
 
@@ -281,10 +284,10 @@ $oldValue = function ($field, $default = '') use ($old) {
             <div class="form-grid">
                 <div class="form-group">
                     <label class="form-label">Package <span class="required">*</span></label>
-                    <select name="package" class="form-select" required>
+                    <select name="package" class="form-select" id="packageSelect" required>
                         <option value="">Select Package</option>
                         <?php foreach (($packages ?? []) as $packageKey => $package): ?>
-                            <option value="<?php echo htmlspecialchars($packageKey); ?>" <?php echo (($old['package'] ?? '') === $packageKey) ? 'selected' : ''; ?>>
+                            <option value="<?php echo htmlspecialchars($packageKey); ?>" data-monthly-contribution="<?php echo htmlspecialchars((string)($package['monthly_contribution'] ?? 0)); ?>" <?php echo (($old['package'] ?? '') === $packageKey) ? 'selected' : ''; ?>>
                                 <?php echo htmlspecialchars(($package['name'] ?? $packageKey) . ' - KES ' . number_format((float)($package['monthly_contribution'] ?? 0), 0) . '/month'); ?>
                             </option>
                         <?php endforeach; ?>
@@ -292,11 +295,19 @@ $oldValue = function ($field, $default = '') use ($old) {
                 </div>
                 <div class="form-group">
                     <label class="form-label">Corporate Couple Count</label>
-                    <select name="corporate_couple_count" class="form-select">
+                    <select name="corporate_couple_count" class="form-select" id="corporateCoupleCount">
                         <option value="0" <?php echo (($old['corporate_couple_count'] ?? '0') === '0') ? 'selected' : ''; ?>>None</option>
-                        <option value="1" <?php echo (($old['corporate_couple_count'] ?? '') === '1') ? 'selected' : ''; ?>>1 Additional Couple (+KES 150)</option>
-                        <option value="2" <?php echo (($old['corporate_couple_count'] ?? '') === '2') ? 'selected' : ''; ?>>2 Additional Couples (+KES 300)</option>
+                        <option value="1" <?php echo (($old['corporate_couple_count'] ?? '') === '1') ? 'selected' : ''; ?>>1 Additional Corporate Couple</option>
+                        <option value="2" <?php echo (($old['corporate_couple_count'] ?? '') === '2') ? 'selected' : ''; ?>>2 Additional Corporate Couples</option>
+                        <option value="3" <?php echo (($old['corporate_couple_count'] ?? '') === '3') ? 'selected' : ''; ?>>3 Additional Corporate Couples</option>
+                        <option value="4" <?php echo (($old['corporate_couple_count'] ?? '') === '4') ? 'selected' : ''; ?>>4 Additional Corporate Couples</option>
+                        <option value="5" <?php echo (($old['corporate_couple_count'] ?? '') === '5') ? 'selected' : ''; ?>>5 Additional Corporate Couples</option>
                     </select>
+                    <small class="form-hint">Each corporate couple is charged at the selected plan amount.</small>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Expected Monthly Contribution</label>
+                    <div class="form-input corporate-total-preview" id="corporateTotalPreview" aria-live="polite">KES 0/month</div>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Referred By (Agent Number)</label>
@@ -352,6 +363,10 @@ $oldValue = function ($field, $default = '') use ($old) {
     const form = document.querySelector('.registration-form');
     const storageKey = 'shena_admin_member_registration_draft';
     if (!form || !window.localStorage) return;
+    const membershipPlanData = <?php echo json_encode($membershipPlanData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
+    const packageSelect = document.getElementById('packageSelect');
+    const corporateSelect = document.getElementById('corporateCoupleCount');
+    const corporateTotalPreview = document.getElementById('corporateTotalPreview');
     const sections = Array.from(form.querySelectorAll('.form-section[data-step]'));
     const indicators = Array.from(form.querySelectorAll('[data-step-indicator]'));
     const backBtn = form.querySelector('.step-back');
@@ -360,6 +375,20 @@ $oldValue = function ($field, $default = '') use ($old) {
     let currentStep = 1;
     const initialStep = <?php echo json_encode(max(1, min(4, $initialStep))); ?>;
     const flashError = <?php echo json_encode($flashError); ?>;
+
+    function updateContributionPreview() {
+        if (!packageSelect || !corporateSelect || !corporateTotalPreview) return;
+        const selectedOption = packageSelect.options[packageSelect.selectedIndex];
+        const packageKey = packageSelect.value;
+        const baseAmount = Number(selectedOption?.dataset.monthlyContribution || membershipPlanData[packageKey]?.monthly_contribution || 0);
+        const corporateCount = Number(corporateSelect.value || 0);
+        const total = baseAmount * (1 + corporateCount);
+        corporateTotalPreview.textContent = 'KES ' + total.toLocaleString() + '/month';
+    }
+
+    packageSelect?.addEventListener('change', updateContributionPreview);
+    corporateSelect?.addEventListener('change', updateContributionPreview);
+    updateContributionPreview();
 
     function showFlash(message, type) {
         if (!message) return;

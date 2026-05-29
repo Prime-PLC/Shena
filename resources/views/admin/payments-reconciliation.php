@@ -593,7 +593,7 @@
 <div class="page-header">
     <div class="page-header-left">
         <h1>Financial Reconciliation</h1>
-        <p>Tracking Paymf b/d 60drt - SHENA Companion Welfare</p>
+        <p>Match M-Pesa Paybill transactions to the correct member account.</p>
     </div>
     <div style="display: flex; gap: 12px; align-items: center;">
         <div class="feed-badge">
@@ -609,6 +609,7 @@
 <?php
 $recon_stats        = $recon_stats ?? [];
 $unmatched_payments = $unmatched_payments ?? [];
+$audit_logs         = $audit_logs ?? [];
 $today_collections  = $today_collections ?? 0;
 $defaulters_count   = $defaulters_count ?? 0;
 $unmatched_count    = (int)($recon_stats['unmatched'] ?? count($unmatched_payments));
@@ -662,191 +663,105 @@ $unmatched_count    = (int)($recon_stats['unmatched'] ?? count($unmatched_paymen
     </div>
 </div>
 
-<!-- Main Content Layout -->
-<div class="content-layout">
-    <!-- Revenue vs. Targets Chart -->
-    <div>
-        <div class="chart-card">
-            <div class="chart-header">
-                <div>
-                    <div class="chart-title">Revenue vs. Targets</div>
-                    <div class="chart-subtitle">Monthly collection performance tracking</div>
-                </div>
-                <div class="chart-legend">
-                    <div class="legend-item">
-                        <div class="legend-dot purple"></div>
-                        <span>Minimal</span>
-                    </div>
-                    <div class="legend-item">
-                        <div class="legend-dot gray"></div>
-                        <span>Target</span>
-                    </div>
-                </div>
-            </div>
-            <div class="chart-container">
-                <canvas id="revenueChart"></canvas>
-            </div>
-        </div>
-    </div>
-
-    <!-- Unmatched Feed -->
-    <div>
-        <div class="feed-card">
-            <div class="feed-title">Unmatched Feed</div>
-
-            <?php if (!empty($unmatched_payments)): ?>
-            <?php foreach (array_slice($unmatched_payments, 0, 5) as $up): ?>
-            <div class="feed-item">
-                <div class="feed-header">
-                    <span class="feed-type"><?php echo htmlspecialchars($up['mpesa_receipt_number'] ?? $up['transaction_reference'] ?? 'N/A'); ?></span>
-                    <span class="feed-time"><?php echo date('h:i A', strtotime($up['created_at'] ?? 'now')); ?></span>
-                </div>
-                <div class="feed-amount">KES <?php echo number_format((float)($up['amount'] ?? 0), 2); ?></div>
-                <div class="feed-description"><?php echo htmlspecialchars($up['notes'] ?? 'No account match'); ?></div>
-                <div class="feed-meta"><?php echo htmlspecialchars($up['payment_method'] ?? 'M-Pesa'); ?></div>
-                <a class="feed-button" href="/admin/payments/unmatched">Link</a>
-            </div>
-            <?php endforeach; ?>
-            <?php else: ?>
-            <div style="padding:24px; text-align:center; color:#6B7280; font-size:0.9rem;">
-                <i class="fas fa-check-circle text-success me-1"></i> No unmatched payments.
-            </div>
-            <?php endif; ?>
-        </div>
-    </div>
-</div>
-
-<!-- Live Payment Reconciliation Table -->
-<div class="table-card">
+<!-- Work Queue -->
+<div class="table-card" style="margin-bottom: 24px;">
     <div class="table-header">
         <div>
-            <div class="table-title">Live Payment Reconciliation</div>
-            <div class="table-subtitle">Auto-match ongoing, queue for instant & manual verification</div>
+            <div class="table-title">Unmatched Payment Queue</div>
+            <div class="table-subtitle">These payments need an admin to find the correct member and reconcile.</div>
         </div>
         <div class="table-actions">
-            <a class="table-btn" href="/admin/payments-reconciliation?filter=1">
-                <i class="fas fa-filter"></i> Filter
-            </a>
-            <a class="table-btn primary" href="/admin/payments-reconciliation?import=statement">
-                <i class="fas fa-download"></i> Import Statement
+            <a class="table-btn primary" href="/admin/payments/unmatched">
+                <i class="fas fa-link"></i> Open matching queue
             </a>
         </div>
     </div>
-
-    <div style="overflow-x: auto;">
+    <div style="overflow-x:auto;">
         <table class="reconciliation-table">
             <thead>
                 <tr>
                     <th>TRANSACTION CODE</th>
-                    <th>SENDER / MEMBER</th>
+                    <th>PAYBILL ACCOUNT / SENDER</th>
                     <th>AMOUNT (KES)</th>
-                    <th>STATUS</th>
-                    <th>TIMESTAMP</th>
-                    <th>ACTIONS</th>
+                    <th>RECEIVED</th>
+                    <th>ACTION</th>
                 </tr>
             </thead>
             <tbody>
-                <?php if (empty($reconciled_payments)): ?>
-                <tr>
-                    <td colspan="6" style="text-align: center; padding: 40px; color: #6B7280;">
-                        <i class="fas fa-file-invoice-dollar" style="font-size: 48px; margin-bottom: 16px; opacity: 0.3;"></i>
-                        <p>No reconciled payments found</p>
-                    </td>
-                </tr>
-                <?php else: ?>
-                    <?php foreach ($reconciled_payments as $payment): ?>
+                <?php if (empty($unmatched_payments)): ?>
                     <tr>
-                        <td><strong><?php echo htmlspecialchars($payment['transaction_id']); ?></strong></td>
-                        <td>
-                            <div class="member-profile">
-                                <div class="member-avatar <?php echo $payment['avatar_color'] ?? 'green'; ?>">
-                                    <?php echo strtoupper(substr($payment['first_name'] ?? 'M', 0, 1) . substr($payment['last_name'] ?? 'M', 0, 1)); ?>
-                                </div>
-                                <div class="member-info">
-                                    <div class="member-name"><?php echo htmlspecialchars($payment['member_name'] ?? 'N/A'); ?></div>
-                                    <div class="member-number"><?php echo htmlspecialchars($payment['member_number'] ?? 'N/A'); ?></div>
-                                </div>
-                            </div>
-                        </td>
-                        <td><strong><?php echo number_format($payment['amount'], 2); ?></strong></td>
-                        <td><span class="status-badge <?php echo $payment['status']; ?>"><?php echo strtoupper($payment['status']); ?></span></td>
-                        <td><?php echo date('M d, h:i A', strtotime($payment['timestamp'])); ?></td>
-                        <td>
-                            <a class="action-btn edit" href="/admin/payments?search=<?php echo urlencode($payment['transaction_id'] ?? ''); ?>">
-                                <i class="fas fa-edit"></i>
-                            </a>
+                        <td colspan="5" style="text-align:center; padding:32px; color:#6B7280;">
+                            No unmatched payments are waiting for review.
                         </td>
                     </tr>
+                <?php else: ?>
+                    <?php foreach (array_slice($unmatched_payments, 0, 8) as $up): ?>
+                        <tr>
+                            <td><strong><?php echo htmlspecialchars($up['mpesa_receipt_number'] ?? 'N/A'); ?></strong></td>
+                            <td>
+                                <?php echo htmlspecialchars($up['paybill_account'] ?? 'No account'); ?>
+                                <div style="color:#6B7280; font-size:12px; margin-top:4px;">
+                                    <?php echo htmlspecialchars($up['sender_name'] ?? 'Unknown sender'); ?>
+                                    <?php if (!empty($up['sender_phone'])): ?>
+                                        - <?php echo htmlspecialchars($up['sender_phone']); ?>
+                                    <?php endif; ?>
+                                </div>
+                            </td>
+                            <td><strong><?php echo number_format((float)($up['amount'] ?? 0), 2); ?></strong></td>
+                            <td><?php echo htmlspecialchars(substr((string)($up['transaction_date'] ?? $up['created_at'] ?? ''), 0, 16)); ?></td>
+                            <td>
+                                <a class="action-btn edit" href="/admin/payments/unmatched?search=<?php echo urlencode($up['mpesa_receipt_number'] ?? ''); ?>">
+                                    Match
+                                </a>
+                            </td>
+                        </tr>
                     <?php endforeach; ?>
                 <?php endif; ?>
             </tbody>
         </table>
     </div>
+</div>
 
-    <div style="text-align: center; padding: 16px; color: #9CA3AF; font-size: 13px;">
-        VIEWING 3,436 RECONCILED PAYMENTS
-        <div style="margin-top: 12px; display: flex; gap: 8px; justify-content: center;">
-            <a href="/admin/payments-reconciliation?page=prev" style="padding: 6px 12px; border: 1px solid #E5E7EB; background: white; border-radius: 6px; cursor: pointer; text-decoration: none; color: #1F2937;">
-                Previous
-            </a>
-            <a href="/admin/payments-reconciliation?page=next" style="padding: 6px 12px; border: 1px solid #E5E7EB; background: white; border-radius: 6px; cursor: pointer; text-decoration: none; color: #1F2937;">
-                Next Page
+<!-- Recent Audit Notes -->
+<div class="table-card" style="margin-bottom: 24px;">
+    <div class="table-header">
+        <div>
+            <div class="table-title">Recent Reconciliation Audit</div>
+            <div class="table-subtitle">Manual matches and notes captured by administrators</div>
+        </div>
+        <div class="table-actions">
+            <a class="table-btn primary" href="/admin/payments/unmatched">
+                <i class="fas fa-link"></i> Review unmatched
             </a>
         </div>
     </div>
+    <div style="padding: 0 16px 16px;">
+        <?php if (empty($audit_logs)): ?>
+            <div style="padding:24px; text-align:center; color:#6B7280; font-size:0.9rem;">
+                No manual reconciliation notes captured yet.
+            </div>
+        <?php else: ?>
+            <?php foreach ($audit_logs as $log): ?>
+                <div style="display:grid; grid-template-columns: 1fr auto; gap:12px; padding:12px 0; border-bottom:1px solid #F3F4F6;">
+                    <div>
+                        <strong><?php echo htmlspecialchars($log['mpesa_receipt_number'] ?? ('Payment #' . ($log['payment_id'] ?? ''))); ?></strong>
+                        <div style="color:#6B7280; font-size:12px; margin-top:4px;">
+                            <?php echo htmlspecialchars(trim(($log['first_name'] ?? '') . ' ' . ($log['last_name'] ?? '')) ?: 'Member'); ?>
+                            <?php if (!empty($log['member_number'])): ?>
+                                - <?php echo htmlspecialchars($log['member_number']); ?>
+                            <?php endif; ?>
+                        </div>
+                        <div style="color:#6B7280; font-size:12px; margin-top:4px;">
+                            <?php echo htmlspecialchars($log['notes'] ?? $log['reconciliation_notes'] ?? 'No notes captured'); ?>
+                        </div>
+                    </div>
+                    <div style="color:#9CA3AF; font-size:12px;">
+                        <?php echo htmlspecialchars(substr((string)($log['created_at'] ?? $log['reconciled_at'] ?? ''), 0, 16)); ?>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        <?php endif; ?>
+    </div>
 </div>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-// Revenue Chart
-const ctx = document.getElementById('revenueChart');
-if (ctx) {
-    new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: <?php echo json_encode($chart_labels ?? ['Week 1', 'Week 2', 'Week 3', 'Week 4']); ?>,
-            datasets: [{
-                label: 'Revenue',
-                data: <?php echo json_encode($chart_data ?? [0, 0, 0, 0]); ?>,
-                borderColor: '#8B5CF6',
-                backgroundColor: 'rgba(139, 92, 246, 0.1)',
-                tension: 0.4,
-                fill: true,
-                pointRadius: 6,
-                pointBackgroundColor: '#8B5CF6',
-                pointBorderColor: 'white',
-                pointBorderWidth: 2
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: false
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    grid: {
-                        color: '#F3F4F6'
-                    },
-                    ticks: {
-                        callback: function(value) {
-                            return 'KES ' + (value / 1000) + 'K';
-                        }
-                    }
-                },
-                x: {
-                    grid: {
-                        display: false
-                    }
-                }
-            }
-        }
-    });
-}
-</script>
 
 <?php include_once __DIR__ . '/../layouts/admin-footer.php'; ?>

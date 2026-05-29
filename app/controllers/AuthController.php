@@ -1365,7 +1365,6 @@ class AuthController extends BaseController
             $phone = $this->sanitizeInput($_POST['phone']);
             $address = $this->sanitizeInput($_POST['address']);
             $county = $this->sanitizeInput($_POST['county']);
-            $subCounty = $this->sanitizeInput($_POST['sub_county'] ?? '');
             $postalCode = $this->sanitizeInput($_POST['postal_code'] ?? '');
             $corporateCoupleCount = max(0, min(5, (int)($_POST['corporate_couple_count'] ?? 0)));
             $paymentMethod = $this->sanitizeInput($_POST['payment_method'] ?? 'mpesa');

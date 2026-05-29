@@ -355,6 +355,58 @@ $successRate = $successRate ?? 0;
         color: #1F2937;
     }
 
+    .reconciliation-workspace {
+        display: grid;
+        grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.8fr);
+        gap: 18px;
+        align-items: start;
+    }
+
+    .reconciliation-panel {
+        background: #FFFFFF;
+        border: 1px solid #E5E7EB;
+        border-radius: 12px;
+        padding: 18px;
+    }
+
+    .reconciliation-panel h4 {
+        margin: 0 0 8px;
+        color: #111827;
+        font-size: 16px;
+        font-weight: 800;
+    }
+
+    .reconciliation-panel p {
+        margin: 0 0 14px;
+        color: #6B7280;
+        font-size: 13px;
+        line-height: 1.45;
+    }
+
+    .reconciliation-queue {
+        display: grid;
+        gap: 10px;
+    }
+
+    .reconciliation-queue-item {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 12px;
+        padding: 11px 0;
+        border-bottom: 1px solid #F3F4F6;
+    }
+
+    .reconciliation-queue-item:last-child {
+        border-bottom: 0;
+    }
+
+    .reconciliation-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 14px;
+    }
+
     /* Financial Dashboard Cards */
     .financial-grid {
         display: grid;
@@ -399,6 +451,10 @@ $successRate = $successRate ?? 0;
         }
 
         .reconciliation-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .reconciliation-workspace {
             grid-template-columns: 1fr;
         }
 
@@ -553,6 +609,7 @@ $successRate = $successRate ?? 0;
                     <th>Payment Method</th>
                     <th>Date & Time</th>
                     <th>Status</th>
+                    <th>Reconciliation</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -567,6 +624,15 @@ $successRate = $successRate ?? 0;
                     <td><?php echo date('M j, Y g:i A', strtotime($p['created_at'])); ?></td>
                     <td><span class="status-badge <?php echo $p['status'] === 'completed' ? 'success' : ($p['status'] === 'failed' ? 'danger' : 'pending'); ?>"><?php echo ucfirst($p['status']); ?></span></td>
                     <td>
+                        <strong><?php echo htmlspecialchars(ucfirst($p['reconciliation_status'] ?? 'pending')); ?></strong>
+                        <?php if (!empty($p['reconciliation_notes'])): ?>
+                            <div style="color:#6B7280; font-size:12px; margin-top:4px;"><?php echo htmlspecialchars($p['reconciliation_notes']); ?></div>
+                        <?php endif; ?>
+                        <?php if (!empty($p['reconciled_at'])): ?>
+                            <div style="color:#9CA3AF; font-size:12px; margin-top:4px;">Reconciled <?php echo date('M j, Y g:i A', strtotime($p['reconciled_at'])); ?></div>
+                        <?php endif; ?>
+                    </td>
+                    <td>
                         <a href="/admin/payments/view/<?php echo $p['id']; ?>" class="filter-btn" style="padding: 6px 12px; font-size: 12px;">
                             <i class="fas fa-eye"></i> View
                         </a>
@@ -574,7 +640,7 @@ $successRate = $successRate ?? 0;
                 </tr>
                 <?php endforeach; ?>
                 <?php else: ?>
-                <tr><td colspan="7" style="text-align:center; padding: 24px; color:#6B7280;">No payments found.</td></tr>
+                <tr><td colspan="8" style="text-align:center; padding: 24px; color:#6B7280;">No payments found.</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>
@@ -632,69 +698,121 @@ $successRate = $successRate ?? 0;
 
     <!-- Reconciliation Tab -->
     <div class="tab-content" id="content-reconciliation">
+        <?php
+            $reconStats = $recon_stats ?? [];
+            $unmatchedQueue = $unmatched_payments ?? [];
+            $auditLogs = $audit_logs ?? [];
+            $totalRecon = (int)($reconStats['total_payments'] ?? 0);
+            $matchedRecon = (int)($reconStats['matched'] ?? 0);
+            $manualRecon = (int)($reconStats['manual'] ?? 0);
+            $unmatchedRecon = (int)($reconStats['unmatched'] ?? count($unmatchedQueue));
+            $unmatchedAmount = (float)($reconStats['unmatched_amount'] ?? array_sum(array_column($unmatchedQueue, 'amount')));
+            $matchedAmount = (float)($reconStats['matched_amount'] ?? 0);
+            $matchRate = $totalRecon > 0 ? round((($matchedRecon + $manualRecon) / $totalRecon) * 100) : 0;
+        ?>
         <div class="reconciliation-grid">
-            <?php
-                $systemTotal   = count($payments ?? []);
-                $systemSuccess = count(array_filter($payments ?? [], fn($p) => $p['status'] === 'completed'));
-                $systemAmount  = array_sum(array_column(array_filter($payments ?? [], fn($p) => $p['status'] === 'completed'), 'amount'));
-                $mpesaAll      = array_filter($payments ?? [], fn($p) => ($p['payment_method'] ?? '') === 'mpesa');
-                $mpesaSuccess  = count(array_filter($mpesaAll, fn($p) => $p['status'] === 'completed'));
-                $mpesaAmount   = array_sum(array_column(array_filter($mpesaAll, fn($p) => $p['status'] === 'completed'), 'amount'));
-                $unmatched     = count(array_filter($payments ?? [], fn($p) => ($p['reconciliation_status'] ?? '') === 'unmatched'));
-            ?>
             <div class="reconciliation-card">
-                <h4><i class="fas fa-database"></i> System Records</h4>
-                <div class="reconciliation-item">
-                    <span class="reconciliation-label">Total Transactions</span>
-                    <span class="reconciliation-value"><?php echo number_format($systemTotal); ?></span>
-                </div>
-                <div class="reconciliation-item">
-                    <span class="reconciliation-label">Total Amount</span>
-                    <span class="reconciliation-value">KSh <?php echo number_format($systemAmount, 2); ?></span>
-                </div>
-                <div class="reconciliation-item">
-                    <span class="reconciliation-label">Successful</span>
-                    <span class="reconciliation-value"><?php echo number_format($systemSuccess); ?></span>
-                </div>
-            </div>
-
-            <div class="reconciliation-card">
-                <h4><i class="fas fa-mobile-alt"></i> M-Pesa Records</h4>
-                <div class="reconciliation-item">
-                    <span class="reconciliation-label">Total Transactions</span>
-                    <span class="reconciliation-value"><?php echo number_format(count($mpesaAll)); ?></span>
-                </div>
-                <div class="reconciliation-item">
-                    <span class="reconciliation-label">Total Amount</span>
-                    <span class="reconciliation-value">KSh <?php echo number_format($mpesaAmount, 2); ?></span>
-                </div>
-                <div class="reconciliation-item">
-                    <span class="reconciliation-label">Confirmed</span>
-                    <span class="reconciliation-value"><?php echo number_format($mpesaSuccess); ?></span>
-                </div>
-            </div>
-
-            <div class="reconciliation-card">
-                <h4><i class="fas fa-exclamation-triangle"></i> Discrepancies</h4>
+                <h4><i class="fas fa-link"></i> Matching Queue</h4>
                 <div class="reconciliation-item">
                     <span class="reconciliation-label">Unmatched Payments</span>
-                    <span class="reconciliation-value" style="color: #DC2626;"><?php echo number_format($unmatched); ?></span>
+                    <span class="reconciliation-value" style="color: <?php echo $unmatchedRecon > 0 ? '#DC2626' : '#059669'; ?>;"><?php echo number_format($unmatchedRecon); ?></span>
                 </div>
                 <div class="reconciliation-item">
-                    <span class="reconciliation-label">Amount Difference</span>
-                    <span class="reconciliation-value" style="color: #DC2626;">KSh <?php echo number_format($systemAmount - $mpesaAmount, 2); ?></span>
+                    <span class="reconciliation-label">Unmatched Amount</span>
+                    <span class="reconciliation-value">KSh <?php echo number_format($unmatchedAmount, 2); ?></span>
                 </div>
                 <div class="reconciliation-item">
-                    <span class="reconciliation-label">Pending Review</span>
-                    <span class="reconciliation-value" style="color: #F59E0B;"><?php echo number_format(count(array_filter($payments ?? [], fn($p) => $p['status'] === 'pending'))); ?></span>
+                    <span class="reconciliation-label">Needs Action</span>
+                    <span class="reconciliation-value"><?php echo $unmatchedRecon > 0 ? 'Review queue' : 'None'; ?></span>
+                </div>
+            </div>
+
+            <div class="reconciliation-card">
+                <h4><i class="fas fa-check-circle"></i> Matched Payments</h4>
+                <div class="reconciliation-item">
+                    <span class="reconciliation-label">Auto Matched</span>
+                    <span class="reconciliation-value"><?php echo number_format($matchedRecon); ?></span>
+                </div>
+                <div class="reconciliation-item">
+                    <span class="reconciliation-label">Matched Amount</span>
+                    <span class="reconciliation-value">KSh <?php echo number_format($matchedAmount, 2); ?></span>
+                </div>
+                <div class="reconciliation-item">
+                    <span class="reconciliation-label">Manual Matches</span>
+                    <span class="reconciliation-value"><?php echo number_format($manualRecon); ?></span>
+                </div>
+            </div>
+
+            <div class="reconciliation-card">
+                <h4><i class="fas fa-chart-pie"></i> Reconciliation Health</h4>
+                <div class="reconciliation-item">
+                    <span class="reconciliation-label">Total M-Pesa Records</span>
+                    <span class="reconciliation-value"><?php echo number_format($totalRecon); ?></span>
+                </div>
+                <div class="reconciliation-item">
+                    <span class="reconciliation-label">Resolved Rate</span>
+                    <span class="reconciliation-value"><?php echo number_format($matchRate); ?>%</span>
+                </div>
+                <div class="reconciliation-item">
+                    <span class="reconciliation-label">Status</span>
+                    <span class="reconciliation-value"><?php echo $unmatchedRecon > 0 ? 'Action required' : 'Clear'; ?></span>
                 </div>
             </div>
         </div>
 
-        <a class="btn-action btn-primary" style="margin-top: 20px;" href="/admin/payments-reconciliation">
-            <i class="fas fa-play"></i>
-            Run Reconciliation
-        </a>
+        <div class="reconciliation-workspace">
+            <div class="reconciliation-panel">
+                <h4>What needs attention</h4>
+                <p>Start here when payments do not automatically attach to a member. Review each transaction, find the correct member, add a note, and reconcile it.</p>
+                <div class="reconciliation-queue">
+                    <?php if (empty($unmatchedQueue)): ?>
+                        <div style="color:#6B7280; padding:12px 0;">No unmatched payments are waiting for review.</div>
+                    <?php else: ?>
+                        <?php foreach (array_slice($unmatchedQueue, 0, 5) as $item): ?>
+                            <div class="reconciliation-queue-item">
+                                <div>
+                                    <strong><?php echo htmlspecialchars($item['mpesa_receipt_number'] ?? 'N/A'); ?></strong>
+                                    <div style="color:#6B7280; font-size:12px; margin-top:4px;">
+                                        <?php echo htmlspecialchars($item['paybill_account'] ?? 'No account'); ?> ·
+                                        KSh <?php echo number_format((float)($item['amount'] ?? 0), 2); ?>
+                                    </div>
+                                </div>
+                                <a class="filter-btn" href="/admin/payments/unmatched?search=<?php echo urlencode($item['mpesa_receipt_number'] ?? ''); ?>">Match</a>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
+                <div class="reconciliation-actions">
+                    <a class="btn-action btn-primary" href="/admin/payments/unmatched">
+                        <i class="fas fa-link"></i>
+                        Review unmatched queue
+                    </a>
+                    <a class="filter-btn" href="/admin/payments-reconciliation">
+                        Open reconciliation workspace
+                    </a>
+                </div>
+            </div>
+
+            <div class="reconciliation-panel">
+                <h4>Recent manual activity</h4>
+                <p>Latest reconciliations with admin notes for quick audit.</p>
+                <?php if (empty($auditLogs)): ?>
+                    <div style="color:#6B7280; padding:12px 0;">No manual reconciliation activity yet.</div>
+                <?php else: ?>
+                    <?php foreach (array_slice($auditLogs, 0, 4) as $log): ?>
+                        <div class="reconciliation-queue-item">
+                            <div>
+                                <strong><?php echo htmlspecialchars($log['mpesa_receipt_number'] ?? ('Payment #' . ($log['payment_id'] ?? ''))); ?></strong>
+                                <div style="color:#6B7280; font-size:12px; margin-top:4px;">
+                                    <?php echo htmlspecialchars($log['notes'] ?? $log['reconciliation_notes'] ?? 'No note captured'); ?>
+                                </div>
+                            </div>
+                            <span style="color:#9CA3AF; font-size:12px;"><?php echo htmlspecialchars(substr((string)($log['created_at'] ?? ''), 0, 10)); ?></span>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+        </div>
     </div>
 
     <!-- Financial Dashboard Tab -->
