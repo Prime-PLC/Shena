@@ -1690,8 +1690,13 @@ class AdminController extends BaseController
             $payload = $reportService->getExportPayload($type, $dateFrom, $dateTo, $_GET);
         }
 
-        if ($this->queryParam('format') === 'csv' || $format === 'excel') {
+        if ($this->queryParam('format') === 'csv') {
             $this->streamCsvReport($payload, $type . '-report-' . date('Ymd_His') . '.csv');
+            return;
+        }
+
+        if ($this->queryParam('format') === 'excel' || $format === 'xls') {
+            $this->streamExcelReport($payload, $type . '-report-' . date('Ymd_His') . '.xls');
             return;
         }
 
@@ -1720,6 +1725,99 @@ class AdminController extends BaseController
         }
 
         fclose($output);
+        exit;
+    }
+
+    private function streamExcelReport(array $payload, string $filename)
+    {
+        header('Content-Type: application/vnd.ms-excel; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+
+        $title = htmlspecialchars($payload['title'] ?? 'SHENA Report', ENT_QUOTES);
+        $subtitle = htmlspecialchars($payload['subtitle'] ?? '', ENT_QUOTES);
+        $preparedFor = htmlspecialchars($payload['prepared_for'] ?? 'Admin', ENT_QUOTES);
+        $generatedAt = htmlspecialchars($payload['generated_at'] ?? date('Y-m-d H:i'), ENT_QUOTES);
+        $dateRange = htmlspecialchars($payload['date_range'] ?? '', ENT_QUOTES);
+        $metrics = $payload['metrics'] ?? [];
+        $tables = $payload['tables'] ?? [];
+
+        echo "\xEF\xBB\xBF";
+        ?>
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body { font-family: Arial, sans-serif; color: #111827; }
+        .letterhead { border-bottom: 4px solid #7F3D9E; padding: 12px 0; margin-bottom: 14px; }
+        .brand { color: #7F3D9E; font-size: 22px; font-weight: 800; }
+        .brand-sub { color: #10B981; font-size: 12px; font-weight: 700; }
+        .meta { color: #6B7280; font-size: 12px; }
+        h1 { color: #111827; font-size: 20px; margin: 12px 0 4px; }
+        .subtitle { color: #6B7280; margin-bottom: 14px; }
+        .metrics td { border: 1px solid #E5E7EB; background: #F9FAFB; padding: 9px 12px; }
+        .metric-label { color: #6B7280; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+        .metric-value { color: #111827; font-size: 16px; font-weight: 800; }
+        .section-title { color: #7F3D9E; font-size: 14px; font-weight: 800; margin-top: 16px; }
+        table.data { border-collapse: collapse; width: 100%; margin-top: 8px; }
+        table.data th { background: #7F3D9E; color: #FFFFFF; border: 1px solid #6f328b; padding: 8px; text-align: left; font-weight: 800; }
+        table.data td { border: 1px solid #E5E7EB; padding: 8px; mso-number-format: "\@"; }
+        table.data tr:nth-child(even) td { background: #F9FAFB; }
+    </style>
+</head>
+<body>
+    <div class="letterhead">
+        <div class="brand">SHENA Companion</div>
+        <div class="brand-sub">Welfare Association</div>
+        <div class="meta">Prepared for: <?php echo $preparedFor; ?> | Generated: <?php echo $generatedAt; ?><?php echo $dateRange ? ' | Period: ' . $dateRange : ''; ?></div>
+    </div>
+
+    <h1><?php echo $title; ?></h1>
+    <?php if ($subtitle): ?><div class="subtitle"><?php echo $subtitle; ?></div><?php endif; ?>
+
+    <?php if (!empty($metrics)): ?>
+        <table class="metrics">
+            <tr>
+                <?php foreach (array_values($metrics) as $index => $metric): ?>
+                    <?php if ($index > 0 && $index % 4 === 0): ?></tr><tr><?php endif; ?>
+                    <td>
+                        <div class="metric-label"><?php echo htmlspecialchars($metric['label'] ?? '', ENT_QUOTES); ?></div>
+                        <div class="metric-value"><?php echo htmlspecialchars((string)($metric['value'] ?? '0'), ENT_QUOTES); ?></div>
+                    </td>
+                <?php endforeach; ?>
+            </tr>
+        </table>
+    <?php endif; ?>
+
+    <?php foreach ($tables as $table): ?>
+        <div class="section-title"><?php echo htmlspecialchars($table['title'] ?? 'Details', ENT_QUOTES); ?></div>
+        <table class="data">
+            <thead>
+                <tr>
+                    <?php foreach (($table['headers'] ?? []) as $header): ?>
+                        <th><?php echo htmlspecialchars((string)$header, ENT_QUOTES); ?></th>
+                    <?php endforeach; ?>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach (($table['rows'] ?? []) as $row): ?>
+                    <tr>
+                        <?php foreach ($row as $value): ?>
+                            <td><?php echo htmlspecialchars((string)$value, ENT_QUOTES); ?></td>
+                        <?php endforeach; ?>
+                    </tr>
+                <?php endforeach; ?>
+                <?php if (empty($table['rows'])): ?>
+                    <tr><td colspan="<?php echo max(1, count($table['headers'] ?? [])); ?>">No records found.</td></tr>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    <?php endforeach; ?>
+</body>
+</html>
+        <?php
         exit;
     }
 

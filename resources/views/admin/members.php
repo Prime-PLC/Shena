@@ -1435,25 +1435,31 @@ $buildMemberPageUrl = function (int $page) use ($search, $status, $package) {
             
             <?php if (!empty($pending_approvals)): ?>
                 <?php foreach ($pending_approvals as $approval): ?>
-                <div class="approval-card">
+                <form class="approval-card pendingApprovalValidationForm" method="POST" action="/admin/payments/verify">
+                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
+                    <input type="hidden" name="member_id" value="<?php echo (int)$approval['id']; ?>">
+                    <input type="hidden" name="method" value="paybill">
+                    <input type="hidden" name="payment_type" value="registration">
+                    <input type="hidden" name="return_to" value="/admin/members">
                     <div class="approval-name"><?php echo htmlspecialchars($approval['name']); ?></div>
                     <div class="approval-details"><?php echo htmlspecialchars($approval['package']); ?></div>
                     <div class="approval-tag <?php echo $approval['tag_class']; ?>"><?php echo htmlspecialchars($approval['tag']); ?></div>
-                    <div class="approval-reference">M-PESA REFERENCE</div>
-                    <?php if (!empty($approval['code'])): ?>
-                        <div class="approval-code"><?php echo htmlspecialchars($approval['code']); ?></div>
-                    <?php else: ?>
-                        <input type="text" class="approval-input" placeholder="Enter Ref Code">
-                    <?php endif; ?>
+                    <label class="approval-reference" for="approval-code-<?php echo (int)$approval['id']; ?>">M-PESA REFERENCE</label>
+                    <input
+                        id="approval-code-<?php echo (int)$approval['id']; ?>"
+                        type="text"
+                        class="approval-input"
+                        name="mpesa_receipt_number"
+                        value="<?php echo htmlspecialchars($approval['code'] ?? ''); ?>"
+                        placeholder="Enter Ref Code"
+                        required
+                    >
                     <div class="approval-actions">
-                        <button class="btn-approve" onclick="window.location.href='/admin/members/approve/<?php echo $approval['id']; ?>'">
+                        <button type="submit" class="btn-approve">
                             <?php echo $approval['action_text'] ?? 'Verify & Activate'; ?>
                         </button>
-                        <button class="btn-close">
-                            <i class="fas fa-times"></i>
-                        </button>
                     </div>
-                </div>
+                </form>
                 <?php endforeach; ?>
             <?php else: ?>
                 <div class="approval-item" style="text-align: center; padding: 20px; color: #9CA3AF;">

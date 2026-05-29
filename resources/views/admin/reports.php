@@ -230,6 +230,7 @@ $summary = $payload['summary'] ?? 'Select a report and date range to review syst
         </div>
         <div class="report-actions">
             <a class="report-btn" href="<?= htmlspecialchars('/admin/reports/export?' . http_build_query(array_merge($_GET, ['type' => $reportType, 'format' => 'csv']))) ?>">Export CSV</a>
+            <a class="report-btn" href="<?= htmlspecialchars('/admin/reports/export?' . http_build_query(array_merge($_GET, ['type' => $reportType, 'format' => 'excel']))) ?>">Export Excel</a>
             <a class="report-btn primary" href="<?= htmlspecialchars('/admin/reports/export?' . http_build_query(array_merge($_GET, ['type' => $reportType, 'format' => 'pdf']))) ?>">Export PDF</a>
         </div>
     </div>

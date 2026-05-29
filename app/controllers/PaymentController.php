@@ -458,6 +458,11 @@ class PaymentController extends BaseController
         if (empty($input)) {
             $input = json_decode(file_get_contents('php://input'), true) ?? [];
         }
+        $wantsJson = $this->wantsJsonResponse();
+        $returnTo = $input['return_to'] ?? '/admin/payments';
+        if (!is_string($returnTo) || strpos($returnTo, '/admin/') !== 0) {
+            $returnTo = '/admin/payments';
+        }
 
         $method = strtolower(trim($input['method'] ?? ''));
         $checkoutRequestId = trim($input['checkout_request_id'] ?? '');
@@ -563,7 +568,13 @@ class PaymentController extends BaseController
 
         if ($method === 'paybill') {
             if (empty($mpesaReceipt)) {
-                $this->json(['error' => 'M-Pesa receipt number is required for Paybill verification'], 400);
+                $message = 'M-Pesa receipt number is required for Paybill verification';
+                if (!$wantsJson) {
+                    $_SESSION['error'] = $message;
+                    header('Location: ' . $returnTo);
+                    exit;
+                }
+                $this->json(['error' => $message], 400);
                 return;
             }
 
@@ -576,8 +587,18 @@ class PaymentController extends BaseController
             );
 
             if ($result['success']) {
+                if (!$wantsJson) {
+                    $_SESSION['success'] = $result['message'];
+                    header('Location: ' . $returnTo);
+                    exit;
+                }
                 $this->json($result);
             } else {
+                if (!$wantsJson) {
+                    $_SESSION['error'] = $result['message'] ?? 'Verification failed';
+                    header('Location: ' . $returnTo);
+                    exit;
+                }
                 $this->json(['error' => $result['message'] ?? 'Verification failed'], 400);
             }
             return;
@@ -585,7 +606,18 @@ class PaymentController extends BaseController
 
         $this->json(['error' => 'Invalid verification method'], 400);
     }
-    
+
+    private function wantsJsonResponse(): bool
+    {
+        $accept = $_SERVER['HTTP_ACCEPT'] ?? '';
+        $requestedWith = $_SERVER['HTTP_X_REQUESTED_WITH'] ?? '';
+        $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+
+        return strcasecmp($requestedWith, 'XMLHttpRequest') === 0
+            || stripos($accept, 'application/json') !== false
+            || stripos($contentType, 'application/json') !== false;
+    }
+
     /**
      * Search members for autocomplete
      * Admin only - Returns member suggestions
