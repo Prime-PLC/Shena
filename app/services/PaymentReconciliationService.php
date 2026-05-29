@@ -420,27 +420,47 @@ class PaymentReconciliationService
             );
 
             if ($existingPayment) {
-                if ($existingPayment['status'] === 'completed') {
+                if ($memberId && !empty($existingPayment['member_id']) && (int)$existingPayment['member_id'] !== (int)$memberId) {
                     return [
-                        'success' => true,
-                        'message' => 'Payment already verified and completed',
-                        'payment_id' => $existingPayment['id'],
-                        'already_verified' => true
+                        'success' => false,
+                        'message' => 'This receipt is already assigned to another member'
                     ];
                 }
 
-                if ($memberId && empty($existingPayment['member_id'])) {
+                if ($memberId && (empty($existingPayment['member_id']) || (int)$existingPayment['member_id'] !== (int)$memberId)) {
                     $this->db->execute(
                         "UPDATE payments SET member_id = :member_id WHERE id = :payment_id",
                         ['member_id' => $memberId, 'payment_id' => $existingPayment['id']]
                     );
+                    $existingPayment['member_id'] = $memberId;
                 }
 
-                if (!empty($paymentType) && empty($existingPayment['payment_type'])) {
+                if (!empty($paymentType) && ($existingPayment['payment_type'] ?? '') !== $paymentType) {
                     $this->db->execute(
                         "UPDATE payments SET payment_type = :payment_type WHERE id = :payment_id",
                         ['payment_type' => $paymentType, 'payment_id' => $existingPayment['id']]
                     );
+                    $existingPayment['payment_type'] = $paymentType;
+                }
+
+                if ($existingPayment['status'] === 'completed') {
+                    $this->paymentModel->confirmPayment($existingPayment['id'], $transId);
+
+                    $this->db->execute(
+                        "UPDATE payments SET reconciliation_status = 'manual', reconciled_at = NOW(), reconciled_by = :user_id, reconciliation_notes = :notes WHERE id = :payment_id",
+                        ['user_id' => $userId, 'notes' => $notes, 'payment_id' => $existingPayment['id']]
+                    );
+
+                    if (!empty($callback['id'])) {
+                        $this->markCallbackProcessed($callback['id'], $existingPayment['id']);
+                    }
+
+                    return [
+                        'success' => true,
+                        'message' => 'Payment already verified and completed; member records refreshed',
+                        'payment_id' => $existingPayment['id'],
+                        'already_verified' => true
+                    ];
                 }
 
                 $this->paymentModel->confirmPayment($existingPayment['id'], $transId);

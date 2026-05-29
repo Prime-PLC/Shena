@@ -958,7 +958,9 @@ class Member extends BaseModel
             $params['search_id_number'] = $searchTerm;
         }
         
-        if ($status !== 'all' && !empty($status)) {
+        if ($status === 'pending_approval') {
+            $sql .= " AND m.status IN ('inactive', 'pending')";
+        } elseif ($status !== 'all' && !empty($status)) {
             $sql .= " AND m.status = :status";
             $params['status'] = $status;
         }

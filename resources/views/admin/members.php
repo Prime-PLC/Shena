@@ -12,12 +12,30 @@ $pendingValidationMemberId = (int)($_SESSION['pending_validation_member_id'] ?? 
 $pendingValidationCode = $_SESSION['pending_validation_code'] ?? '';
 unset($_SESSION['pending_validation_error'], $_SESSION['pending_validation_member_id'], $_SESSION['pending_validation_code']);
 $pagination = $pagination ?? ['current_page' => 1, 'total_pages' => 1, 'total_items' => count($members), 'per_page' => 50];
+$activeMemberTab = match ($status ?? 'all') {
+    'pending_approval', 'inactive', 'pending' => 'pending',
+    'active' => 'active',
+    'suspended' => 'suspended',
+    'grace_period' => 'grace',
+    default => 'all',
+};
 $buildMemberPageUrl = function (int $page) use ($search, $status, $package) {
     $query = array_filter([
         'search' => $search ?? '',
         'status' => ($status ?? 'all') !== 'all' ? $status : '',
         'package' => ($package ?? 'all') !== 'all' ? $package : '',
         'page' => $page > 1 ? $page : '',
+    ], function ($value) {
+        return $value !== '' && $value !== null;
+    });
+
+    return '/admin/members' . (!empty($query) ? '?' . http_build_query($query) : '');
+};
+$buildMemberFilterUrl = function (string $targetStatus) use ($search, $package) {
+    $query = array_filter([
+        'search' => $search ?? '',
+        'status' => $targetStatus !== 'all' ? $targetStatus : '',
+        'package' => ($package ?? 'all') !== 'all' ? $package : '',
     ], function ($value) {
         return $value !== '' && $value !== null;
     });
@@ -1199,29 +1217,29 @@ $buildMemberPageUrl = function (int $page) use ($search, $status, $package) {
 <!-- Tabbed Interface -->
 <div class="tabs-container">
     <div class="tabs-nav">
-        <button class="tab-item active" onclick="switchTab('all')">
+        <a class="tab-item <?php echo $activeMemberTab === 'all' ? 'active' : ''; ?>" href="<?php echo htmlspecialchars($buildMemberFilterUrl('all')); ?>">
             <i class="fas fa-users"></i>
             All Members
             <span class="tab-badge"><?= $stats['total_members'] ?? 0 ?></span>
-        </button>
-        <button class="tab-item" onclick="switchTab('pending')">
+        </a>
+        <a class="tab-item <?php echo $activeMemberTab === 'pending' ? 'active' : ''; ?>" href="<?php echo htmlspecialchars($buildMemberFilterUrl('pending_approval')); ?>">
             <i class="fas fa-clock"></i>
             Pending Approval
             <span class="tab-badge"><?= count($pending_approvals ?? []) ?></span>
-        </button>
-        <button class="tab-item" onclick="switchTab('active')">
+        </a>
+        <a class="tab-item <?php echo $activeMemberTab === 'active' ? 'active' : ''; ?>" href="<?php echo htmlspecialchars($buildMemberFilterUrl('active')); ?>">
             <i class="fas fa-user-check"></i>
             Active Members
-        </button>
-        <button class="tab-item" onclick="switchTab('suspended')">
+        </a>
+        <a class="tab-item <?php echo $activeMemberTab === 'suspended' ? 'active' : ''; ?>" href="<?php echo htmlspecialchars($buildMemberFilterUrl('suspended')); ?>">
             <i class="fas fa-user-slash"></i>
             Suspended
-        </button>
-        <button class="tab-item" onclick="switchTab('grace')">
+        </a>
+        <a class="tab-item <?php echo $activeMemberTab === 'grace' ? 'active' : ''; ?>" href="<?php echo htmlspecialchars($buildMemberFilterUrl('grace_period')); ?>">
             <i class="fas fa-hourglass-half"></i>
             Grace Period
             <span class="tab-badge"><?= $stats['grace_period'] ?? 0 ?></span>
-        </button>
+        </a>
         <button class="tab-item" onclick="switchTab('reports')">
             <i class="fas fa-chart-line"></i>
             Reports
@@ -1233,7 +1251,7 @@ $buildMemberPageUrl = function (int $page) use ($search, $status, $package) {
     </div>
 
     <!-- All Members Tab -->
-    <div id="tab-all" class="tab-content active">
+    <div id="tab-all" class="tab-content <?php echo $activeMemberTab === 'all' ? 'active' : ''; ?>">
         <div class="tab-actions">
             <a href="/admin/members/register" class="tab-action-btn primary">
                 <i class="fas fa-user-plus"></i>
@@ -1252,6 +1270,7 @@ $buildMemberPageUrl = function (int $page) use ($search, $status, $package) {
             </div>
             <select class="filter-select" id="filter-status" name="status">
                 <option value="all" <?php echo (($status ?? 'all') === 'all') ? 'selected' : ''; ?>>All Statuses</option>
+                <option value="pending_approval" <?php echo (($status ?? '') === 'pending_approval') ? 'selected' : ''; ?>>Pending Approval</option>
                 <option value="active" <?php echo (($status ?? '') === 'active') ? 'selected' : ''; ?>>Active</option>
                 <option value="inactive" <?php echo (($status ?? '') === 'inactive') ? 'selected' : ''; ?>>Inactive</option>
                 <option value="suspended" <?php echo (($status ?? '') === 'suspended') ? 'selected' : ''; ?>>Suspended</option>
@@ -1278,7 +1297,7 @@ $buildMemberPageUrl = function (int $page) use ($search, $status, $package) {
     </div>
 
     <!-- Pending Approvals Tab -->
-    <div id="tab-pending" class="tab-content">
+    <div id="tab-pending" class="tab-content <?php echo $activeMemberTab === 'pending' ? 'active' : ''; ?>">
         <div class="tab-actions">
             <button class="tab-action-btn primary" onclick="bulkApprove()">
                 <i class="fas fa-check-double"></i>
@@ -1293,7 +1312,7 @@ $buildMemberPageUrl = function (int $page) use ($search, $status, $package) {
     </div>
 
     <!-- Active Members Tab -->
-    <div id="tab-active" class="tab-content">
+    <div id="tab-active" class="tab-content <?php echo $activeMemberTab === 'active' ? 'active' : ''; ?>">
         <div class="tab-actions">
             <a href="/admin/payments" class="tab-action-btn">
                 <i class="fas fa-money-bill-wave"></i>
@@ -1313,7 +1332,7 @@ $buildMemberPageUrl = function (int $page) use ($search, $status, $package) {
     </div>
 
     <!-- Suspended Members Tab -->
-    <div id="tab-suspended" class="tab-content">
+    <div id="tab-suspended" class="tab-content <?php echo $activeMemberTab === 'suspended' ? 'active' : ''; ?>">
         <div class="tab-actions">
             <button class="tab-action-btn primary" onclick="bulkReactivate()">
                 <i class="fas fa-undo"></i>
@@ -1324,7 +1343,7 @@ $buildMemberPageUrl = function (int $page) use ($search, $status, $package) {
     </div>
 
     <!-- Grace Period Tab -->
-    <div id="tab-grace" class="tab-content">
+    <div id="tab-grace" class="tab-content <?php echo $activeMemberTab === 'grace' ? 'active' : ''; ?>">
         <div class="tab-actions">
             <button class="tab-action-btn" onclick="sendReminders()">
                 <i class="fas fa-bell"></i>

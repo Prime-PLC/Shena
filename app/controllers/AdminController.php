@@ -585,40 +585,20 @@ class AdminController extends BaseController
                     return;
                 }
                 
-                // Verify registration fee payment (KES 200) per policy Section 5
+                // Verify registration fee payment per policy Section 5.
                 $paymentModel = new Payment();
-                $registrationFeeRequired = defined('REGISTRATION_FEE') ? REGISTRATION_FEE : 200;
-                
-                // Check if registration fee has been paid
-                $registrationPayments = $paymentModel->findAll([
-                    'member_id' => $memberId,
-                    'payment_type' => 'registration',
-                    'status' => 'completed'
-                ]);
-                
-                $totalRegistrationPaid = 0;
-                foreach ($registrationPayments as $payment) {
-                    $totalRegistrationPaid += $payment['amount'];
-                }
-                
-                if ($totalRegistrationPaid < $registrationFeeRequired) {
-                    $outstanding = $registrationFeeRequired - $totalRegistrationPaid;
-                    $_SESSION['error'] = "Cannot activate member. Registration fee of KES " . number_format($registrationFeeRequired) . " not paid. Outstanding: KES " . number_format($outstanding);
+                if (!$paymentModel->hasPaidRegistrationFee($memberId)) {
+                    $_SESSION['error'] = "Cannot activate member. Registration fee has not been fully paid.";
                     $this->redirect('/admin/members');
                     return;
                 }
-                
-                // Update member status
-                $this->memberModel->update($memberId, [
-                    'status' => 'active',
-                    'coverage_ends' => date('Y-m-d', strtotime('+1 year'))
-                ]);
-                
-                // Update user status
-                if ($member) {
-                    $this->userModel->update($member['user_id'], ['status' => 'active']);
+
+                if (!$paymentModel->activateMemberAfterRegistrationPayment($memberId)) {
+                    $_SESSION['error'] = 'Registration payment was found, but activation could not be completed.';
+                    $this->redirect('/admin/members');
+                    return;
                 }
-                
+
                 $_SESSION['success'] = 'Member activated successfully!';
             } else {
                 $_SESSION['error'] = 'Invalid member ID.';
@@ -686,7 +666,6 @@ class AdminController extends BaseController
             }
             
             $paymentModel = new Payment();
-            $registrationFeeRequired = defined('REGISTRATION_FEE') ? REGISTRATION_FEE : 200;
             $activatedCount = 0;
             $skippedCount = 0;
             $errors = [];
@@ -704,33 +683,18 @@ class AdminController extends BaseController
                         continue;
                     }
                     
-                    // Check if registration fee has been paid
-                    $registrationPayments = $paymentModel->findAll([
-                        'member_id' => $memberId,
-                        'payment_type' => 'registration',
-                        'status' => 'completed'
-                    ]);
-                    
-                    $totalRegistrationPaid = 0;
-                    foreach ($registrationPayments as $payment) {
-                        $totalRegistrationPaid += $payment['amount'];
-                    }
-                    
-                    if ($totalRegistrationPaid < $registrationFeeRequired) {
+                    if (!$paymentModel->hasPaidRegistrationFee($memberId)) {
                         $errors[] = "Member {$member['member_number']}: Registration fee not paid";
                         $skippedCount++;
                         continue;
                     }
-                    
-                    // Activate member
-                    $this->memberModel->update($memberId, [
-                        'status' => 'active',
-                        'coverage_ends' => date('Y-m-d', strtotime('+1 year'))
-                    ]);
-                    
-                    // Update user status
-                    $this->userModel->update($member['user_id'], ['status' => 'active']);
-                    
+
+                    if (!$paymentModel->activateMemberAfterRegistrationPayment($memberId)) {
+                        $errors[] = "Member {$member['member_number']}: Registration payment could not activate member";
+                        $skippedCount++;
+                        continue;
+                    }
+
                     $activatedCount++;
                     
                 } catch (Exception $e) {
