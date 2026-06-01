@@ -604,6 +604,7 @@ class BulkSmsController extends BaseController
     public function quickSms()
     {
         $this->requireRole(['admin', 'super_admin', 'manager']);
+        header('Content-Type: application/json');
 
         try {
             if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -624,16 +625,17 @@ class BulkSmsController extends BaseController
             require_once __DIR__ . '/../services/SmsService.php';
             $smsService = new SmsService();
 
-            // Resolve phone number(s) based on recipient type
-            $phones = [];
+            // Resolve recipients based on recipient type. Keep member details so
+            // supported placeholders can be personalized per recipient.
+            $recipients = [];
 
             if ($recipientType === 'individual') {
                 // Single member by member_id (recipient_id holds member id)
-                $member = $this->memberModel->findById($recipientId);
+                $member = $this->memberModel->getMemberById($recipientId);
                 if (!$member || empty($member['phone'])) {
                     throw new Exception('Member not found or has no phone number.');
                 }
-                $phones[] = $member['phone'];
+                $recipients[] = $this->quickSmsRecipientFromMember($member);
 
             } elseif ($recipientType === 'group') {
                 // Group: active / inactive / pending
@@ -642,13 +644,17 @@ class BulkSmsController extends BaseController
                     'inactive' => 'inactive',
                     'pending'  => 'inactive', // pending members are stored as inactive+pending
                 ];
-                $sql = "SELECT u.phone FROM members m
+                $sql = "SELECT u.phone, u.first_name, u.last_name,
+                               m.member_number, m.package, m.status, m.monthly_contribution
+                        FROM members m
                         JOIN users u ON m.user_id = u.id
                         WHERE m.status = :status AND u.phone IS NOT NULL AND u.phone != ''";
                 $status = $statusMap[$recipientGroup] ?? 'active';
                 // For 'pending' group also include status='pending'
                 if ($recipientGroup === 'pending') {
-                    $sql = "SELECT u.phone FROM members m
+                    $sql = "SELECT u.phone, u.first_name, u.last_name,
+                                   m.member_number, m.package, m.status, m.monthly_contribution
+                            FROM members m
                             JOIN users u ON m.user_id = u.id
                             WHERE m.status IN ('inactive','pending') AND u.phone IS NOT NULL AND u.phone != ''";
                     $rows = $this->db->fetchAll($sql);
@@ -656,22 +662,24 @@ class BulkSmsController extends BaseController
                     $rows = $this->db->fetchAll($sql, ['status' => $status]);
                 }
                 foreach ($rows as $row) {
-                    $phones[] = $row['phone'];
+                    $recipients[] = $this->quickSmsRecipientFromMember($row);
                 }
 
             } elseif ($recipientType === 'all') {
-                $sql = "SELECT u.phone FROM members m
+                $sql = "SELECT u.phone, u.first_name, u.last_name,
+                               m.member_number, m.package, m.status, m.monthly_contribution
+                        FROM members m
                         JOIN users u ON m.user_id = u.id
                         WHERE u.phone IS NOT NULL AND u.phone != ''";
                 $rows = $this->db->fetchAll($sql);
                 foreach ($rows as $row) {
-                    $phones[] = $row['phone'];
+                    $recipients[] = $this->quickSmsRecipientFromMember($row);
                 }
             } else {
                 throw new Exception('Please select a recipient type.');
             }
 
-            if (empty($phones)) {
+            if (empty($recipients)) {
                 throw new Exception('No recipients found for the selected group.');
             }
 
@@ -679,13 +687,20 @@ class BulkSmsController extends BaseController
             $sent = 0;
             $failed = 0;
             $lastError = '';
-            foreach ($phones as $rawPhone) {
-                $formatted = $smsService->formatPhoneNumber($rawPhone);
+            foreach ($recipients as $recipient) {
+                $formatted = $smsService->formatPhoneNumber($recipient['phone']);
                 if (!$smsService->validatePhoneNumber($formatted)) {
                     $failed++;
                     continue;
                 }
-                $result = $smsService->sendSms($formatted, $message);
+                $personalizedMessage = $this->personalizeQuickSmsMessage($message, $recipient);
+                if (strlen($personalizedMessage) > 160) {
+                    $failed++;
+                    $lastError = 'Personalized SMS is longer than 160 characters for one or more recipients.';
+                    continue;
+                }
+
+                $result = $smsService->sendSms($formatted, $personalizedMessage);
                 if ($result['success']) {
                     $sent++;
                 } else {
@@ -698,18 +713,49 @@ class BulkSmsController extends BaseController
                 throw new Exception($lastError ?: 'Failed to send SMS to any recipient.');
             }
 
-            header('Content-Type: application/json');
             $msg = "SMS sent to {$sent} recipient(s)";
             if ($failed > 0) $msg .= " ({$failed} skipped)";
             echo json_encode(['success' => true, 'message' => $msg]);
             exit();
 
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             error_log('Quick SMS error: ' . $e->getMessage());
-            header('Content-Type: application/json');
+            http_response_code(500);
             echo json_encode(['success' => false, 'message' => $e->getMessage()]);
             exit();
         }
+    }
+
+    private function quickSmsRecipientFromMember(array $member): array
+    {
+        $firstName = trim((string)($member['first_name'] ?? ''));
+        $lastName = trim((string)($member['last_name'] ?? ''));
+
+        return [
+            'phone' => $member['phone'] ?? '',
+            'first_name' => $firstName,
+            'last_name' => $lastName,
+            'member_name' => trim($firstName . ' ' . $lastName),
+            'member_number' => $member['member_number'] ?? '',
+            'package' => $member['package'] ?? '',
+            'status' => $member['status'] ?? '',
+            'amount_due' => $member['monthly_contribution'] ?? '',
+        ];
+    }
+
+    private function personalizeQuickSmsMessage(string $message, array $recipient): string
+    {
+        $replacements = [
+            '{member_name}' => $recipient['member_name'] ?? '',
+            '{first_name}' => $recipient['first_name'] ?? '',
+            '{last_name}' => $recipient['last_name'] ?? '',
+            '{member_number}' => $recipient['member_number'] ?? '',
+            '{package}' => $recipient['package'] ?? '',
+            '{status}' => $recipient['status'] ?? '',
+            '{amount_due}' => $recipient['amount_due'] ?? '',
+        ];
+
+        return strtr($message, $replacements);
     }
     
     /**
@@ -798,14 +844,106 @@ class BulkSmsController extends BaseController
         $this->requireRole(['admin', 'super_admin', 'manager']);
         header('Content-Type: application/json');
         
-        $input = json_decode(file_get_contents('php://input'), true);
-        $campaignId = $input['campaign_id'] ?? 0;
-        
-        // TODO: Implement edit functionality
-        $this->json([
-            'success' => false,
-            'message' => 'Edit feature coming soon. Please create a new campaign instead.'
-        ]);
+        try {
+            $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+            $input = stripos($contentType, 'application/json') !== false
+                ? (json_decode(file_get_contents('php://input'), true) ?: [])
+                : $_POST;
+
+            $campaignId = (int)($input['campaign_id'] ?? 0);
+            $title = trim((string)($input['title'] ?? ''));
+            $message = trim((string)($input['message'] ?? ''));
+            $targetAudience = $this->normalizeTargetAudience($input['target_audience'] ?? 'all_members');
+            $scheduledAt = !empty($input['scheduled_at']) ? $input['scheduled_at'] : null;
+
+            if ($campaignId <= 0 || $title === '' || $message === '') {
+                throw new Exception('Campaign ID, title, and message are required');
+            }
+
+            $customFilters = $this->extractCustomFilters($input);
+
+            $setClauses = [
+                'title = ?',
+                'message = ?',
+                'target_audience = ?',
+                'custom_filters = ?',
+                'scheduled_at = ?',
+                "status = CASE WHEN ? IS NULL THEN 'draft' ELSE 'scheduled' END",
+            ];
+
+            if ($this->bulkMessagesHasColumn('updated_at')) {
+                $setClauses[] = 'updated_at = NOW()';
+            }
+
+            $sql = "UPDATE bulk_messages
+                    SET " . implode(', ', $setClauses) . "
+                    WHERE id = ? AND message_type = 'sms' AND status IN ('draft', 'scheduled', 'paused')";
+            $stmt = $this->db->getConnection()->prepare($sql);
+            $stmt->execute([
+                $title,
+                $message,
+                $targetAudience,
+                !empty($customFilters) ? json_encode($customFilters) : null,
+                $scheduledAt,
+                $scheduledAt,
+                $campaignId
+            ]);
+
+            if ($stmt->rowCount() < 1) {
+                $check = $this->db->getConnection()->prepare("SELECT COUNT(*) FROM bulk_messages WHERE id = ? AND message_type = 'sms' AND status IN ('draft', 'scheduled', 'paused')");
+                $check->execute([$campaignId]);
+                if ((int)$check->fetchColumn() > 0) {
+                    $this->json(['success' => true, 'message' => 'SMS campaign updated successfully']);
+                    return;
+                }
+                throw new Exception('Campaign not found or cannot be edited after sending has started');
+            }
+
+            $this->json(['success' => true, 'message' => 'SMS campaign updated successfully']);
+        } catch (Throwable $e) {
+            error_log('SMS edit campaign error: ' . $e->getMessage());
+            $this->json(['success' => false, 'message' => $e->getMessage()], 400);
+        }
+    }
+
+    private function extractCustomFilters(array $input): array
+    {
+        $filters = [];
+
+        if (!empty($input['custom_filters']) && is_array($input['custom_filters'])) {
+            $filters = $input['custom_filters'];
+        }
+
+        if (($input['target_audience'] ?? '') === 'inactive') {
+            $filters['member_status'] = 'inactive';
+        } elseif (($input['target_audience'] ?? '') === 'pending') {
+            $filters['member_status'] = 'pending';
+        }
+
+        foreach (['filter_status' => 'member_status', 'filter_package' => 'package', 'filter_joined_after' => 'joined_after', 'filter_joined_before' => 'joined_before'] as $inputKey => $filterKey) {
+            if (isset($input[$inputKey])) {
+                $value = trim((string)$input[$inputKey]);
+                if ($value !== '') {
+                    $filters[$filterKey] = $value;
+                } else {
+                    unset($filters[$filterKey]);
+                }
+            }
+        }
+
+        return array_filter($filters, static fn($value) => $value !== null && $value !== '');
+    }
+
+    private function bulkMessagesHasColumn(string $column): bool
+    {
+        try {
+            $stmt = $this->db->getConnection()->prepare('SHOW COLUMNS FROM bulk_messages LIKE ?');
+            $stmt->execute([$column]);
+            return (bool)$stmt->fetch();
+        } catch (Throwable $e) {
+            error_log('bulk_messages column check failed: ' . $e->getMessage());
+            return false;
+        }
     }
     
     /**

@@ -1240,6 +1240,10 @@ $buildMemberFilterUrl = function (string $targetStatus) use ($search, $package) 
             Grace Period
             <span class="tab-badge"><?= $stats['grace_period'] ?? 0 ?></span>
         </a>
+        <a class="tab-item" href="/admin/members/archived">
+            <i class="fas fa-archive"></i>
+            Archived
+        </a>
         <button class="tab-item" onclick="switchTab('reports')">
             <i class="fas fa-chart-line"></i>
             Reports
@@ -1448,6 +1452,7 @@ $buildMemberFilterUrl = function (string $targetStatus) use ($search, $package) 
                                 'next_of_kin' => $member['next_of_kin'] ?? '',
                                 'next_of_kin_relationship' => $member['next_of_kin_relationship'] ?? '',
                                 'next_of_kin_phone' => $member['next_of_kin_phone'] ?? '',
+                                'monthly_contribution' => 'KES ' . number_format((float)($member['monthly_contribution'] ?? 0), 2),
                                 'last_payment_amount' => 'KES ' . number_format($member['last_payment_amount'] ?? 0, 2),
                                 'last_payment_date' => $lastPaymentDate,
                                 'agent_number' => $member['agent_number'] ?? 'N/A',
@@ -1654,6 +1659,10 @@ $buildMemberFilterUrl = function (string $targetStatus) use ($search, $package) 
                             </select>
                         </div>
                         <div class="form-group" style="grid-column:1 / -1;">
+                            <label class="form-label">Monthly payable amount</label>
+                            <div class="form-input" id="memberManageMonthlyContribution" style="background:#f9fafb;font-weight:700;"></div>
+                        </div>
+                        <div class="form-group" style="grid-column:1 / -1;">
                             <label class="form-label" for="memberManageAddress">Address</label>
                             <textarea class="form-input" id="memberManageAddress" name="address" rows="2"></textarea>
                         </div>
@@ -1672,6 +1681,9 @@ $buildMemberFilterUrl = function (string $targetStatus) use ($search, $package) 
                     </div>
                 </div>
                 <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-danger me-auto" id="memberManageDeleteButton" onclick="openMemberDeleteConfirm()">
+                        <i class="fas fa-trash-alt"></i> Delete / Archive
+                    </button>
                     <a href="#" class="btn btn-outline-secondary" id="memberManagePaymentsLink">
                         <i class="fas fa-credit-card"></i> Payments
                     </a>
@@ -1716,6 +1728,10 @@ $buildMemberFilterUrl = function (string $targetStatus) use ($search, $package) 
                             <div class="entity-field-value" id="memberModalPackage">N/A</div>
                         </div>
                         <div>
+                            <div class="entity-field-label">Monthly payable amount</div>
+                            <div class="entity-field-value" id="memberModalMonthlyContribution">N/A</div>
+                        </div>
+                        <div>
                             <div class="entity-field-label">Phone</div>
                             <div class="entity-field-value" id="memberModalPhone">N/A</div>
                         </div>
@@ -1745,6 +1761,42 @@ $buildMemberFilterUrl = function (string $targetStatus) use ($search, $package) 
     </div>
 </div>
 
+<div class="modal fade entity-modal" id="memberDeleteConfirmModal" tabindex="-1" aria-labelledby="memberDeleteConfirmLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="POST" id="memberDeleteArchiveForm">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title" id="memberDeleteConfirmLabel">Delete or Archive Member</h5>
+                        <div id="memberDeleteSubtitle" style="font-size:13px;opacity:.85;margin-top:2px;"></div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p style="color:#4b5563;margin-bottom:16px;">
+                        Members with no payments or claims will be permanently deleted. Members with payments or claims will be archived for audit history.
+                    </p>
+                    <div class="form-group">
+                        <label class="form-label" for="memberDeleteConfirmNumber">Type the member number to confirm</label>
+                        <input class="form-input" id="memberDeleteConfirmNumber" name="confirm_member_number" required autocomplete="off">
+                    </div>
+                    <div class="form-group" style="margin-top:12px;">
+                        <label class="form-label" for="memberArchiveReason">Reason</label>
+                        <textarea class="form-input" id="memberArchiveReason" name="archive_reason" rows="3" placeholder="Brief reason for deletion/archive"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash-alt"></i> Confirm
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
 function setText(id, value) {
     const el = document.getElementById(id);
@@ -1759,6 +1811,7 @@ function openMemberModal(button) {
     setText('memberModalStatus', (member.status || 'N/A').replace(/_/g, ' ').toUpperCase());
     setText('memberModalNationalId', member.national_id);
     setText('memberModalPackage', member.package);
+    setText('memberModalMonthlyContribution', member.monthly_contribution);
     setText('memberModalPhone', member.phone);
     setText('memberModalEmail', member.email);
     setText('memberModalAgent', member.agent_number);
@@ -1768,6 +1821,8 @@ function openMemberModal(button) {
     new bootstrap.Modal(document.getElementById('memberDetailModal')).show();
 }
 
+let selectedManagedMember = null;
+
 function setFormValue(id, value) {
     const field = document.getElementById(id);
     if (field) field.value = value || '';
@@ -1775,6 +1830,7 @@ function setFormValue(id, value) {
 
 function openMemberManageModal(button) {
     const member = JSON.parse(button.getAttribute('data-member') || '{}');
+    selectedManagedMember = member;
     setText('memberQuickSubtitle', (member.name || 'N/A') + ' | ' + (member.member_number || 'N/A'));
     const form = document.getElementById('memberManageForm');
     form.action = '/admin/members/update/' + encodeURIComponent(member.id || '');
@@ -1792,8 +1848,19 @@ function openMemberManageModal(button) {
     setFormValue('memberManageNokName', member.next_of_kin);
     setFormValue('memberManageNokPhone', member.next_of_kin_phone);
     setFormValue('memberManageNokRelationship', member.next_of_kin_relationship);
+    setText('memberManageMonthlyContribution', member.monthly_contribution);
     document.getElementById('memberManagePaymentsLink').href = member.payments_url || '#';
     new bootstrap.Modal(document.getElementById('memberQuickPanel')).show();
+}
+
+function openMemberDeleteConfirm() {
+    if (!selectedManagedMember || !selectedManagedMember.id) return;
+    const form = document.getElementById('memberDeleteArchiveForm');
+    form.action = '/admin/members/delete/' + encodeURIComponent(selectedManagedMember.id);
+    setText('memberDeleteSubtitle', (selectedManagedMember.name || 'N/A') + ' | ' + (selectedManagedMember.member_number || 'N/A'));
+    setFormValue('memberDeleteConfirmNumber', '');
+    setFormValue('memberArchiveReason', '');
+    new bootstrap.Modal(document.getElementById('memberDeleteConfirmModal')).show();
 }
 
 function confirmMemberStatus(event, message, type) {

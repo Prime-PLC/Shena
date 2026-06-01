@@ -664,6 +664,9 @@ $actionNeededCount = count(array_filter($all_claims, fn($c) =>
 <div class="page-header">
     <h1 class="page-title">Claims & Logistics Hub</h1>
     <p class="page-subtitle">Verification and funeral coordination management</p>
+    <button type="button" class="btn btn-primary" style="margin-top:12px;" onclick="openAdminClaimModal()">
+        <i class="fas fa-plus"></i> File Claim for Member
+    </button>
 </div>
 
 <!-- Cash Alternative Requests Alert -->
@@ -870,7 +873,204 @@ $actionNeededCount = count(array_filter($all_claims, fn($c) =>
     <div id="tab-rejected" class="tab-content" style="display:none;"></div>
 </div>
 
+<div class="modal fade" id="adminClaimModal" tabindex="-1" aria-labelledby="adminClaimModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <form method="POST" action="/admin/claims/submit" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="adminClaimModalLabel">File Claim for Member</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="adminClaimMemberSearch">Search Member</label>
+                            <input class="form-control" id="adminClaimMemberSearch" type="search" placeholder="Name, National ID, member number or phone">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="adminClaimMemberId">Select Member</label>
+                            <select class="form-select" id="adminClaimMemberId" name="member_id" required>
+                                <option value="">Type to search active members...</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="adminClaimBeneficiaryId">Beneficiary</label>
+                            <select class="form-select" id="adminClaimBeneficiaryId" name="beneficiary_id" required disabled>
+                                <option value="">Select a member first...</option>
+                            </select>
+                            <small class="text-muted">Same requirement used in the member portal.</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="adminClaimDateOfDeath">Date of Death</label>
+                            <input class="form-control" id="adminClaimDateOfDeath" name="date_of_death" type="date" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="adminClaimDeceasedName">Deceased Name</label>
+                            <input class="form-control" id="adminClaimDeceasedName" name="deceased_name" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="adminClaimDeceasedId">Deceased ID Number</label>
+                            <input class="form-control" id="adminClaimDeceasedId" name="deceased_id_number" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="adminClaimPlaceOfDeath">Place of Death</label>
+                            <input class="form-control" id="adminClaimPlaceOfDeath" name="place_of_death" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="adminClaimCauseOfDeath">Cause of Death</label>
+                            <textarea class="form-control" id="adminClaimCauseOfDeath" name="cause_of_death" rows="2" required></textarea>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="adminClaimMortuaryName">Mortuary Name</label>
+                            <input class="form-control" id="adminClaimMortuaryName" name="mortuary_name" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="adminClaimMortuaryDays">Days in Mortuary</label>
+                            <input class="form-control" id="adminClaimMortuaryDays" name="mortuary_days_count" type="number" min="0" max="14" required>
+                            <small class="text-muted">Maximum 14 days covered per policy.</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="adminClaimMortuaryAmount">Mortuary Bill Amount (KES)</label>
+                            <input class="form-control" id="adminClaimMortuaryAmount" name="mortuary_bill_amount" type="number" min="0" step="0.01" required>
+                        </div>
+                        <div class="col-12">
+                            <div class="alert alert-warning">
+                                <h6 class="mb-2"><i class="fas fa-exchange-alt"></i> Cash Alternative Option</h6>
+                                <p class="mb-2 small">Per Policy Section 12, cash alternative is exceptional and requires agreement.</p>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" name="request_cash_alternative" id="adminRequestCashAlternative" value="1">
+                                    <label class="form-check-label" for="adminRequestCashAlternative">
+                                        <strong>Request cash alternative (KSH 20,000)</strong>
+                                    </label>
+                                </div>
+                                <div id="adminClaimCashAlternativeReasonField" style="display:none;">
+                                    <label class="form-label" for="adminClaimCashAlternativeReason">Reason for Cash Alternative Request</label>
+                                    <textarea class="form-control" id="adminClaimCashAlternativeReason" name="cash_alternative_reason" rows="3" placeholder="Provide a detailed reason, minimum 50 characters"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <h6><i class="fas fa-paperclip"></i> Required Documents</h6>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Copy of ID / Birth Certificate</label>
+                            <input type="file" name="id_copy" class="form-control" accept=".pdf,.jpg,.jpeg,.png" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Chief's Letter</label>
+                            <input type="file" name="chief_letter" class="form-control" accept=".pdf,.jpg,.jpeg,.png" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Mortuary Invoice</label>
+                            <input type="file" name="mortuary_invoice" class="form-control" accept=".pdf,.jpg,.jpeg,.png" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Death Certificate <span class="badge bg-secondary">Optional</span></label>
+                            <input type="file" name="death_certificate" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label" for="adminClaimNotes">Notes</label>
+                            <textarea class="form-control" id="adminClaimNotes" name="notes" rows="3"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Submit Claim</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
+function openAdminClaimModal() {
+    new bootstrap.Modal(document.getElementById('adminClaimModal')).show();
+}
+
+let adminClaimSearchTimer = null;
+document.getElementById('adminClaimMemberSearch')?.addEventListener('input', function() {
+    clearTimeout(adminClaimSearchTimer);
+    const value = this.value.trim();
+    const select = document.getElementById('adminClaimMemberId');
+
+    if (value.length < 2) {
+        select.innerHTML = '<option value="">Type at least 2 characters...</option>';
+        return;
+    }
+
+    adminClaimSearchTimer = setTimeout(() => {
+        select.innerHTML = '<option value="">Searching...</option>';
+        fetch('/admin/api/members?search=' + encodeURIComponent(value))
+            .then(response => response.json())
+            .then(members => {
+                select.innerHTML = '<option value="">Select member...</option>';
+                if (!Array.isArray(members) || members.length === 0) {
+                    select.innerHTML = '<option value="">No active member found</option>';
+                    return;
+                }
+                members.forEach(member => {
+                    const label = `${member.member_name || 'Member'} (${member.member_number || 'N/A'} | ID ${member.id_number || 'N/A'} | ${member.phone || 'N/A'})`;
+                    select.innerHTML += `<option value="${member.id}">${label}</option>`;
+                });
+                document.getElementById('adminClaimBeneficiaryId').innerHTML = '<option value="">Select a member first...</option>';
+                document.getElementById('adminClaimBeneficiaryId').disabled = true;
+            })
+            .catch(() => {
+                select.innerHTML = '<option value="">Search failed</option>';
+            });
+    }, 250);
+});
+
+document.getElementById('adminClaimMemberId')?.addEventListener('change', function() {
+    const memberId = this.value;
+    const beneficiarySelect = document.getElementById('adminClaimBeneficiaryId');
+
+    if (!memberId) {
+        beneficiarySelect.innerHTML = '<option value="">Select a member first...</option>';
+        beneficiarySelect.disabled = true;
+        return;
+    }
+
+    beneficiarySelect.innerHTML = '<option value="">Loading beneficiaries...</option>';
+    beneficiarySelect.disabled = true;
+
+    fetch('/admin/api/members/' + encodeURIComponent(memberId) + '/beneficiaries')
+        .then(response => response.json())
+        .then(beneficiaries => {
+            beneficiarySelect.innerHTML = '<option value="">Select beneficiary...</option>';
+            if (!Array.isArray(beneficiaries) || beneficiaries.length === 0) {
+                beneficiarySelect.innerHTML = '<option value="">No active beneficiaries found</option>';
+                return;
+            }
+
+            beneficiaries.forEach(beneficiary => {
+                const label = `${beneficiary.full_name || 'Beneficiary'} (${beneficiary.relationship || 'Relationship not set'})`;
+                beneficiarySelect.innerHTML += `<option value="${beneficiary.id}">${label}</option>`;
+            });
+            beneficiarySelect.disabled = false;
+        })
+        .catch(() => {
+            beneficiarySelect.innerHTML = '<option value="">Failed to load beneficiaries</option>';
+        });
+});
+
+document.getElementById('adminRequestCashAlternative')?.addEventListener('change', function() {
+    const reasonField = document.getElementById('adminClaimCashAlternativeReasonField');
+    const reasonInput = document.getElementById('adminClaimCashAlternativeReason');
+    if (this.checked) {
+        reasonField.style.display = 'block';
+        reasonInput.setAttribute('required', 'required');
+        reasonInput.setAttribute('minlength', '50');
+    } else {
+        reasonField.style.display = 'none';
+        reasonInput.removeAttribute('required');
+        reasonInput.removeAttribute('minlength');
+        reasonInput.value = '';
+    }
+});
+
 function switchClaimTab(tabName, evt) {
     // Hide all tabs
     document.querySelectorAll('.tab-content').forEach(content => {

@@ -535,6 +535,16 @@ if (empty($_SESSION['csrf_token'])) {
                 </thead>
                 <tbody>
                     <?php foreach ($campaigns as $campaign): ?>
+                    <?php
+                    $smsCampaignFilters = !empty($campaign['custom_filters']) ? json_decode($campaign['custom_filters'], true) : [];
+                    $campaignEditJson = htmlspecialchars(json_encode([
+                        'id' => (int)$campaign['id'],
+                        'title' => $campaign['title'] ?? '',
+                        'message' => $campaign['message'] ?? '',
+                        'target_audience' => $campaign['target_audience'] ?? 'all_members',
+                        'custom_filters' => is_array($smsCampaignFilters) ? $smsCampaignFilters : [],
+                        'scheduled_at' => !empty($campaign['scheduled_at']) ? date('Y-m-d\TH:i', strtotime($campaign['scheduled_at'])) : '',
+                    ], JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_HEX_TAG), ENT_QUOTES, 'UTF-8'); ?>
                     <tr>
                         <td>
                             <div>
@@ -572,6 +582,9 @@ if (empty($_SESSION['csrf_token'])) {
                                 <i class="fas fa-eye"></i>
                             </button>
                             <?php if ($campaign['status'] === 'draft' || $campaign['status'] === 'scheduled'): ?>
+                                <button class="action-btn" data-campaign="<?php echo $campaignEditJson; ?>" onclick="editSmsCampaign(this)" title="Edit">
+                                    <i class="fas fa-edit"></i>
+                                </button>
                                 <button class="action-btn success" onclick="sendCampaign(<?php echo $campaign['id']; ?>)" title="Send Now">
                                     <i class="fas fa-paper-plane"></i>
                                 </button>
@@ -706,6 +719,85 @@ if (empty($_SESSION['csrf_token'])) {
     </div>
 </div>
 
+<div class="modern-modal" id="editCampaignModal">
+    <div class="modal-content-modern">
+        <div class="modal-header-modern">
+            <h3><i class="fas fa-edit"></i> Edit SMS Campaign</h3>
+            <button class="modal-close" onclick="closeModal('editCampaignModal')">&times;</button>
+        </div>
+        <div class="modal-body-modern">
+            <form id="editCampaignForm">
+                <input type="hidden" id="edit-campaign-id" name="campaign_id">
+                <div class="form-group">
+                    <label for="edit-campaign-title">Campaign Title</label>
+                    <input type="text" class="form-control" id="edit-campaign-title" name="title" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit-target-audience">Target Audience</label>
+                    <select class="form-control" id="edit-target-audience" name="target_audience" required>
+                        <option value="all_members">All Members</option>
+                        <option value="active">Active Members Only</option>
+                        <option value="inactive">Inactive Members</option>
+                        <option value="grace_period">Grace Period Members</option>
+                        <option value="defaulted">Payment Defaulters</option>
+                        <option value="custom">Custom Selection</option>
+                    </select>
+                </div>
+                <div id="edit-custom-filters-panel" style="display:none; background:#F9FAFB; border:1px solid #E5E7EB; border-radius:10px; padding:16px 18px; margin-bottom:16px;">
+                    <p style="font-size:0.82rem; font-weight:600; color:#7F3D9E; margin:0 0 12px;">Custom Filters <span style="font-weight:400; color:#6B7280;">(leave blank to skip a filter)</span></p>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label style="font-size:0.82rem;">Membership Status</label>
+                            <select class="form-control form-control-sm" id="edit-filter-status" name="filter_status">
+                                <option value="">Any status</option>
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                                <option value="grace_period">Grace Period</option>
+                                <option value="suspended">Suspended</option>
+                                <option value="defaulted">Defaulted</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label style="font-size:0.82rem;">Package Type</label>
+                            <select class="form-control form-control-sm" id="edit-filter-package" name="filter_package">
+                                <option value="">Any package</option>
+                                <option value="individual">Individual</option>
+                                <option value="family">Family / Couple</option>
+                                <option value="extended_family_1">Extended Family 1</option>
+                                <option value="extended_family_2">Extended Family 2</option>
+                                <option value="executive">Executive</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label style="font-size:0.82rem;">Joined After</label>
+                            <input type="date" class="form-control form-control-sm" id="edit-filter-joined-after" name="filter_joined_after">
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label style="font-size:0.82rem;">Joined Before</label>
+                            <input type="date" class="form-control form-control-sm" id="edit-filter-joined-before" name="filter_joined_before">
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="edit-campaign-message">Message</label>
+                    <textarea class="form-control" id="edit-campaign-message" name="message" rows="5" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="edit-campaign-scheduled-at">Scheduled Date & Time</label>
+                    <input type="datetime-local" class="form-control" id="edit-campaign-scheduled-at" name="scheduled_at">
+                    <small style="color:#6b7280;">Leave blank to keep the campaign as a draft.</small>
+                </div>
+                <div style="display:flex;gap:1rem;justify-content:flex-end;margin-top:2rem;">
+                    <button type="button" class="modern-btn secondary" onclick="closeModal('editCampaignModal')">Cancel</button>
+                    <button type="submit" class="modern-btn primary">
+                        <i class="fas fa-save"></i> Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- Quick SMS Modal -->
 <div class="modern-modal" id="quickSMSModal">
     <div class="modal-content-modern">
@@ -738,9 +830,11 @@ if (empty($_SESSION['csrf_token'])) {
                 </div>
 
                 <div class="form-group" id="quick-individual-field" style="display: none;">
+                    <label for="quick-member-search">Search Member</label>
+                    <input class="form-control" id="quick-member-search" type="search" placeholder="Search by name, ID, member number or phone">
                     <label for="quick-recipient-id">Select Member</label>
                     <select class="form-control" id="quick-recipient-id" name="recipient_id">
-                        <!-- Populated via JavaScript -->
+                        <option value="">Type above to search members...</option>
                     </select>
                 </div>
 
@@ -800,10 +894,91 @@ document.getElementById('quick-message')?.addEventListener('input', function() {
     document.getElementById('quick-char-counter').textContent = this.value.length;
 });
 
+async function parseJsonResponse(response) {
+    const text = await response.text();
+    let data = {};
+
+    try {
+        data = text ? JSON.parse(text) : {};
+    } catch (error) {
+        data = {
+            success: false,
+            message: 'Server returned an unexpected response. Please retry or check logs.'
+        };
+    }
+
+    if (!response.ok && data.success !== false) {
+        data.success = false;
+        data.message = data.message || 'Request failed with HTTP ' + response.status;
+    }
+
+    return data;
+}
+
 // Schedule type handler
 document.getElementById('schedule-type')?.addEventListener('change', function() {
     const datetimeField = document.getElementById('schedule-datetime-field');
     datetimeField.style.display = this.value === 'scheduled' ? 'block' : 'none';
+});
+
+document.getElementById('target-audience')?.addEventListener('change', function () {
+    const panel = document.getElementById('custom-filters-panel');
+    if (panel) {
+        panel.style.display = this.value === 'custom' ? '' : 'none';
+    }
+});
+
+document.getElementById('edit-target-audience')?.addEventListener('change', function () {
+    const panel = document.getElementById('edit-custom-filters-panel');
+    if (panel) {
+        panel.style.display = this.value === 'custom' ? '' : 'none';
+    }
+});
+
+function setEditFilterValues(filters = {}) {
+    const status = filters.member_status || filters.status || '';
+    document.getElementById('edit-filter-status').value = status;
+    document.getElementById('edit-filter-package').value = filters.package || '';
+    document.getElementById('edit-filter-joined-after').value = filters.joined_after || '';
+    document.getElementById('edit-filter-joined-before').value = filters.joined_before || '';
+}
+
+function loadQuickSmsMembers(searchTerm = '') {
+    const recipientDropdown = document.getElementById('quick-recipient-id');
+    if (!recipientDropdown) return;
+
+    if (searchTerm.trim().length < 2) {
+        recipientDropdown.innerHTML = '<option value="">Type at least 2 characters to search...</option>';
+        return;
+    }
+
+    recipientDropdown.innerHTML = '<option value="">Searching...</option>';
+    fetch('/admin/api/members?search=' + encodeURIComponent(searchTerm.trim()))
+        .then(response => response.json())
+        .then(data => {
+            recipientDropdown.innerHTML = '<option value="">Select member...</option>';
+            if (!Array.isArray(data) || data.length === 0) {
+                recipientDropdown.innerHTML = '<option value="">No active member found</option>';
+                return;
+            }
+
+            data.forEach(member => {
+                const memberName = member.member_name || `${member.first_name || ''} ${member.last_name || ''}`.trim() || 'Member';
+                const idNumber = member.id_number ? ` | ID ${member.id_number}` : '';
+                const phone = member.phone ? ` | ${member.phone}` : '';
+                recipientDropdown.innerHTML += `<option value="${member.id}">${memberName} (${member.member_number}${idNumber}${phone})</option>`;
+            });
+        })
+        .catch(() => {
+            recipientDropdown.innerHTML = '<option value="">Failed to load members</option>';
+        });
+}
+
+let quickSmsSearchTimer = null;
+document.getElementById('quick-member-search')?.addEventListener('input', function() {
+    clearTimeout(quickSmsSearchTimer);
+    const value = this.value;
+    quickSmsSearchTimer = setTimeout(() => loadQuickSmsMembers(value), 250);
 });
 
 // Quick SMS recipient type handler
@@ -815,22 +990,8 @@ document.getElementById('quick-recipient-type')?.addEventListener('change', func
     individualField.style.display = this.value === 'individual' ? 'block' : 'none';
 
     if (this.value === 'individual') {
-        // Fetch members for dropdown
-        recipientDropdown.innerHTML = '<option value="">Loading...</option>';
-        fetch('/admin/api/members')
-            .then(response => response.json())
-            .then(data => {
-                recipientDropdown.innerHTML = '<option value="">Select member...</option>';
-                if (Array.isArray(data)) {
-                    data.forEach(member => {
-                        const memberName = member.member_name || `${member.first_name || ''} ${member.last_name || ''}`.trim() || 'Member';
-                        recipientDropdown.innerHTML += `<option value="${member.id}">${memberName} (${member.member_number})</option>`;
-                    });
-                }
-            })
-            .catch(() => {
-                recipientDropdown.innerHTML = '<option value="">Failed to load members</option>';
-            });
+        document.getElementById('quick-member-search').value = '';
+        recipientDropdown.innerHTML = '<option value="">Type above to search members...</option>';
     } else {
         recipientDropdown.innerHTML = '';
     }
@@ -840,6 +1001,48 @@ document.getElementById('quick-recipient-type')?.addEventListener('change', func
 function viewCampaign(id) {
     window.location.href = '/admin/communications/campaign/' + id;
 }
+
+function editSmsCampaign(button) {
+    const campaign = JSON.parse(button.getAttribute('data-campaign') || '{}');
+    document.getElementById('edit-campaign-id').value = campaign.id || '';
+    document.getElementById('edit-campaign-title').value = campaign.title || '';
+    document.getElementById('edit-campaign-message').value = campaign.message || '';
+    document.getElementById('edit-target-audience').value = campaign.target_audience || 'all_members';
+    setEditFilterValues(campaign.custom_filters || {});
+    document.getElementById('edit-target-audience').dispatchEvent(new Event('change'));
+    document.getElementById('edit-campaign-scheduled-at').value = campaign.scheduled_at || '';
+    openModal('editCampaignModal');
+}
+
+document.getElementById('editCampaignForm')?.addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    fetch('/admin/communications/edit-campaign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            campaign_id: formData.get('campaign_id'),
+            title: formData.get('title'),
+            message: formData.get('message'),
+            target_audience: formData.get('target_audience') || 'all_members',
+            filter_status: formData.get('filter_status') || '',
+            filter_package: formData.get('filter_package') || '',
+            filter_joined_after: formData.get('filter_joined_after') || '',
+            filter_joined_before: formData.get('filter_joined_before') || '',
+            scheduled_at: formData.get('scheduled_at') || null
+        })
+    })
+    .then(parseJsonResponse)
+    .then(data => {
+        if (data.success) {
+            ShenaApp.showNotification(data.message || 'Campaign updated', 'success');
+            location.reload();
+        } else {
+            ShenaApp.showNotification(data.message || 'Failed to update campaign', 'error');
+        }
+    })
+    .catch(() => ShenaApp.showNotification('Network error occurred', 'error'));
+});
 
 function sendCampaign(id) {
     const proceed = () => {
@@ -997,11 +1200,6 @@ function resumeCampaign(id) {
     }
 }
 
-// Show/hide custom filters panel
-document.getElementById('target-audience')?.addEventListener('change', function () {
-    document.getElementById('custom-filters-panel').style.display = this.value === 'custom' ? '' : 'none';
-});
-
 // Form submissions
 document.getElementById('createCampaignForm')?.addEventListener('submit', function(e) {
     e.preventDefault();
@@ -1037,7 +1235,7 @@ document.getElementById('quickSMSForm')?.addEventListener('submit', function(e) 
         method: 'POST',
         body: formData
     })
-    .then(response => response.json())
+    .then(response => parseJsonResponse(response))
     .then(data => {
         if (data.success) {
             ShenaApp.showNotification('SMS sent successfully!', 'success');

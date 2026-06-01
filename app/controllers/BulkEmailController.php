@@ -46,7 +46,8 @@ class BulkEmailController extends BaseController
             'title' => 'Email Campaigns - Admin',
             'campaigns' => $campaigns,
             'templates' => $templates,
-            'stats' => $stats
+            'stats' => $stats,
+            'csrf_token' => $this->generateCsrfToken()
         ];
         
         $this->view('admin.email-campaigns', $data);
@@ -187,6 +188,76 @@ class BulkEmailController extends BaseController
             ]);
         } catch (Throwable $e) {
             error_log('Email campaign creation error: ' . $e->getMessage());
+            $this->jsonError($e->getMessage(), 400);
+        }
+    }
+
+    public function editCampaign()
+    {
+        $this->requireRole(['admin', 'super_admin', 'manager']);
+
+        try {
+            if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+                throw new Exception('Method not allowed');
+            }
+
+            $input = $this->readRequestData();
+            $this->validateRequestCsrf($input);
+
+            $campaignId = (int)($input['campaign_id'] ?? 0);
+            $title = trim($input['title'] ?? '');
+            $subject = trim($input['subject'] ?? '');
+            $message = trim($input['message'] ?? $input['body'] ?? '');
+            $targetAudience = $this->normalizeTargetAudience($input['target_audience'] ?? 'all_members');
+            $scheduledAt = !empty($input['scheduled_at']) ? $input['scheduled_at'] : null;
+
+            if ($campaignId <= 0 || $title === '' || $subject === '' || $message === '') {
+                throw new Exception('Campaign ID, title, subject, and message are required');
+            }
+
+            $customFilters = $this->extractCustomFilters($input);
+            $customFilters['email_subject'] = $subject;
+
+            $setClauses = [
+                'title = ?',
+                'message = ?',
+                'target_audience = ?',
+                'custom_filters = ?',
+                'scheduled_at = ?',
+                "status = CASE WHEN ? IS NULL THEN 'draft' ELSE 'scheduled' END",
+            ];
+
+            if ($this->bulkMessagesHasColumn('updated_at')) {
+                $setClauses[] = 'updated_at = NOW()';
+            }
+
+            $sql = "UPDATE bulk_messages
+                    SET " . implode(', ', $setClauses) . "
+                    WHERE id = ? AND message_type = 'email' AND status IN ('draft', 'scheduled', 'paused')";
+            $stmt = Database::getInstance()->getConnection()->prepare($sql);
+            $stmt->execute([
+                $title,
+                $message,
+                $targetAudience,
+                json_encode($customFilters),
+                $scheduledAt,
+                $scheduledAt,
+                $campaignId
+            ]);
+
+            if ($stmt->rowCount() < 1) {
+                $check = Database::getInstance()->getConnection()->prepare("SELECT COUNT(*) FROM bulk_messages WHERE id = ? AND message_type = 'email' AND status IN ('draft', 'scheduled', 'paused')");
+                $check->execute([$campaignId]);
+                if ((int)$check->fetchColumn() > 0) {
+                    $this->json(['success' => true, 'message' => 'Email campaign updated successfully']);
+                    return;
+                }
+                throw new Exception('Campaign not found or cannot be edited after sending has started');
+            }
+
+            $this->json(['success' => true, 'message' => 'Email campaign updated successfully']);
+        } catch (Throwable $e) {
+            error_log('Email edit campaign error: ' . $e->getMessage());
             $this->jsonError($e->getMessage(), 400);
         }
     }
@@ -484,5 +555,17 @@ class BulkEmailController extends BaseController
         }
 
         return $filters;
+    }
+
+    private function bulkMessagesHasColumn(string $column): bool
+    {
+        try {
+            $stmt = Database::getInstance()->getConnection()->prepare('SHOW COLUMNS FROM bulk_messages LIKE ?');
+            $stmt->execute([$column]);
+            return (bool)$stmt->fetch();
+        } catch (Throwable $e) {
+            error_log('bulk_messages column check failed: ' . $e->getMessage());
+            return false;
+        }
     }
 }

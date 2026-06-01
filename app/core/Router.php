@@ -122,12 +122,14 @@ class Router
         $this->addRoute('GET', '/admin', 'AdminController@dashboard');
         $this->addRoute('GET', '/admin/dashboard', 'AdminController@dashboard');
         $this->addRoute('GET', '/admin/members', 'AdminController@members');
+        $this->addRoute('GET', '/admin/members/archived', 'AdminController@archivedMembers');
         $this->addRoute('GET', '/admin/members/export-csv', 'AdminController@exportMembersCSV');
         $this->addRoute('GET', '/admin/members/register', 'AdminController@registerMember');
         $this->addRoute('POST', '/admin/members/register', 'AdminController@registerMember');
         $this->addRoute('GET', '/admin/members/view/{id}', 'AdminController@viewMember');
         $this->addRoute('GET', '/admin/members/edit/{id}', 'AdminController@editMember');
         $this->addRoute('POST', '/admin/members/update/{id}', 'AdminController@updateMember');
+        $this->addRoute('POST', '/admin/members/delete/{id}', 'AdminController@deleteOrArchiveMember');
         $this->addRoute('POST', '/admin/members/suspend/{id}', 'AdminController@suspendMember');
         $this->addRoute('POST', '/admin/members/activate/{id}', 'AdminController@activateMember');
         $this->addRoute('GET', '/admin/member/{id}', 'AdminController@viewMember');
@@ -147,8 +149,10 @@ class Router
         $this->addRoute('GET', '/admin/claims/view/{id}', 'AdminController@viewClaim');
         $this->addRoute('GET', '/admin/claims/completed', 'AdminController@viewCompletedClaims');
         $this->addRoute('GET', '/admin/claims/track-services', 'AdminController@viewTrackServices');
+        $this->addRoute('POST', '/admin/claims/submit', 'AdminController@submitClaimForMember');
         // Admin AJAX API
         $this->addRoute('GET', '/admin/api/members', 'AdminApiController@members');
+        $this->addRoute('GET', '/admin/api/members/{id}/beneficiaries', 'AdminApiController@memberBeneficiaries');
         $this->addRoute('POST', '/admin/claims/approve', 'AdminController@approveClaim');
         $this->addRoute('POST', '/admin/claims/{id}/approve', 'AdminController@approveClaim');
         $this->addRoute('POST', '/admin/claims/approve-cash', 'AdminController@approveClaimCashAlternative');
@@ -189,6 +193,7 @@ class Router
         $this->addRoute('POST', '/admin/email-campaigns/create', 'BulkEmailController@createCampaign');
         $this->addRoute('POST', '/admin/email-campaigns/send', 'BulkEmailController@sendCampaign');
         $this->addRoute('POST', '/admin/email-campaigns/cancel', 'BulkEmailController@cancelCampaign');
+        $this->addRoute('POST', '/admin/email-campaigns/edit', 'BulkEmailController@editCampaign');
         $this->addRoute('POST', '/admin/email-campaigns/pause', 'BulkEmailController@pauseCampaign');
         $this->addRoute('POST', '/admin/email-campaigns/reschedule', 'BulkEmailController@reschedule');
         $this->addRoute('POST', '/admin/email-campaigns/retry-failed', 'BulkEmailController@retryFailed');

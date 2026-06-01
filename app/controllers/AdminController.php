@@ -5,6 +5,7 @@
 require_once __DIR__ . '/../services/ReportService.php';
 require_once __DIR__ . '/../services/PaymentReconciliationService.php';
 require_once __DIR__ . '/../services/InAppNotificationService.php';
+require_once __DIR__ . '/../services/SmsService.php';
 require_once __DIR__ . '/../helpers/ReportDocumentTemplate.php';
 
 class AdminController extends BaseController
@@ -286,6 +287,20 @@ class AdminController extends BaseController
         ];
         
         $this->view('admin.members', $data);
+    }
+
+    public function archivedMembers()
+    {
+        $this->requireAdminAccess();
+
+        $search = $_GET['search'] ?? '';
+        $members = $this->memberModel->getArchivedMembersWithDetails($search);
+
+        $this->view('admin.members-archived', [
+            'title' => 'Archived Members - Admin',
+            'members' => $members,
+            'search' => $search,
+        ]);
     }
 
     /**
@@ -1002,6 +1017,71 @@ class AdminController extends BaseController
         $this->redirect($returnTo);
     }
 
+    public function deleteOrArchiveMember($id)
+    {
+        $this->requireAdminAccess();
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->redirect('/admin/members');
+            return;
+        }
+
+        try {
+            $this->validateCsrf();
+        } catch (Throwable $e) {
+            $_SESSION['error_message'] = 'Security check failed. Please try again.';
+            $this->redirect('/admin/members');
+            return;
+        }
+
+        $memberId = (int)$id;
+        $member = $this->memberModel->getMemberById($memberId);
+        if (!$member) {
+            $_SESSION['error_message'] = 'Member not found.';
+            $this->redirect('/admin/members');
+            return;
+        }
+
+        $confirmation = trim((string)($_POST['confirm_member_number'] ?? ''));
+        if ($confirmation !== (string)($member['member_number'] ?? '')) {
+            $_SESSION['error_message'] = 'Member number confirmation did not match. No changes were made.';
+            $this->redirect('/admin/members');
+            return;
+        }
+
+        $reason = $this->sanitizeInput($_POST['archive_reason'] ?? '');
+
+        try {
+            $this->db->getConnection()->beginTransaction();
+
+            if ($this->memberModel->canHardDelete($memberId)) {
+                $userId = (int)($member['user_id'] ?? 0);
+                $this->memberModel->delete($memberId);
+                if ($userId > 0) {
+                    $this->userModel->delete($userId);
+                }
+                $message = 'Member permanently deleted because no payments or claims were attached.';
+            } else {
+                $this->memberModel->archiveMember($memberId, $_SESSION['user_id'] ?? null, $reason);
+                if (!empty($member['user_id'])) {
+                    $this->userModel->update($member['user_id'], ['status' => 'inactive']);
+                }
+                $message = 'Member archived because payments or claims history exists.';
+            }
+
+            $this->db->getConnection()->commit();
+            $_SESSION['success_message'] = $message;
+        } catch (Throwable $e) {
+            if ($this->db->getConnection()->inTransaction()) {
+                $this->db->getConnection()->rollBack();
+            }
+            error_log('Member delete/archive error: ' . $e->getMessage());
+            $_SESSION['error_message'] = 'Failed to delete or archive member: ' . $e->getMessage();
+        }
+
+        $this->redirect('/admin/members');
+    }
+
     private function notifyMemberManagementChange(array $member, string $newStatus, string $previousStatus): void
     {
         if (empty($member['user_id'])) {
@@ -1174,10 +1254,79 @@ class AdminController extends BaseController
             'approvedClaims' => $approvedClaims,
             'rejectedClaims' => $rejectedClaims,
             'totalClaimAmount' => $totalClaimAmount,
-            'status' => $status
+            'status' => $status,
+            'csrf_token' => $this->generateCsrfToken()
         ];
         
         $this->view('admin.claims', $data);
+    }
+
+    public function submitClaimForMember()
+    {
+        $this->requireAdminAccess();
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->redirect('/admin/claims');
+            return;
+        }
+
+        try {
+            $this->validateCsrf();
+
+            $memberId = (int)($_POST['member_id'] ?? 0);
+            $member = $this->memberModel->getMemberById($memberId);
+            if (!$member) {
+                throw new Exception('Please select a valid member.');
+            }
+
+            if (($member['status'] ?? '') !== 'active') {
+                throw new Exception('Claims can only be submitted for active members.');
+            }
+
+            $requestCashAlternative = isset($_POST['request_cash_alternative']) && $_POST['request_cash_alternative'] === '1';
+            $cashAlternativeReason = $requestCashAlternative ? $this->sanitizeInput($_POST['cash_alternative_reason'] ?? '') : '';
+            if ($requestCashAlternative && strlen($cashAlternativeReason) < 50) {
+                throw new Exception('Cash alternative reason must be at least 50 characters.');
+            }
+
+            $claimData = [
+                'member_id' => $memberId,
+                'beneficiary_id' => (int)($_POST['beneficiary_id'] ?? 0),
+                'deceased_name' => $this->sanitizeInput($_POST['deceased_name'] ?? ''),
+                'deceased_id_number' => $this->sanitizeInput($_POST['deceased_id_number'] ?? ''),
+                'date_of_birth' => $_POST['date_of_birth'] ?? null,
+                'date_of_death' => $_POST['date_of_death'] ?? '',
+                'place_of_death' => $this->sanitizeInput($_POST['place_of_death'] ?? ''),
+                'cause_of_death' => $this->sanitizeInput($_POST['cause_of_death'] ?? ''),
+                'mortuary_name' => $this->sanitizeInput($_POST['mortuary_name'] ?? ''),
+                'mortuary_bill_amount' => (float)($_POST['mortuary_bill_amount'] ?? 0),
+                'mortuary_days_count' => (int)($_POST['mortuary_days_count'] ?? 0),
+                'service_delivery_type' => $requestCashAlternative ? 'cash_alternative' : 'standard_services',
+                'cash_alternative_reason' => $cashAlternativeReason,
+                'notes' => $this->sanitizeInput($_POST['notes'] ?? ''),
+            ];
+
+            foreach (['beneficiary_id', 'deceased_name', 'deceased_id_number', 'date_of_death', 'place_of_death', 'cause_of_death', 'mortuary_name', 'mortuary_days_count'] as $field) {
+                if (empty($claimData[$field])) {
+                    throw new Exception('Please complete all required claim details.');
+                }
+            }
+
+            if ($claimData['mortuary_days_count'] > 14) {
+                throw new Exception('Mortuary preservation is covered for a maximum of 14 days per policy.');
+            }
+
+            $claimId = $this->claimModel->submitClaim($claimData);
+            $this->processAdminClaimDocumentUploads($claimId);
+            $this->sendClaimAcknowledgementSms($member, $claimId, $claimData);
+
+            $_SESSION['success'] = 'Claim submitted for member successfully.';
+        } catch (Throwable $e) {
+            error_log('Admin claim submission error: ' . $e->getMessage());
+            $_SESSION['error'] = 'Failed to submit claim: ' . $e->getMessage();
+        }
+
+        $this->redirect('/admin/claims');
     }
 
     /**
@@ -1289,6 +1438,7 @@ class AdminController extends BaseController
 
                     // Approve for standard service delivery
                     $this->claimModel->approveClaimForServices($claimId, $deliveryDate, $notes);
+                    $this->sendClaimLifecycleSms($claimId, 'approved');
                     
                     // Send notification to member
                     if (class_exists('EmailService')) {
@@ -1362,6 +1512,7 @@ class AdminController extends BaseController
                         $requestedBy,
                         $_SESSION['user_id']
                     );
+                    $this->sendClaimLifecycleSms($claimId, 'approved');
                     
                     $message = 'Claim approved for KSH 20,000 cash alternative. Agreement must be signed before payment.';
                     
@@ -1563,6 +1714,7 @@ class AdminController extends BaseController
             if ($claimId) {
                 try {
                     $this->claimModel->completeClaim($claimId, $completionNotes);
+                    $this->sendClaimLifecycleSms($claimId, 'completed');
                     $_SESSION['success'] = 'Claim marked as completed successfully.';
                 } catch (Exception $e) {
                     error_log('Complete claim error: ' . $e->getMessage());
@@ -1586,6 +1738,7 @@ class AdminController extends BaseController
             $reason = $_POST['reason'] ?? '';
             
             if ($claimId && $this->claimModel->rejectClaim($claimId, $reason)) {
+                $this->sendClaimLifecycleSms($claimId, 'rejected', $reason);
                 $_SESSION['success'] = 'Claim rejected successfully!';
             } else {
                 $_SESSION['error'] = 'Failed to reject claim.';
@@ -1594,6 +1747,96 @@ class AdminController extends BaseController
         
         header('Location: /admin/claims');
         exit();
+    }
+
+    private function sendClaimAcknowledgementSms(array $member, int $claimId, array $claimData): void
+    {
+        $phone = $member['phone'] ?? null;
+        if (!$phone || !class_exists('SmsService')) {
+            return;
+        }
+
+        try {
+            $memberName = trim(($member['first_name'] ?? '') . ' ' . ($member['last_name'] ?? '')) ?: 'Member';
+            $claimRef = 'CLM-' . date('Y') . '-' . str_pad($claimId, 4, '0', STR_PAD_LEFT);
+            $deceasedName = $claimData['deceased_name'] ?? 'your loved one';
+            $message = "Dear {$memberName}, SHENA has received your claim {$claimRef} for {$deceasedName}. "
+                . "We acknowledge your loss and stand with you in this difficult time. Our team will contact you with the next steps. - Shena Companion";
+
+            $smsService = new SmsService();
+            $smsService->sendSms($phone, $message);
+        } catch (Throwable $e) {
+            error_log('Claim acknowledgement SMS failed: ' . $e->getMessage());
+        }
+    }
+
+    private function processAdminClaimDocumentUploads(int $claimId): void
+    {
+        $claimDocumentModel = new ClaimDocument();
+        $documentFields = [
+            'id_copy' => ['required' => true, 'label' => 'ID/Birth Certificate Copy'],
+            'chief_letter' => ['required' => true, 'label' => 'Chief Letter'],
+            'mortuary_invoice' => ['required' => true, 'label' => 'Mortuary Invoice'],
+            'death_certificate' => ['required' => false, 'label' => 'Death Certificate'],
+        ];
+
+        require_once __DIR__ . '/../helpers/functions.php';
+
+        foreach ($documentFields as $inputName => $config) {
+            if (!isset($_FILES[$inputName]) || $_FILES[$inputName]['error'] === UPLOAD_ERR_NO_FILE) {
+                if ($config['required']) {
+                    $this->claimModel->delete($claimId);
+                    throw new Exception("Required document missing: {$config['label']}.");
+                }
+                continue;
+            }
+
+            $uploadResult = uploadFile($_FILES[$inputName], 'claims/' . $claimId);
+            if ($uploadResult === false) {
+                if ($config['required']) {
+                    $this->claimModel->delete($claimId);
+                    throw new Exception("Failed to upload required document: {$config['label']}.");
+                }
+                continue;
+            }
+
+            $claimDocumentModel->addDocument([
+                'claim_id' => $claimId,
+                'document_type' => $inputName,
+                'file_name' => $uploadResult['file_name'],
+                'file_path' => $uploadResult['file_path'],
+                'file_size' => $uploadResult['file_size'],
+                'mime_type' => $uploadResult['mime_type'],
+                'uploaded_by' => $_SESSION['user_id'] ?? null,
+            ]);
+        }
+    }
+
+    private function sendClaimLifecycleSms(int $claimId, string $status, string $notes = ''): void
+    {
+        if (!class_exists('SmsService')) {
+            return;
+        }
+
+        try {
+            $claimDetails = $this->claimModel->getClaimDetails($claimId);
+            if (!$claimDetails || empty($claimDetails['phone'])) {
+                return;
+            }
+
+            $claimRef = 'CLM-' . date('Y') . '-' . str_pad($claimId, 4, '0', STR_PAD_LEFT);
+            $statusText = ucwords(str_replace('_', ' ', $status));
+            $message = "Claim Update: Your claim {$claimRef} has been {$statusText}.";
+            if ($notes !== '') {
+                $message .= " Notes: " . trim($notes);
+            }
+            $message .= " Please check your dashboard or contact SHENA for assistance.";
+
+            $smsService = new SmsService();
+            $smsService->sendSms($claimDetails['phone'], $message . " - Shena Companion");
+        } catch (Throwable $e) {
+            error_log('Claim lifecycle SMS failed: ' . $e->getMessage());
+        }
     }
 
     /**

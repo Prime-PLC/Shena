@@ -9,6 +9,31 @@
 class Member extends BaseModel
 {
     protected $table = 'members';
+    private $columnCache = null;
+
+    private function getTableColumns()
+    {
+        if ($this->columnCache !== null) {
+            return $this->columnCache;
+        }
+
+        $columns = $this->db->fetchAll("DESCRIBE {$this->table}");
+        $this->columnCache = array_map(static function ($column) {
+            return $column['Field'];
+        }, $columns);
+
+        return $this->columnCache;
+    }
+
+    private function hasColumn($column)
+    {
+        return in_array($column, $this->getTableColumns(), true);
+    }
+
+    private function activeArchiveCondition($alias = 'm')
+    {
+        return $this->hasColumn('archived_at') ? " AND {$alias}.archived_at IS NULL" : "";
+    }
     
     /**
      * Get all members with optional filters
@@ -22,6 +47,7 @@ class Member extends BaseModel
                 FROM {$this->table} m
                 JOIN users u ON m.user_id = u.id
                 WHERE 1=1";
+        $sql .= $this->activeArchiveCondition('m');
         
         $params = [];
         
@@ -669,7 +695,8 @@ class Member extends BaseModel
      */
     public function getTotalMembers()
     {
-        $sql = "SELECT COUNT(*) as count FROM {$this->table}";
+        $sql = "SELECT COUNT(*) as count FROM {$this->table} WHERE 1=1";
+        $sql .= $this->activeArchiveCondition($this->table);
         $result = $this->db->fetch($sql);
         return $result['count'] ?? 0;
     }
@@ -682,6 +709,7 @@ class Member extends BaseModel
     public function getActiveMembers()
     {
         $sql = "SELECT COUNT(*) as count FROM {$this->table} WHERE status = 'active'";
+        $sql .= $this->activeArchiveCondition($this->table);
         $result = $this->db->fetch($sql);
         return $result['count'] ?? 0;
     }
@@ -694,6 +722,7 @@ class Member extends BaseModel
     public function getInactiveMembers()
     {
         $sql = "SELECT COUNT(*) as count FROM {$this->table} WHERE status = 'inactive'";
+        $sql .= $this->activeArchiveCondition($this->table);
         $result = $this->db->fetch($sql);
         return $result['count'] ?? 0;
     }
@@ -705,11 +734,13 @@ class Member extends BaseModel
      */
     public function getPendingMembers()
     {
+        $archiveCondition = $this->activeArchiveCondition('m');
         $sql = "SELECT m.*, u.email, u.phone, u.first_name, u.last_name, p.transaction_id
                 FROM {$this->table} m
                 JOIN users u ON m.user_id = u.id
                 LEFT JOIN payments p ON m.id = p.member_id AND p.status = 'pending'
-                WHERE m.status = 'inactive' OR m.status = 'pending'
+                WHERE (m.status = 'inactive' OR m.status = 'pending')
+                {$archiveCondition}
                 ORDER BY m.created_at DESC";
         
         return $this->db->fetchAll($sql);
@@ -722,7 +753,8 @@ class Member extends BaseModel
      */
     public function getPendingMembersCount()
     {
-        $sql = "SELECT COUNT(*) as count FROM {$this->table} WHERE status = 'inactive' OR status = 'pending'";
+        $sql = "SELECT COUNT(*) as count FROM {$this->table} WHERE (status = 'inactive' OR status = 'pending')";
+        $sql .= $this->activeArchiveCondition($this->table);
         $result = $this->db->fetch($sql);
         return $result['count'] ?? 0;
     }
@@ -751,10 +783,12 @@ class Member extends BaseModel
      */
     public function getActiveMembersList()
     {
+        $archiveCondition = $this->activeArchiveCondition('m');
         $sql = "SELECT m.*, u.email, u.phone, u.first_name, u.last_name
                 FROM {$this->table} m
                 JOIN users u ON m.user_id = u.id
                 WHERE m.status = 'active'
+                {$archiveCondition}
                 ORDER BY m.created_at DESC";
 
         return $this->db->fetchAll($sql);
@@ -767,10 +801,12 @@ class Member extends BaseModel
      */
     public function getInactiveMembersList()
     {
+        $archiveCondition = $this->activeArchiveCondition('m');
         $sql = "SELECT m.*, u.email, u.phone, u.first_name, u.last_name
                 FROM {$this->table} m
                 JOIN users u ON m.user_id = u.id
                 WHERE m.status = 'inactive'
+                {$archiveCondition}
                 ORDER BY m.created_at DESC";
 
         return $this->db->fetchAll($sql);
@@ -939,6 +975,7 @@ class Member extends BaseModel
                 FROM {$this->table} m
                 JOIN users u ON m.user_id = u.id
                 WHERE 1=1";
+        $sql .= $this->activeArchiveCondition('m');
         
         $params = [];
         
@@ -973,6 +1010,63 @@ class Member extends BaseModel
         $sql .= " ORDER BY m.created_at DESC";
         
         return $this->db->fetchAll($sql, $params);
+    }
+
+    public function getArchivedMembersWithDetails($search = '')
+    {
+        if (!$this->hasColumn('archived_at')) {
+            return [];
+        }
+
+        $sql = "SELECT m.*, u.email, u.phone, u.first_name, u.last_name, u.role
+                FROM {$this->table} m
+                JOIN users u ON m.user_id = u.id
+                WHERE m.archived_at IS NOT NULL";
+        $params = [];
+
+        if (!empty($search)) {
+            $searchTerm = '%' . $search . '%';
+            $sql .= " AND (m.member_number LIKE :search_member_number
+                      OR m.id_number LIKE :search_id_number
+                      OR u.first_name LIKE :search_first_name
+                      OR u.last_name LIKE :search_last_name
+                      OR u.email LIKE :search_email
+                      OR u.phone LIKE :search_phone)";
+            $params = [
+                'search_member_number' => $searchTerm,
+                'search_id_number' => $searchTerm,
+                'search_first_name' => $searchTerm,
+                'search_last_name' => $searchTerm,
+                'search_email' => $searchTerm,
+                'search_phone' => $searchTerm,
+            ];
+        }
+
+        $sql .= " ORDER BY m.archived_at DESC, m.created_at DESC";
+
+        return $this->db->fetchAll($sql, $params);
+    }
+
+    public function canHardDelete($memberId)
+    {
+        $payments = (int)$this->db->fetchColumn("SELECT COUNT(*) FROM payments WHERE member_id = :member_id", ['member_id' => $memberId]);
+        $claims = (int)$this->db->fetchColumn("SELECT COUNT(*) FROM claims WHERE member_id = :member_id", ['member_id' => $memberId]);
+
+        return $payments === 0 && $claims === 0;
+    }
+
+    public function archiveMember($memberId, $archivedBy, $reason = '')
+    {
+        if (!$this->hasColumn('archived_at')) {
+            throw new Exception('Member archive columns are missing. Run database/migrations/014_member_archive_support.sql first.');
+        }
+
+        return $this->update($memberId, [
+            'status' => 'inactive',
+            'archived_at' => date('Y-m-d H:i:s'),
+            'archived_by' => $archivedBy ?: null,
+            'archive_reason' => trim((string)$reason) ?: 'Archived by admin',
+        ]);
     }
     
     /**
