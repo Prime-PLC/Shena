@@ -179,7 +179,7 @@ class MembershipPricingService
         $anchorAge = self::resolveAnchorAgeForTier($tier, $principalAge, $parentsAnchorAge, $inlawsAnchorAge);
         $ageBand = self::resolveAgeBand($anchorAge);
 
-        $basePrice = self::resolveBasePrice($tier, $ageBand);
+        $basePrice = self::resolveConfiguredBasePrice($input['package_definition'] ?? [], $tier, $ageBand);
         $corporateAddon = $corporateCouples * $basePrice;
 
         return [
@@ -190,6 +190,66 @@ class MembershipPricingService
             'corporate_couple_count' => $corporateCouples,
             'corporate_addon' => $corporateAddon,
             'total_price' => $basePrice + $corporateAddon
+        ];
+    }
+
+    /**
+     * Resolve the monthly amount for an explicitly selected package key.
+     *
+     * @param string $packageKey
+     * @param array $membershipPackages
+     * @return int
+     */
+    public static function resolveSelectedPackageAmount($packageKey, array $membershipPackages)
+    {
+        if (!empty($packageKey) && isset($membershipPackages[$packageKey])) {
+            return (int)($membershipPackages[$packageKey]['monthly_contribution'] ?? 0);
+        }
+
+        return 0;
+    }
+
+    /**
+     * Calculate total payable amount for one main member plus corporate line items.
+     *
+     * @param string $mainPackageKey
+     * @param array $corporateMembers
+     * @param array $membershipPackages
+     * @return array
+     */
+    public static function calculateAccountMonthlyContribution($mainPackageKey, array $corporateMembers, array $membershipPackages)
+    {
+        $mainAmount = self::resolveSelectedPackageAmount($mainPackageKey, $membershipPackages);
+        $corporateTotal = 0;
+        $lineItems = [];
+
+        foreach ($corporateMembers as $item) {
+            if (!empty($item['delete'])) {
+                continue;
+            }
+
+            $packageKey = (string)($item['package_key'] ?? '');
+            if ($packageKey === '' || !isset($membershipPackages[$packageKey])) {
+                continue;
+            }
+
+            $amount = self::resolveSelectedPackageAmount($packageKey, $membershipPackages);
+            $corporateTotal += $amount;
+            $lineItems[] = [
+                'label' => trim((string)($item['label'] ?? '')),
+                'relationship' => trim((string)($item['relationship'] ?? 'corporate')),
+                'package_key' => $packageKey,
+                'package_name' => $membershipPackages[$packageKey]['name'] ?? $packageKey,
+                'monthly_contribution' => $amount,
+                'status' => $item['status'] ?? 'active',
+            ];
+        }
+
+        return [
+            'main_amount' => $mainAmount,
+            'corporate_total' => $corporateTotal,
+            'total_amount' => $mainAmount + $corporateTotal,
+            'line_items' => $lineItems,
         ];
     }
 
@@ -253,5 +313,22 @@ class MembershipPricingService
         }
 
         return (int)($pricing[$ageBand] ?? 0);
+    }
+
+    /**
+     * Prefer a selected package's configured monthly amount when available.
+     *
+     * @param array $packageDefinition
+     * @param string $tier
+     * @param string $ageBand
+     * @return int
+     */
+    private static function resolveConfiguredBasePrice(array $packageDefinition, $tier, $ageBand)
+    {
+        if (array_key_exists('monthly_contribution', $packageDefinition)) {
+            return (int)$packageDefinition['monthly_contribution'];
+        }
+
+        return self::resolveBasePrice($tier, $ageBand);
     }
 }

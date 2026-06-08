@@ -81,7 +81,7 @@
 
     .report-table {
         width: 100%;
-        min-width: 1120px;
+        min-width: 1380px;
         border-collapse: collapse;
     }
 
@@ -113,7 +113,13 @@
     }
 
     .status-pill.sent { background: #D1FAE5; color: #065F46; }
+    .status-pill.delivered { background: #D1FAE5; color: #065F46; }
+    .status-pill.submitted { background: #DBEAFE; color: #1D4ED8; }
     .status-pill.failed { background: #FEE2E2; color: #991B1B; }
+    .status-pill.undelivered,
+    .status-pill.expired,
+    .status-pill.rejected,
+    .status-pill.unknown { background: #FEE2E2; color: #991B1B; }
     .status-pill.pending { background: #FEF3C7; color: #92400E; }
     .status-pill.skipped { background: #E5E7EB; color: #374151; }
 </style>
@@ -125,6 +131,9 @@ $channel = $channel ?? ($campaign['message_type'] ?? 'campaign');
 $backUrl = $back_url ?? '/admin/communications';
 $total = (int)($stats['total'] ?? $campaign['total_recipients'] ?? 0);
 $sent = (int)($stats['sent'] ?? $campaign['sent_count'] ?? 0);
+$submitted = (int)($stats['submitted'] ?? $campaign['submitted_count'] ?? 0);
+$delivered = (int)($stats['delivered'] ?? $campaign['delivered_count'] ?? $sent);
+$undelivered = (int)($stats['undelivered'] ?? $campaign['undelivered_count'] ?? 0);
 $failed = (int)($stats['failed'] ?? $campaign['failed_count'] ?? 0);
 $pending = (int)($stats['pending'] ?? max(0, $total - $sent - $failed));
 $skipped = (int)($stats['skipped'] ?? 0);
@@ -135,9 +144,24 @@ $skipped = (int)($stats['skipped'] ?? 0);
         <h1><i class="fas fa-chart-line"></i> <?php echo htmlspecialchars(ucfirst($channel)); ?> Campaign Report</h1>
         <p><?php echo htmlspecialchars($campaign['title'] ?? 'Campaign'); ?> · <?php echo htmlspecialchars(ucfirst($campaign['status'] ?? 'draft')); ?></p>
     </div>
-    <a href="<?php echo htmlspecialchars($backUrl); ?>" class="report-btn">
-        <i class="fas fa-arrow-left"></i> Back to Campaigns
-    </a>
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <?php if (($channel ?? '') === 'sms'): ?>
+            <a href="/admin/communications/campaign/<?php echo (int)($campaign['id'] ?? 0); ?>/delivery-report" class="report-btn">
+                <i class="fas fa-file-download"></i> Download Delivery Report
+            </a>
+            <button type="button" class="report-btn" onclick="syncDeliveryStatuses()">
+                <i class="fas fa-sync"></i> Sync Delivery
+            </button>
+            <?php if ($pending > 0 || $failed > 0): ?>
+                <button type="button" class="report-btn" onclick="resendPendingFailed(<?php echo (int)($campaign['id'] ?? 0); ?>)">
+                    <i class="fas fa-redo"></i> Resend Pending/Failed
+                </button>
+            <?php endif; ?>
+        <?php endif; ?>
+        <a href="<?php echo htmlspecialchars($backUrl); ?>" class="report-btn">
+            <i class="fas fa-arrow-left"></i> Back to Campaigns
+        </a>
+    </div>
 </div>
 
 <div class="report-grid">
@@ -146,16 +170,16 @@ $skipped = (int)($stats['skipped'] ?? 0);
         <div class="report-value"><?php echo number_format($total); ?></div>
     </div>
     <div class="report-card">
-        <div class="report-label">Sent</div>
-        <div class="report-value"><?php echo number_format($sent); ?></div>
+        <div class="report-label">Submitted</div>
+        <div class="report-value"><?php echo number_format($submitted); ?></div>
     </div>
     <div class="report-card">
-        <div class="report-label">Failed</div>
-        <div class="report-value"><?php echo number_format($failed); ?></div>
+        <div class="report-label">Delivered</div>
+        <div class="report-value"><?php echo number_format($delivered); ?></div>
     </div>
     <div class="report-card">
-        <div class="report-label">Pending</div>
-        <div class="report-value"><?php echo number_format($pending); ?></div>
+        <div class="report-label">Failed / Undelivered</div>
+        <div class="report-value"><?php echo number_format($failed + $undelivered); ?></div>
     </div>
     <div class="report-card">
         <div class="report-label">Skipped</div>
@@ -176,15 +200,18 @@ $skipped = (int)($stats['skipped'] ?? 0);
                     <th>Status</th>
                     <th>Delivery Method</th>
                     <th>Provider Ref</th>
-                    <th>Provider Response</th>
-                    <th>Sent At</th>
+                    <th>Provider Status</th>
+                    <th>Provider Cause</th>
+                    <th>Submitted At</th>
+                    <th>Delivered At</th>
+                    <th>DLR Checked</th>
                     <th>Error</th>
                 </tr>
             </thead>
             <tbody>
                 <?php if (empty($recipients)): ?>
                     <tr>
-                        <td colspan="10" style="text-align:center; color:#6B7280; padding:32px;">No recipient records found.</td>
+                        <td colspan="13" style="text-align:center; color:#6B7280; padding:32px;">No recipient records found.</td>
                     </tr>
                 <?php else: ?>
                     <?php foreach ($recipients as $recipient): ?>
@@ -202,8 +229,11 @@ $skipped = (int)($stats['skipped'] ?? 0);
                             <td><span class="status-pill <?php echo htmlspecialchars($recipient['status'] ?? 'pending'); ?>"><?php echo htmlspecialchars($recipient['status'] ?? 'pending'); ?></span></td>
                             <td><?php echo htmlspecialchars($recipient['delivery_method'] ?? $recipient['recipient_type'] ?? $channel); ?></td>
                             <td><?php echo htmlspecialchars($recipient['provider_message_id'] ?? 'N/A'); ?></td>
-                            <td title="<?php echo htmlspecialchars($recipient['provider_response'] ?? '', ENT_QUOTES); ?>"><?php echo htmlspecialchars($providerResponse ?: 'N/A'); ?></td>
-                            <td><?php echo !empty($recipient['sent_at']) ? date('M j, Y H:i', strtotime($recipient['sent_at'])) : 'N/A'; ?></td>
+                            <td><?php echo htmlspecialchars($recipient['provider_status'] ?? 'N/A'); ?></td>
+                            <td><?php echo htmlspecialchars($recipient['provider_cause'] ?? 'N/A'); ?></td>
+                            <td><?php echo !empty($recipient['submitted_at']) ? date('M j, Y H:i', strtotime($recipient['submitted_at'])) : (!empty($recipient['sent_at']) ? date('M j, Y H:i', strtotime($recipient['sent_at'])) : 'N/A'); ?></td>
+                            <td><?php echo !empty($recipient['delivered_at']) ? date('M j, Y H:i', strtotime($recipient['delivered_at'])) : 'N/A'; ?></td>
+                            <td><?php echo !empty($recipient['dlr_checked_at']) ? date('M j, Y H:i', strtotime($recipient['dlr_checked_at'])) : 'N/A'; ?></td>
                             <td><?php echo htmlspecialchars($recipient['error_message'] ?? ''); ?></td>
                         </tr>
                     <?php endforeach; ?>
@@ -212,5 +242,61 @@ $skipped = (int)($stats['skipped'] ?? 0);
         </table>
     </div>
 </div>
+
+<?php if (($channel ?? '') === 'sms'): ?>
+<script>
+function resendPendingFailed(id) {
+    const proceed = () => {
+        fetch('/admin/communications/campaign/' + id + '/resend-pending-failed', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                ShenaApp.showNotification(data.message || 'Resend started', 'success');
+                setTimeout(() => window.location.reload(), 900);
+            } else {
+                ShenaApp.showNotification(data.message || 'Failed to resend pending/failed SMS', 'error');
+            }
+        })
+        .catch(() => ShenaApp.showNotification('Network error occurred', 'error'));
+    };
+
+    if (window.ShenaApp && typeof ShenaApp.confirmAction === 'function') {
+        ShenaApp.confirmAction(
+            'Resend this campaign to every pending or failed recipient?',
+            proceed,
+            null,
+            { type: 'warning', title: 'Resend SMS', confirmText: 'Resend' }
+        );
+        return;
+    }
+
+    if (confirm('Resend this campaign to every pending or failed recipient?')) {
+        proceed();
+    }
+}
+
+function syncDeliveryStatuses() {
+    fetch('/admin/communications/sync-delivery-statuses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limit: 100 })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            ShenaApp.showNotification(`Delivery sync checked ${data.checked_count || 0} SMS record(s); ${data.updated_count || 0} updated.`, 'success');
+            setTimeout(() => window.location.reload(), 900);
+        } else {
+            ShenaApp.showNotification(data.message || 'Failed to sync delivery statuses', 'error');
+        }
+    })
+    .catch(() => ShenaApp.showNotification('Network error occurred', 'error'));
+}
+</script>
+<?php endif; ?>
 
 <?php include_once __DIR__ . '/../layouts/admin-footer.php'; ?>

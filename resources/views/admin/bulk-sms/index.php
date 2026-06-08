@@ -62,7 +62,7 @@
                             <th>Campaign</th>
                             <th>Target Audience</th>
                             <th>Recipients</th>
-                            <th>Sent</th>
+                            <th>Delivered</th>
                             <th>Failed</th>
                             <th>Success Rate</th>
                             <th>Status</th>
@@ -97,7 +97,7 @@
                                     </td>
                                     <td><?= number_format($campaign['total_recipients']) ?></td>
                                     <td>
-                                        <span class="badge bg-success"><?= number_format($campaign['sent_count']) ?></span>
+                                        <span class="badge bg-success"><?= number_format($campaign['delivered_count'] ?? $campaign['sent_count']) ?></span>
                                     </td>
                                     <td>
                                         <span class="badge bg-danger"><?= number_format($campaign['failed_count']) ?></span>

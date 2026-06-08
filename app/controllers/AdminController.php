@@ -16,6 +16,8 @@ class AdminController extends BaseController
     private $userModel;
     private $agentModel;
     private $payoutRequestModel;
+    private $corporateMemberModel;
+    private $beneficiaryModel;
 
     public function __construct()
     {
@@ -26,6 +28,8 @@ class AdminController extends BaseController
         $this->claimModel = null;
         $this->agentModel = null;
         $this->payoutRequestModel = null;
+        $this->corporateMemberModel = null;
+        $this->beneficiaryModel = null;
     }
 
     private function initAdminModels()
@@ -45,18 +49,234 @@ class AdminController extends BaseController
         if ($this->payoutRequestModel === null) {
             $this->payoutRequestModel = new PayoutRequest();
         }
+        if ($this->corporateMemberModel === null) {
+            $this->corporateMemberModel = new MemberCorporateMember();
+        }
+        if ($this->beneficiaryModel === null) {
+            $this->beneficiaryModel = new Beneficiary();
+        }
     }
 
 
     private function requireAdminAccess()
     {
-        if (!isset($_SESSION['user_id']) || !isset($_SESSION['user_role']) || 
+        if (!isset($_SESSION['user_id']) || !isset($_SESSION['user_role']) ||
             !in_array($_SESSION['user_role'], ['super_admin', 'manager'])) {
             header('Location: /admin-login');
             exit();
         }
 
         $this->initAdminModels();
+    }
+
+    private function friendlyErrorMessage(Throwable $e, string $fallback): string
+    {
+        error_log($fallback . ': ' . $e->getMessage());
+        return $fallback . ' Please review the information and try again.';
+    }
+
+    private function parseCorporateMembersFromPost(): array
+    {
+        global $membership_packages;
+
+        $rows = $_POST['corporate_members'] ?? [];
+        if (!is_array($rows)) {
+            return [];
+        }
+
+        $items = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $packageKey = $this->sanitizeInput($row['package_key'] ?? '');
+            $label = $this->sanitizeInput($row['label'] ?? '');
+            $relationship = $this->sanitizeInput($row['relationship'] ?? 'corporate');
+
+            if ($packageKey === '' && $label === '') {
+                continue;
+            }
+
+            if (!isset($membership_packages[$packageKey])) {
+                throw new Exception('Invalid corporate member package selected.');
+            }
+
+            $items[] = [
+                'label' => $label !== '' ? $label : 'Corporate member',
+                'relationship' => $relationship !== '' ? $relationship : 'corporate',
+                'package_key' => $packageKey,
+            ];
+        }
+
+        return $items;
+    }
+
+    private function calculateAccountMonthlyContribution(string $packageKey, array $corporateMembers): array
+    {
+        global $membership_packages;
+
+        return MembershipPricingService::calculateAccountMonthlyContribution(
+            $packageKey,
+            $corporateMembers,
+            $membership_packages ?? []
+        );
+    }
+
+    private function enrichMembersForManagement(array $members): array
+    {
+        foreach ($members as &$member) {
+            $memberId = (int)($member['id'] ?? 0);
+            if ($memberId <= 0) {
+                continue;
+            }
+
+            $member['corporate_members'] = $this->corporateMemberModel->getActiveForMember($memberId) ?: [];
+            $member['beneficiaries'] = $this->beneficiaryModel->getActiveBeneficiaries($memberId) ?: [];
+            $member['coverage_summary'] = $this->memberModel->getPlanCoverageSummary($member);
+            $member['dependant_relationship_options'] = $this->relationshipOptionsForMember($member, $member['beneficiaries']);
+        }
+        unset($member);
+
+        return $members;
+    }
+
+    private function relationshipOptionsForMember(array $member, array $beneficiaries): array
+    {
+        $coverage = $this->memberModel->getPlanCoverageSummary($member);
+        $limits = $coverage['limits'] ?? [];
+        $counts = [
+            'spouse' => 0,
+            'child' => 0,
+            'parent' => 0,
+            'father_in_law' => 0,
+            'mother_in_law' => 0,
+        ];
+
+        foreach ($beneficiaries as $beneficiary) {
+            $relationship = $this->memberModel->normalizeDependentRelationship((string)($beneficiary['relationship'] ?? ''));
+            if (isset($counts[$relationship])) {
+                $counts[$relationship]++;
+            }
+        }
+
+        $options = [];
+        if (($limits['spouse'] ?? 0) > $counts['spouse']) {
+            $options[] = ['value' => 'spouse', 'label' => 'Spouse'];
+        }
+        if (($limits['children'] ?? 0) > $counts['child']) {
+            $options[] = ['value' => 'child', 'label' => 'Child'];
+        }
+        if (($limits['parents'] ?? 0) > $counts['parent']) {
+            $options[] = ['value' => 'parent', 'label' => 'Parent'];
+        }
+        $inlawLimit = (int)($limits['inlaws'] ?? 0);
+        $inlawCount = $counts['father_in_law'] + $counts['mother_in_law'];
+        if ($inlawLimit > $inlawCount) {
+            $options[] = ['value' => 'father_in_law', 'label' => 'Father-in-law'];
+            $options[] = ['value' => 'mother_in_law', 'label' => 'Mother-in-law'];
+        }
+
+        return $options;
+    }
+
+    private function getMemberActivationRestrictions(array $member, Payment $paymentModel): array
+    {
+        $memberId = (int)($member['id'] ?? 0);
+        if ($memberId <= 0) {
+            return ['Member record is missing a valid ID.'];
+        }
+
+        $restrictions = [];
+        if (!$paymentModel->hasPaidRegistrationFee($memberId)) {
+            $restrictions[] = 'Registration fee has not been fully paid.';
+        }
+
+        $status = strtolower((string)($member['status'] ?? ''));
+        if (in_array($status, ['suspended', 'defaulted', 'grace_period'], true)
+            && !$paymentModel->hasPaidReactivationFee($memberId)) {
+            $restrictions[] = 'Activation/reactivation fee has not been fully paid.';
+        }
+
+        return array_values(array_unique($restrictions));
+    }
+
+    private function activationOverrideRequested(): bool
+    {
+        return ($_POST['activation_override'] ?? '') === '1'
+            || ($_POST['override_system_restrictions'] ?? '') === '1';
+    }
+
+    private function activationOverrideRequestedFromInput(array $input): bool
+    {
+        return !empty($input['override_system_restrictions']);
+    }
+
+    private function activateMemberWithAdminOverride(array $member): bool
+    {
+        $memberId = (int)($member['id'] ?? 0);
+        if ($memberId <= 0) {
+            return false;
+        }
+
+        $updateData = [
+            'status' => 'active',
+            'coverage_ends' => date('Y-m-d', strtotime('+1 year')),
+        ];
+
+        if (in_array(($member['status'] ?? ''), ['suspended', 'defaulted', 'grace_period'], true)) {
+            $updateData['maturity_ends'] = date('Y-m-d', strtotime('+4 months'));
+            $updateData['reactivated_at'] = date('Y-m-d H:i:s');
+        }
+
+        $updatedMember = $this->memberModel->update($memberId, $updateData);
+        $updatedUser = true;
+        if (!empty($member['user_id'])) {
+            $updatedUser = $this->userModel->update($member['user_id'], ['status' => 'active']);
+        }
+
+        return (bool)$updatedMember && (bool)$updatedUser;
+    }
+
+    private function activateMemberByPolicy(array $member, Payment $paymentModel, bool $overrideSystemRestrictions): array
+    {
+        $memberId = (int)($member['id'] ?? 0);
+        $restrictions = $this->getMemberActivationRestrictions($member, $paymentModel);
+        if (!empty($restrictions) && !$overrideSystemRestrictions) {
+            return [
+                'success' => false,
+                'requires_override' => true,
+                'restrictions' => $restrictions,
+            ];
+        }
+
+        if (!empty($restrictions) && $overrideSystemRestrictions) {
+            return [
+                'success' => $this->activateMemberWithAdminOverride($member),
+                'requires_override' => false,
+                'restrictions' => $restrictions,
+            ];
+        }
+
+        $status = strtolower((string)($member['status'] ?? ''));
+        if (in_array($status, ['suspended', 'defaulted', 'grace_period'], true)) {
+            $activated = $this->memberModel->reactivateMember($memberId);
+            if ($activated && !empty($member['user_id'])) {
+                $this->userModel->update($member['user_id'], ['status' => 'active']);
+            }
+
+            return [
+                'success' => (bool)$activated,
+                'requires_override' => false,
+                'restrictions' => [],
+            ];
+        }
+
+        return [
+            'success' => $paymentModel->activateMemberAfterRegistrationPayment($memberId),
+            'requires_override' => false,
+            'restrictions' => [],
+        ];
     }
 
     /**
@@ -226,6 +446,7 @@ class AdminController extends BaseController
         $totalPages = ceil($totalItems / $perPage);
         $offset = ($page - 1) * $perPage;
         $members = array_slice($members, $offset, $perPage);
+        $members = $this->enrichMembersForManagement($members);
         
         // Get pending approvals (members with pending status)
         $pendingMembers = $this->memberModel->getPendingMembers();
@@ -400,7 +621,8 @@ class AdminController extends BaseController
             $nextOfKinRelationship = $this->sanitizeInput($_POST['next_of_kin_relationship'] ?? '');
             $nextOfKinPhoneRaw = $this->sanitizeInput($_POST['next_of_kin_phone'] ?? '');
             $packageKey = $this->sanitizeInput($_POST['package'] ?? 'individual_below_70');
-            $corporateCoupleCount = max(0, (int)($_POST['corporate_couple_count'] ?? 0));
+            $corporateMembers = $this->parseCorporateMembersFromPost();
+            $corporateCoupleCount = count($corporateMembers);
             $password = $_POST['password'] ?? null;
 
             // Basic validation
@@ -486,21 +708,16 @@ class AdminController extends BaseController
             }
             $normalizedPackage = $this->memberModel->normalizePackageTier($packageKey, $membership_packages[$packageKey]);
 
-            // Calculate monthly contribution centrally
-            $memberForCalc = [
-                'date_of_birth' => $dateOfBirth,
-                'package' => $packageKey,
-                'package_key' => $packageKey,
-                'corporate_couple_count' => $corporateCoupleCount
-            ];
-            $monthlyContribution = $this->memberModel->calculateMonthlyContribution($memberForCalc, []);
+            $accountContribution = $this->calculateAccountMonthlyContribution($packageKey, $corporateMembers);
+            $monthlyContribution = (float)$accountContribution['total_amount'];
+            $corporateMembers = $accountContribution['line_items'];
 
             // Maturity ends default
             $maturityMonths = defined('MATURITY_PERIOD_UNDER_80') ? MATURITY_PERIOD_UNDER_80 : 4;
             $maturityEnds = date('Y-m-d', strtotime("+{$maturityMonths} months"));
 
             // Create member record
-            $this->memberModel->create([
+            $memberId = $this->memberModel->create([
                 'user_id' => $userId,
                 'member_number' => $memberNumber,
                 'id_number' => $idNumber,
@@ -518,6 +735,8 @@ class AdminController extends BaseController
                 'status' => 'inactive',
                 'created_at' => date('Y-m-d H:i:s')
             ]);
+
+            $this->corporateMemberModel->replaceForMember((int)$memberId, $corporateMembers);
 
             $this->db->getConnection()->commit();
 
@@ -587,7 +806,11 @@ class AdminController extends BaseController
     public function activateMember($id = null)
     {
         $this->requireAdminAccess();
-        
+        $returnTo = $_POST['return_to'] ?? '/admin/members';
+        if (!is_string($returnTo) || strpos($returnTo, '/admin/') !== 0) {
+            $returnTo = '/admin/members';
+        }
+
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $memberId = $id ?? ($_POST['member_id'] ?? 0);
             
@@ -600,27 +823,34 @@ class AdminController extends BaseController
                     return;
                 }
                 
-                // Verify registration fee payment per policy Section 5.
                 $paymentModel = new Payment();
-                if (!$paymentModel->hasPaidRegistrationFee($memberId)) {
-                    $_SESSION['error'] = "Cannot activate member. Registration fee has not been fully paid.";
-                    $this->redirect('/admin/members');
+                $activationResult = $this->activateMemberByPolicy(
+                    $member,
+                    $paymentModel,
+                    $this->activationOverrideRequested()
+                );
+
+                if (!empty($activationResult['requires_override'])) {
+                    $_SESSION['error'] = 'Activation is blocked by system checks: ' . implode(' ', $activationResult['restrictions']) . ' Confirm override to activate anyway.';
+                    $this->redirect($returnTo);
                     return;
                 }
 
-                if (!$paymentModel->activateMemberAfterRegistrationPayment($memberId)) {
-                    $_SESSION['error'] = 'Registration payment was found, but activation could not be completed.';
-                    $this->redirect('/admin/members');
+                if (empty($activationResult['success'])) {
+                    $_SESSION['error'] = 'Activation could not be completed.';
+                    $this->redirect($returnTo);
                     return;
                 }
 
-                $_SESSION['success'] = 'Member activated successfully!';
+                $_SESSION['success'] = !empty($activationResult['restrictions'])
+                    ? 'Member activated with admin override.'
+                    : 'Member activated successfully!';
             } else {
                 $_SESSION['error'] = 'Invalid member ID.';
             }
         }
-        
-        $this->redirect('/admin/members');
+
+        $this->redirect($returnTo);
     }
 
 /**
@@ -670,6 +900,7 @@ class AdminController extends BaseController
         try {
             $input = json_decode(file_get_contents('php://input'), true);
             $memberIds = $input['member_ids'] ?? [];
+            $overrideSystemRestrictions = $this->activationOverrideRequestedFromInput($input ?: []);
             
             if (empty($memberIds)) {
                 $pendingMembers = $this->memberModel->getPendingMembers();
@@ -698,14 +929,15 @@ class AdminController extends BaseController
                         continue;
                     }
                     
-                    if (!$paymentModel->hasPaidRegistrationFee($memberId)) {
-                        $errors[] = "Member {$member['member_number']}: Registration fee not paid";
+                    $activationResult = $this->activateMemberByPolicy($member, $paymentModel, $overrideSystemRestrictions);
+                    if (!empty($activationResult['requires_override'])) {
+                        $errors[] = "Member {$member['member_number']}: Requires override - " . implode(' ', $activationResult['restrictions']);
                         $skippedCount++;
                         continue;
                     }
 
-                    if (!$paymentModel->activateMemberAfterRegistrationPayment($memberId)) {
-                        $errors[] = "Member {$member['member_number']}: Registration payment could not activate member";
+                    if (empty($activationResult['success'])) {
+                        $errors[] = "Member {$member['member_number']}: Activation could not be completed";
                         $skippedCount++;
                         continue;
                     }
@@ -725,6 +957,7 @@ class AdminController extends BaseController
                 'message' => "{$activatedCount} members activated, {$skippedCount} skipped",
                 'activated_count' => $activatedCount,
                 'skipped_count' => $skippedCount,
+                'requires_override' => !$overrideSystemRestrictions && $skippedCount > 0 && !empty($errors),
                 'errors' => $errors
             ]);
             exit();
@@ -758,6 +991,7 @@ class AdminController extends BaseController
         try {
             $input = json_decode(file_get_contents('php://input'), true);
             $memberIds = $input['member_ids'] ?? [];
+            $overrideSystemRestrictions = $this->activationOverrideRequestedFromInput($input ?: []);
             
             if (empty($memberIds)) {
                 $memberIds = array_column($this->memberModel->getInactiveMembersList() ?: [], 'id');
@@ -785,21 +1019,19 @@ class AdminController extends BaseController
                         continue;
                     }
 
-                    if (!$paymentModel->hasPaidRegistrationFee($memberId)) {
-                        $errors[] = "Member {$member['member_number']}: Registration fee not paid";
+                    $activationResult = $this->activateMemberByPolicy($member, $paymentModel, $overrideSystemRestrictions);
+                    if (!empty($activationResult['requires_override'])) {
+                        $errors[] = "Member {$member['member_number']}: Requires override - " . implode(' ', $activationResult['restrictions']);
                         $skippedCount++;
                         continue;
                     }
-                    
-                    // Reactivate member
-                    $this->memberModel->update($memberId, [
-                        'status' => 'active',
-                        'coverage_ends' => date('Y-m-d', strtotime('+1 year'))
-                    ]);
-                    
-                    // Update user status
-                    $this->userModel->update($member['user_id'], ['status' => 'active']);
-                    
+
+                    if (empty($activationResult['success'])) {
+                        $errors[] = "Member {$member['member_number']}: Reactivation could not be completed";
+                        $skippedCount++;
+                        continue;
+                    }
+
                     $reactivatedCount++;
                     
                 } catch (Exception $e) {
@@ -815,6 +1047,7 @@ class AdminController extends BaseController
                 'message' => "{$reactivatedCount} members reactivated, {$skippedCount} skipped",
                 'reactivated_count' => $reactivatedCount,
                 'skipped_count' => $skippedCount,
+                'requires_override' => !$overrideSystemRestrictions && $skippedCount > 0 && !empty($errors),
                 'errors' => $errors
             ]);
             exit();
@@ -863,8 +1096,23 @@ class AdminController extends BaseController
             $membershipMonths = $registrationDate->diff($now)->m + ($registrationDate->diff($now)->y * 12);
         }
         
-        // Get beneficiaries
-        $beneficiaries = $this->memberModel->getMemberDependents($id);
+        $corporateMembers = $this->corporateMemberModel->getActiveForMember((int)$id) ?: [];
+        $beneficiaries = $this->beneficiaryModel->getActiveBeneficiaries((int)$id) ?: [];
+        $coverageSummary = $this->memberModel->getPlanCoverageSummary($member);
+        $dependantRelationshipOptions = $this->relationshipOptionsForMember($member, $beneficiaries);
+        $activationRestrictions = $this->getMemberActivationRestrictions($member, new Payment());
+        $dependantRestrictions = [];
+        if (strtolower((string)($member['status'] ?? '')) !== 'active') {
+            $dependantRestrictions[] = 'Member is not active. Dependant addition requires admin override until status restrictions are cleared.';
+        }
+
+        $membershipPlanData = [];
+        foreach (($GLOBALS['membership_packages'] ?? []) as $packageKey => $packageOption) {
+            $membershipPlanData[$packageKey] = [
+                'name' => $packageOption['name'] ?? $packageKey,
+                'monthly_contribution' => (float)($packageOption['monthly_contribution'] ?? 0),
+            ];
+        }
 
         // Enrich member with agent contact details for display (agent number/phone/email)
         if (!empty($member['agent_id'])) {
@@ -882,6 +1130,14 @@ class AdminController extends BaseController
             'member' => $member,
             'payments' => $payments,
             'beneficiaries' => $beneficiaries,
+            'corporate_members' => $corporateMembers,
+            'coverage_summary' => $coverageSummary,
+            'dependant_relationship_options' => $dependantRelationshipOptions,
+            'activation_restrictions' => $activationRestrictions,
+            'dependant_restrictions' => $dependantRestrictions,
+            'packages' => $GLOBALS['membership_packages'] ?? [],
+            'membershipPlanData' => $membershipPlanData,
+            'csrf_token' => $this->generateCsrfToken(),
             'stats' => [
                 'total_contributions' => $totalContributions,
                 'last_payment_date' => $lastPayment ? $lastPayment['payment_date'] : null,
@@ -956,15 +1212,20 @@ class AdminController extends BaseController
             return;
         }
 
-        $corporateCoupleCount = max(0, min(5, (int)($_POST['corporate_couple_count'] ?? ($member['corporate_couple_count'] ?? 0))));
+        try {
+            $corporateMembers = array_key_exists('corporate_members', $_POST)
+                ? $this->parseCorporateMembersFromPost()
+                : ($this->corporateMemberModel->getActiveForMember((int)$id) ?: []);
+        } catch (Throwable $e) {
+            $_SESSION['error_message'] = $this->friendlyErrorMessage($e, 'We could not process the selected corporate member package.');
+            $this->redirect($returnTo);
+            return;
+        }
+        $corporateCoupleCount = count($corporateMembers);
         $normalizedPackage = $this->memberModel->normalizePackageTier($packageKey, $membership_packages[$packageKey]);
-        $memberForCalc = [
-            'date_of_birth' => $_POST['date_of_birth'] ?? ($member['date_of_birth'] ?? null),
-            'package' => $packageKey,
-            'package_key' => $packageKey,
-            'corporate_couple_count' => $corporateCoupleCount
-        ];
-        $monthlyContribution = $this->memberModel->calculateMonthlyContribution($memberForCalc, []);
+        $accountContribution = $this->calculateAccountMonthlyContribution($packageKey, $corporateMembers);
+        $monthlyContribution = (float)$accountContribution['total_amount'];
+        $corporateMembers = $accountContribution['line_items'];
 
         $memberStatus = $_POST['status'] ?? 'active';
         $previousStatus = $member['status'] ?? '';
@@ -997,6 +1258,7 @@ class AdminController extends BaseController
             $this->db->getConnection()->beginTransaction();
             $updatedUser = $this->userModel->update($member['user_id'], $memberUserData);
             $updatedMember = $this->memberModel->update($id, $memberRecordData);
+            $this->corporateMemberModel->replaceForMember((int)$id, $corporateMembers);
 
             if ($updatedUser && $updatedMember) {
                 $this->db->getConnection()->commit();
@@ -1010,10 +1272,217 @@ class AdminController extends BaseController
             if ($this->db->getConnection()->inTransaction()) {
                 $this->db->getConnection()->rollBack();
             }
-            error_log('Admin member update error: ' . $e->getMessage());
-            $_SESSION['error_message'] = 'Failed to update member: ' . $e->getMessage();
+            $_SESSION['error_message'] = $this->friendlyErrorMessage($e, 'Failed to update member.');
         }
         
+        $this->redirect($returnTo);
+    }
+
+    public function addMemberDependant($id)
+    {
+        $this->requireAdminAccess();
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->redirect('/admin/members');
+            return;
+        }
+
+        try {
+            $this->validateCsrf();
+        } catch (Throwable $e) {
+            $_SESSION['error_message'] = 'Security check failed. Please try again.';
+            $this->redirect('/admin/members');
+            return;
+        }
+
+        $returnTo = $_POST['return_to'] ?? '/admin/members';
+        if (!is_string($returnTo) || strpos($returnTo, '/admin/') !== 0) {
+            $returnTo = '/admin/members';
+        }
+
+        try {
+            $member = $this->memberModel->getMemberById((int)$id);
+            if (!$member) {
+                throw new Exception('Member not found.');
+            }
+
+            $relationship = $this->sanitizeInput($_POST['relationship'] ?? '');
+            $fullName = $this->sanitizeInput($_POST['full_name'] ?? '');
+            $idNumber = $this->sanitizeInput($_POST['id_number'] ?? '');
+            $dateOfBirth = $this->sanitizeInput($_POST['date_of_birth'] ?? '');
+            $phoneInput = $this->sanitizeInput($_POST['phone_number'] ?? '');
+
+            $existingDependants = $this->beneficiaryModel->getActiveBeneficiaries((int)$id) ?: [];
+            // validateDependentAddition runs evaluateDependentCoverageForAddition plus admin-only override checks.
+            $policy = $this->memberModel->validateDependentAddition($member, $existingDependants, [
+                'full_name' => $fullName,
+                'relationship' => $relationship,
+                'id_number' => $idNumber,
+                'date_of_birth' => $dateOfBirth,
+            ], [
+                'allow_override' => true,
+                'override_requested' => ($_POST['dependant_override'] ?? '') === '1',
+            ]);
+            if (empty($policy['allowed'])) {
+                throw new Exception((string)($policy['message'] ?? 'Please review dependant details.'));
+            }
+
+            $this->beneficiaryModel->addBeneficiary([
+                'member_id' => (int)$id,
+                'full_name' => $fullName,
+                'relationship' => $policy['relationship'] ?? $relationship,
+                'id_number' => $idNumber,
+                'date_of_birth' => $dateOfBirth,
+                'phone_number' => $phoneInput !== '' ? formatKenyanPhone($phoneInput) : null,
+                'percentage' => 0,
+            ]);
+
+            $_SESSION['success_message'] = 'Dependant added successfully.';
+        } catch (Throwable $e) {
+            error_log('Failed to add dependant: ' . $e->getMessage());
+            $message = trim($e->getMessage());
+            if (stripos($message, 'SQLSTATE') !== false || stripos($message, 'Duplicate entry') !== false) {
+                $message = 'A dependant with the same unique details may already exist. Check the ID or birth certificate number.';
+            }
+            $_SESSION['error_message'] = 'Failed to add dependant. ' . ($message !== '' ? $message : 'Please review the information and try again.');
+        }
+
+        $this->redirect($returnTo);
+    }
+
+    public function updateMemberDependant($id)
+    {
+        $this->requireAdminAccess();
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->redirect('/admin/members');
+            return;
+        }
+
+        $returnTo = $_POST['return_to'] ?? '/admin/members/view/' . (int)$id;
+        if (!is_string($returnTo) || strpos($returnTo, '/admin/') !== 0) {
+            $returnTo = '/admin/members/view/' . (int)$id;
+        }
+
+        try {
+            $this->validateCsrf();
+
+            $member = $this->memberModel->getMemberById((int)$id);
+            if (!$member) {
+                throw new Exception('Member not found.');
+            }
+
+            $dependantId = (int)($_POST['dependant_id'] ?? 0);
+            $dependant = $this->beneficiaryModel->find($dependantId);
+            if (!$dependant || (int)($dependant['member_id'] ?? 0) !== (int)$id) {
+                throw new Exception('Dependant not found for this member.');
+            }
+
+            $fullName = $this->sanitizeInput($_POST['full_name'] ?? '');
+            $relationship = $this->sanitizeInput($_POST['relationship'] ?? '');
+            $idNumber = $this->sanitizeInput($_POST['id_number'] ?? '');
+            $dateOfBirth = $this->sanitizeInput($_POST['date_of_birth'] ?? '');
+            $phoneInput = $this->sanitizeInput($_POST['phone_number'] ?? '');
+
+            $existingDependants = array_filter(
+                $this->beneficiaryModel->getActiveBeneficiaries((int)$id) ?: [],
+                static fn($item) => (int)($item['id'] ?? 0) !== $dependantId
+            );
+            $policy = $this->memberModel->validateDependentAddition($member, $existingDependants, [
+                'full_name' => $fullName,
+                'relationship' => $relationship,
+                'id_number' => $idNumber,
+                'date_of_birth' => $dateOfBirth,
+            ], [
+                'allow_override' => true,
+                'override_requested' => true,
+            ]);
+            if (empty($policy['allowed'])) {
+                throw new Exception((string)($policy['message'] ?? 'Please review dependant details.'));
+            }
+
+            $this->beneficiaryModel->updateBeneficiary($dependantId, [
+                'full_name' => $fullName,
+                'relationship' => $policy['relationship'] ?? $relationship,
+                'id_number' => $idNumber,
+                'date_of_birth' => $dateOfBirth,
+                'phone_number' => $phoneInput !== '' ? formatKenyanPhone($phoneInput) : null,
+                'percentage' => 0,
+            ]);
+
+            $_SESSION['success_message'] = 'Dependant updated successfully.';
+        } catch (Throwable $e) {
+            $_SESSION['error_message'] = $this->friendlyErrorMessage($e, 'Failed to update dependant.');
+        }
+
+        $this->redirect($returnTo);
+    }
+
+    public function deleteMemberDependant($id)
+    {
+        $this->requireAdminAccess();
+
+        $returnTo = $_POST['return_to'] ?? '/admin/members/view/' . (int)$id;
+        if (!is_string($returnTo) || strpos($returnTo, '/admin/') !== 0) {
+            $returnTo = '/admin/members/view/' . (int)$id;
+        }
+
+        try {
+            $this->validateCsrf();
+
+            $dependantId = (int)($_POST['dependant_id'] ?? 0);
+            $dependant = $this->beneficiaryModel->find($dependantId);
+            if (!$dependant || (int)($dependant['member_id'] ?? 0) !== (int)$id) {
+                throw new Exception('Dependant not found for this member.');
+            }
+
+            $this->beneficiaryModel->deactivateBeneficiary($dependantId);
+            $_SESSION['success_message'] = 'Dependant deleted successfully.';
+        } catch (Throwable $e) {
+            $_SESSION['error_message'] = $this->friendlyErrorMessage($e, 'Failed to delete dependant.');
+        }
+
+        $this->redirect($returnTo);
+    }
+
+    public function deleteMemberCorporateMember($id)
+    {
+        $this->requireAdminAccess();
+
+        $returnTo = $_POST['return_to'] ?? '/admin/members/view/' . (int)$id;
+        if (!is_string($returnTo) || strpos($returnTo, '/admin/') !== 0) {
+            $returnTo = '/admin/members/view/' . (int)$id;
+        }
+
+        try {
+            $this->validateCsrf();
+
+            $corporateId = (int)($_POST['corporate_member_id'] ?? 0);
+            $corporate = $this->corporateMemberModel->find($corporateId);
+            if (!$corporate || (int)($corporate['member_id'] ?? 0) !== (int)$id) {
+                throw new Exception('Corporate member not found for this profile.');
+            }
+
+            $this->corporateMemberModel->delete($corporateId);
+
+            $member = $this->memberModel->getMemberById((int)$id);
+            if ($member) {
+                $remainingCorporate = $this->corporateMemberModel->getActiveForMember((int)$id) ?: [];
+                $accountContribution = $this->calculateAccountMonthlyContribution(
+                    (string)($member['package_key'] ?? ''),
+                    $remainingCorporate
+                );
+                $this->memberModel->update((int)$id, [
+                    'corporate_couple_count' => count($remainingCorporate),
+                    'monthly_contribution' => (float)($accountContribution['total_amount'] ?? 0),
+                ]);
+            }
+
+            $_SESSION['success_message'] = 'Corporate member deleted successfully.';
+        } catch (Throwable $e) {
+            $_SESSION['error_message'] = $this->friendlyErrorMessage($e, 'Failed to delete corporate member.');
+        }
+
         $this->redirect($returnTo);
     }
 
@@ -1076,7 +1545,7 @@ class AdminController extends BaseController
                 $this->db->getConnection()->rollBack();
             }
             error_log('Member delete/archive error: ' . $e->getMessage());
-            $_SESSION['error_message'] = 'Failed to delete or archive member: ' . $e->getMessage();
+            $_SESSION['error_message'] = $this->friendlyErrorMessage($e, 'Failed to delete or archive member.');
         }
 
         $this->redirect('/admin/members');
@@ -1162,18 +1631,37 @@ class AdminController extends BaseController
         $reconStats = $reconciliationService->getReconciliationStats();
         $unmatchedPayments = $reconciliationService->getUnmatchedPayments();
         $auditLogs = $reconciliationService->getRecentReconciliationLogs(5);
+        $paymentSummary = $this->getAdminPaymentSummary($reconStats ?? []);
 
         $data = [
             'title' => 'Payments - Admin',
             'payments' => $this->paymentModel->getAllPaymentsWithDetails($conditions),
             'status' => $status,
             'member_id' => $memberId,
+            'paymentSummary' => $paymentSummary,
+            'totalPayments' => $paymentSummary['totalPayments'],
+            'monthlyPayments' => $paymentSummary['monthlyPayments'],
+            'pendingReconciliation' => $paymentSummary['pendingReconciliation'],
             'recon_stats' => $reconStats ?? [],
             'unmatched_payments' => $unmatchedPayments ?? [],
             'audit_logs' => $auditLogs ?? [],
         ];
         
         $this->view('admin.payments', $data);
+    }
+
+    private function getAdminPaymentSummary(array $reconStats = []): array
+    {
+        $totalPayments = (float)$this->paymentModel->getTotalRevenue();
+        $monthStart = date('Y-m-01 00:00:00');
+        $monthEnd = date('Y-m-t 23:59:59');
+        $monthlyPayments = (float)$this->paymentModel->getTotalRevenue($monthStart, $monthEnd);
+
+        return [
+            'totalPayments' => $totalPayments,
+            'monthlyPayments' => $monthlyPayments,
+            'pendingReconciliation' => (int)($reconStats['unmatched'] ?? 0),
+        ];
     }
 
     /**
@@ -1323,7 +1811,7 @@ class AdminController extends BaseController
             $_SESSION['success'] = 'Claim submitted for member successfully.';
         } catch (Throwable $e) {
             error_log('Admin claim submission error: ' . $e->getMessage());
-            $_SESSION['error'] = 'Failed to submit claim: ' . $e->getMessage();
+            $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Failed to submit claim.');
         }
 
         $this->redirect('/admin/claims');
@@ -1671,7 +2159,7 @@ class AdminController extends BaseController
 
             } catch (Exception $e) {
                 error_log('Service tracking error: ' . $e->getMessage());
-                $_SESSION['error'] = 'Failed to update service status: ' . $e->getMessage();
+                $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Failed to update service status.');
             }
             
             $this->redirect('/admin/claims/track/' . $claimId);
@@ -1718,7 +2206,7 @@ class AdminController extends BaseController
                     $_SESSION['success'] = 'Claim marked as completed successfully.';
                 } catch (Exception $e) {
                     error_log('Complete claim error: ' . $e->getMessage());
-                    $_SESSION['error'] = 'Failed to complete claim: ' . $e->getMessage();
+                    $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Failed to complete claim.');
                 }
             }
         }
@@ -2466,9 +2954,38 @@ class AdminController extends BaseController
             exit();
         }
 
-        $this->logCommunication('sms', $recipients, 'SMS Message', $message, count($memberList));
+        require_once __DIR__ . '/../services/BulkSmsService.php';
+        $pdo = Database::getInstance()->getConnection();
+        $queueStmt = $pdo->prepare("
+            INSERT INTO sms_queue (phone_number, message, priority, status, user_id, created_at)
+            VALUES (?, ?, 'normal', 'pending', ?, NOW())
+        ");
 
-        echo json_encode(['success' => true, 'message' => 'SMS sent to ' . count($memberList) . ' members successfully!']);
+        $queued = 0;
+        foreach ($memberList as $member) {
+            $phone = $member['phone'] ?? $member['user_phone'] ?? '';
+            if (!$phone) {
+                continue;
+            }
+            $queueStmt->execute([$phone, $message, $member['user_id'] ?? null]);
+            $queued++;
+        }
+
+        if ($queued < 1) {
+            echo json_encode(['success' => false, 'message' => 'No recipients with phone numbers were found.']);
+            exit();
+        }
+
+        $queueResult = (new BulkSmsService())->processQueue(min($queued, 100));
+        $this->logCommunication('sms', $recipients, 'SMS Message', $message, $queued, 'draft');
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'SMS queued and submitted to HostPinnacle for ' . (int)($queueResult['submitted_count'] ?? $queueResult['sent_count'] ?? 0) . ' member(s). Delivery confirmation will update through SMS queue DLR sync.',
+            'queued_count' => $queued,
+            'submitted_count' => (int)($queueResult['submitted_count'] ?? $queueResult['sent_count'] ?? 0),
+            'failed_count' => (int)($queueResult['failed_count'] ?? 0),
+        ]);
         exit();
     }
 
@@ -2499,15 +3016,18 @@ class AdminController extends BaseController
     /**
      * Log communication attempt
      */
-    private function logCommunication($type, $recipients, $subject, $message, $count)
+    private function logCommunication($type, $recipients, $subject, $message, $count, $status = 'sent')
     {
         try {
             $db = Database::getInstance();
             // communications table schema:
             // sender_id, recipient_id (optional), recipient_type, recipient_criteria (JSON),
             // subject, message, type, status, sent_at
-            $query = "INSERT INTO communications (sender_id, recipient_id, recipient_type, recipient_criteria, subject, message, type, status, sent_at) 
-                      VALUES (:sender_id, NULL, :recipient_type, :recipient_criteria, :subject, :message, :type, 'sent', NOW())";
+            $sentAtSql = $status === 'sent' ? 'NOW()' : 'NULL';
+            $query = "INSERT INTO communications
+                      (sender_id, recipient_id, recipient_type, recipient_criteria, subject, message, type, status, sent_at)
+                      VALUES
+                      (:sender_id, NULL, :recipient_type, :recipient_criteria, :subject, :message, :type, :status, {$sentAtSql})";
 
             $criteria = [
                 'criteria' => $recipients,
@@ -2520,7 +3040,8 @@ class AdminController extends BaseController
                 'recipient_criteria' => json_encode($criteria),
                 'subject' => $subject,
                 'message' => $message,
-                'type' => $type
+                'type' => $type,
+                'status' => $status
             ]);
         } catch (Exception $e) {
             error_log('Failed to log communication: ' . $e->getMessage());
@@ -2632,7 +3153,7 @@ class AdminController extends BaseController
                 $_SESSION['success'] = 'Settings updated successfully to database!';
                 
             } catch (Exception $e) {
-                $_SESSION['error'] = 'Error updating settings: ' . $e->getMessage();
+                $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Error updating settings.');
             }
         }
         
@@ -2729,7 +3250,7 @@ class AdminController extends BaseController
             $_SESSION['success'] = 'M-Pesa configuration updated successfully';
             
         } catch (Exception $e) {
-            $_SESSION['error'] = 'Error updating configuration: ' . $e->getMessage();
+            $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Error updating configuration.');
         }
         
         $this->redirect('/admin/mpesa-config');
@@ -2875,7 +3396,7 @@ class AdminController extends BaseController
             
         } catch (Exception $e) {
             $db->rollBack();
-            $_SESSION['error'] = 'Error completing upgrade: ' . $e->getMessage();
+            $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Error completing upgrade.');
         }
         
         $this->redirect('/admin/plan-upgrades');
@@ -2938,7 +3459,7 @@ class AdminController extends BaseController
             
         } catch (Exception $e) {
             $db->rollBack();
-            $_SESSION['error'] = 'Error cancelling upgrade: ' . $e->getMessage();
+            $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Error cancelling upgrade.');
         }
         
         $this->redirect('/admin/plan-upgrades');
@@ -2962,7 +3483,7 @@ class AdminController extends BaseController
             $service->approveUpgrade($id, $_SESSION['user_id'] ?? null);
             $_SESSION['success'] = 'Upgrade approved. Payment initiation queued.';
         } catch (Exception $e) {
-            $_SESSION['error'] = 'Error approving upgrade: ' . $e->getMessage();
+            $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Error approving upgrade.');
         }
 
         $this->redirect('/admin/plan-upgrades');
@@ -2988,7 +3509,7 @@ class AdminController extends BaseController
             $service->rejectUpgrade($id, $reason, $_SESSION['user_id'] ?? null);
             $_SESSION['success'] = 'Upgrade request rejected';
         } catch (Exception $e) {
-            $_SESSION['error'] = 'Error rejecting upgrade: ' . $e->getMessage();
+            $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Error rejecting upgrade.');
         }
 
         $this->redirect('/admin/plan-upgrades');
@@ -3178,7 +3699,7 @@ class AdminController extends BaseController
                 }
             } catch (Exception $e) {
                 error_log('Mark as paid error: ' . $e->getMessage());
-                $_SESSION['error'] = 'Error marking payout as paid: ' . $e->getMessage();
+                $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Error marking payout as paid.');
             }
             
             $this->redirect('/admin/payouts');
@@ -3249,7 +3770,7 @@ class AdminController extends BaseController
             }
         } catch (Exception $e) {
             error_log('Payout processing error: ' . $e->getMessage());
-            $_SESSION['error'] = 'Error processing payout: ' . $e->getMessage();
+            $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Error processing payout.');
         }
         
         // Redirect back to agent details if agent_id is provided, otherwise to payouts list

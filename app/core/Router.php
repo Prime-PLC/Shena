@@ -76,10 +76,6 @@ class Router
         $this->addRoute('POST', '/member/onboarding/dismiss', 'MemberController@dismissOnboarding');
         $this->addRoute('GET',  '/member/onboarding/payment-status', 'MemberController@checkRegistrationPayment');
 
-        // Agent Routes (Protected)
-        $this->addRoute('GET', '/agent/dashboard', 'AgentDashboardController@dashboard');
-        $this->addRoute('GET', '/agent/payouts', 'AgentDashboardController@payouts');
-        $this->addRoute('POST', '/agent/payouts/request', 'AgentDashboardController@requestPayout');
         $this->addRoute('POST', '/profile/next-of-kin', 'MemberController@updateNextOfKin');
         $this->addRoute('GET', '/payments', 'MemberController@payments');
         $this->addRoute('GET', '/member/payments/export', 'MemberController@exportPaymentHistory');
@@ -129,6 +125,10 @@ class Router
         $this->addRoute('GET', '/admin/members/view/{id}', 'AdminController@viewMember');
         $this->addRoute('GET', '/admin/members/edit/{id}', 'AdminController@editMember');
         $this->addRoute('POST', '/admin/members/update/{id}', 'AdminController@updateMember');
+        $this->addRoute('POST', '/admin/members/{id}/dependants/add', 'AdminController@addMemberDependant');
+        $this->addRoute('POST', '/admin/members/{id}/dependants/update', 'AdminController@updateMemberDependant');
+        $this->addRoute('POST', '/admin/members/{id}/dependants/delete', 'AdminController@deleteMemberDependant');
+        $this->addRoute('POST', '/admin/members/{id}/corporate-members/delete', 'AdminController@deleteMemberCorporateMember');
         $this->addRoute('POST', '/admin/members/delete/{id}', 'AdminController@deleteOrArchiveMember');
         $this->addRoute('POST', '/admin/members/suspend/{id}', 'AdminController@suspendMember');
         $this->addRoute('POST', '/admin/members/activate/{id}', 'AdminController@activateMember');
@@ -174,6 +174,8 @@ class Router
         $this->addRoute('POST', '/admin/communications/send-campaign', 'BulkSmsController@sendCampaign');
         $this->addRoute('POST', '/admin/communications/cancel-campaign', 'BulkSmsController@cancelCampaign');
         $this->addRoute('POST', '/admin/communications/process-queue', 'BulkSmsController@processQueue');
+        $this->addRoute('POST', '/admin/communications/process-scheduled-campaigns', 'BulkSmsController@processScheduledCampaigns');
+        $this->addRoute('POST', '/admin/communications/sync-delivery-statuses', 'BulkSmsController@syncDeliveryStatuses');
         $this->addRoute('POST', '/admin/communications/quick-sms', 'BulkSmsController@quickSms');
         $this->addRoute('POST', '/admin/communications/send-now', 'BulkSmsController@sendNow');
         $this->addRoute('POST', '/admin/communications/edit-campaign', 'BulkSmsController@editCampaign');
@@ -183,6 +185,8 @@ class Router
         $this->addRoute('POST', '/admin/communications/retry-queue-item', 'BulkSmsController@retryQueueItem');
         $this->addRoute('POST', '/admin/communications/delete-queue-item', 'BulkSmsController@deleteQueueItem');
         $this->addRoute('GET', '/admin/communications/campaign/{id}', 'BulkSmsController@viewCampaign');
+        $this->addRoute('GET', '/admin/communications/campaign/{id}/delivery-report', 'BulkSmsController@downloadDeliveryReport');
+        $this->addRoute('POST', '/admin/communications/campaign/{id}/resend-pending-failed', 'BulkSmsController@resendPendingFailed');
         $this->addRoute('GET', '/admin/communications/templates', 'BulkSmsController@templates');
         
         // SMS Campaign Management Routes (dedicated page)
@@ -256,26 +260,7 @@ class Router
         $this->addRoute('POST', '/admin/payouts/{id}/process', 'AdminController@processPayoutRequest');
 
 
-        // Agent Dashboard Routes (Agent Only)
-        $this->addRoute('GET', '/agent/dashboard', 'AgentDashboardController@dashboard');
-        $this->addRoute('GET', '/agent/profile', 'AgentDashboardController@profile');
-        $this->addRoute('POST', '/agent/profile', 'AgentDashboardController@updateProfile');
-        $this->addRoute('POST', '/agent/profile/update', 'AgentDashboardController@updateProfile');
-        $this->addRoute('POST', '/agent/password/update', 'AgentDashboardController@updatePassword');
-        $this->addRoute('GET', '/agent/members', 'AgentDashboardController@members');
-        $this->addRoute('GET', '/agent/payouts', 'AgentDashboardController@payouts');
-        $this->addRoute('POST', '/agent/payouts/request', 'AgentDashboardController@requestPayout');
-        $this->addRoute('GET', '/agent/resources', 'AgentDashboardController@resources');
-        $this->addRoute('GET', '/agent/resources/download/{id}', 'AgentDashboardController@downloadResource');
-        $this->addRoute('GET', '/agent/member-details/{id}', 'AgentDashboardController@memberDetails');
-
-        $this->addRoute('POST', '/agent/member-details/{id}/claim-request', 'AgentDashboardController@requestClaimAssistance');
-        $this->addRoute('POST', '/agent/member-details/{id}/payment-assist', 'AgentDashboardController@requestPaymentAssistance');
-        $this->addRoute('POST', '/agent/member-details/{id}/dependents/add', 'AgentDashboardController@addDependent');
-        $this->addRoute('GET', '/agent/member-details/{id}/statement', 'AgentDashboardController@downloadStatement');
-        $this->addRoute('GET', '/agent/support', 'AgentDashboardController@support');
-        $this->addRoute('GET', '/agent/register-member', 'AgentDashboardController@registerMember');
-        $this->addRoute('POST', '/agent/register-member/store', 'AgentDashboardController@storeRegisterMember');
+        $this->registerAgentRoutes();
         
         // Agent Notifications Page
         $this->addRoute('GET', '/agent/notifications', 'AgentDashboardController@notifications');
@@ -315,6 +300,28 @@ class Router
         $this->addRoute('GET', '/error/404', 'ErrorController@notFound');
         $this->addRoute('GET', '/error/500', 'ErrorController@serverError');
         $this->addRoute('GET', '/error/403', 'ErrorController@forbidden');
+    }
+
+    private function registerAgentRoutes()
+    {
+        $this->addRoute('GET', '/agent/dashboard', 'AgentDashboardController@dashboard');
+        $this->addRoute('GET', '/agent/profile', 'AgentDashboardController@profile');
+        $this->addRoute('POST', '/agent/profile', 'AgentDashboardController@updateProfile');
+        $this->addRoute('POST', '/agent/profile/update', 'AgentDashboardController@updateProfile');
+        $this->addRoute('POST', '/agent/password/update', 'AgentDashboardController@updatePassword');
+        $this->addRoute('GET', '/agent/members', 'AgentDashboardController@members');
+        $this->addRoute('GET', '/agent/payouts', 'AgentDashboardController@payouts');
+        $this->addRoute('POST', '/agent/payouts/request', 'AgentDashboardController@requestPayout');
+        $this->addRoute('GET', '/agent/resources', 'AgentDashboardController@resources');
+        $this->addRoute('GET', '/agent/resources/download/{id}', 'AgentDashboardController@downloadResource');
+        $this->addRoute('GET', '/agent/member-details/{id}', 'AgentDashboardController@memberDetails');
+        $this->addRoute('POST', '/agent/member-details/{id}/claim-request', 'AgentDashboardController@requestClaimAssistance');
+        $this->addRoute('POST', '/agent/member-details/{id}/payment-assist', 'AgentDashboardController@requestPaymentAssistance');
+        $this->addRoute('POST', '/agent/member-details/{id}/dependents/add', 'AgentDashboardController@addDependent');
+        $this->addRoute('GET', '/agent/member-details/{id}/statement', 'AgentDashboardController@downloadStatement');
+        $this->addRoute('GET', '/agent/support', 'AgentDashboardController@support');
+        $this->addRoute('GET', '/agent/register-member', 'AgentDashboardController@registerMember');
+        $this->addRoute('POST', '/agent/register-member/store', 'AgentDashboardController@storeRegisterMember');
     }
     
     public function addRoute($method, $path, $action)

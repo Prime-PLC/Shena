@@ -149,8 +149,23 @@ class Payment extends BaseModel
                 AND status = 'completed'";
         
         $result = $this->db->fetch($sql, ['member_id' => $memberId]);
-        
+
         return ($result['total_paid'] ?? 0) >= $registrationFeeRequired;
+    }
+
+    public function hasPaidReactivationFee($memberId)
+    {
+        $reactivationFeeRequired = defined('REACTIVATION_FEE') ? REACTIVATION_FEE : 100;
+
+        $sql = "SELECT COALESCE(SUM(amount), 0) as total_paid
+                FROM {$this->table}
+                WHERE member_id = :member_id
+                AND payment_type = 'reactivation'
+                AND status = 'completed'";
+
+        $result = $this->db->fetch($sql, ['member_id' => $memberId]);
+
+        return ($result['total_paid'] ?? 0) >= $reactivationFeeRequired;
     }
 
     public function activateMemberAfterRegistrationPayment($memberId)

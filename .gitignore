@@ -14,3 +14,5 @@ project_presentation/*.zip
 *.sql.bak
 tmp_*.html
 archives/
+public/assets/launch-images/
+public/assets/shena-facebook-member-ad.*

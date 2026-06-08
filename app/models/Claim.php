@@ -333,12 +333,12 @@ class Claim extends BaseModel
     {
         $sql = "SELECT 
                     COUNT(*) as total_claims,
-                    COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_claims,
+                    COUNT(CASE WHEN status IN ('submitted', 'under_review') THEN 1 END) as pending_claims,
                     COUNT(CASE WHEN status = 'approved' THEN 1 END) as approved_claims,
                     COUNT(CASE WHEN status = 'rejected' THEN 1 END) as rejected_claims,
-                    COUNT(CASE WHEN status = 'processed' THEN 1 END) as processed_claims,
+                    COUNT(CASE WHEN status = 'completed' THEN 1 END) as processed_claims,
                     SUM(claim_amount) as total_claimed_amount,
-                    SUM(CASE WHEN status = 'approved' OR status = 'processed' THEN approved_amount ELSE 0 END) as total_approved_amount
+                    SUM(CASE WHEN status IN ('approved', 'completed') THEN approved_amount ELSE 0 END) as total_approved_amount
                 FROM {$this->table}";
         
         return $this->db->fetch($sql);

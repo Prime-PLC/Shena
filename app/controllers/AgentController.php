@@ -632,8 +632,9 @@ class AgentController extends BaseController
         
         $search = $_GET['search'] ?? '';
         $status = $_GET['status'] ?? 'all';
+        $statusFilter = $status === 'all' ? '' : $status;
         
-        $agents = $this->agentModel->getAllAgents($search, $status);
+        $agents = $this->agentModel->getAllAgents(['search' => $search, 'status' => $statusFilter], 10000, 0);
         
         // Set headers for CSV download
         header('Content-Type: text/csv');

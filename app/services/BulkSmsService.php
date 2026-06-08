@@ -102,8 +102,13 @@ class BulkSmsService
             $sql .= " AND m.status = ?";
             $params[] = 'grace_period';
         } elseif ($targetAudience === 'defaulted') {
-            $sql .= " AND m.status = ?";
-            $params[] = 'defaulted';
+            $sql .= " AND m.status IN ('inactive', 'grace_period', 'defaulted')
+                      AND NOT EXISTS (
+                          SELECT 1 FROM payments p
+                          WHERE p.member_id = m.id
+                            AND p.status = 'completed'
+                            AND p.created_at >= DATE_SUB(CURDATE(), INTERVAL 60 DAY)
+                      )";
         } elseif ($targetAudience === 'custom') {
             $status = $customFilters['member_status'] ?? $customFilters['status'] ?? null;
             if (!empty($status)) {
@@ -192,6 +197,7 @@ class BulkSmsService
             return ['success' => false, 'error' => 'Campaign not found or already completed'];
         }
 
+        $batchSize = max(1, min((int) $batchSize, 500));
         $this->updateCampaignStatus($bulkMessageId, 'sending', true);
 
         $sql = "SELECT bmr.*, u.first_name, u.last_name, u.email, u.phone,
@@ -207,8 +213,11 @@ class BulkSmsService
         $recipients = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $emailFallbackCount = 0;
+        $processedCount = 0;
 
         foreach ($recipients as $recipient) {
+            $processedCount++;
+
             try {
                 if ($this->notificationPreference->isInQuietHours($recipient['user_id'])) {
                     continue;
@@ -241,12 +250,15 @@ class BulkSmsService
                         if ($deliveryMethod === 'email') {
                             $emailFallbackCount++;
                         }
+                        $status = $deliveryMethod === 'email' ? 'sent' : 'submitted';
                         $this->updateRecipientStatus(
                             $recipient['id'],
-                            'sent',
+                            $status,
                             null,
                             $deliveryMethod,
-                            $result['data']['transactionId'] ?? null,
+                            $result['provider_message_id'] ?? $result['data']['transactionId'] ?? null,
+                            $result['provider_status'] ?? null,
+                            $result['provider_cause'] ?? null,
                             $result
                         );
                     } else {
@@ -255,6 +267,8 @@ class BulkSmsService
                             'failed',
                             $result['error'] ?? 'Unknown error',
                             'failed',
+                            null,
+                            null,
                             null,
                             $result
                         );
@@ -265,10 +279,12 @@ class BulkSmsService
                     if (!empty($result['success'])) {
                         $this->updateRecipientStatus(
                             $recipient['id'],
-                            'sent',
+                            'submitted',
                             null,
                             'sms',
-                            $result['data']['transactionId'] ?? null,
+                            $result['provider_message_id'] ?? $result['data']['transactionId'] ?? null,
+                            $result['provider_status'] ?? null,
+                            $result['provider_cause'] ?? null,
                             $result
                         );
                     } else {
@@ -277,6 +293,8 @@ class BulkSmsService
                             'failed',
                             $result['error'] ?? 'Unknown error',
                             'failed',
+                            null,
+                            null,
                             null,
                             $result
                         );
@@ -292,16 +310,126 @@ class BulkSmsService
         $counts = $this->recalculateCampaignCounts($bulkMessageId);
 
         if ((int) $counts['pending_count'] === 0) {
-            $finalStatus = ((int) $counts['sent_count'] > 0 || (int) $counts['failed_count'] > 0) ? 'completed' : 'failed';
-            $this->updateCampaignStatus($bulkMessageId, $finalStatus, false, true);
+            $finalStatus = $this->campaignStatusFromCounts($counts);
+            $this->updateCampaignStatus($bulkMessageId, $finalStatus, false, in_array($finalStatus, ['completed', 'failed'], true));
         }
 
         return [
             'success' => true,
-            'sent_count' => (int) $counts['sent_count'],
+            'sent_count' => (int) $counts['submitted_count'],
+            'submitted_count' => (int) $counts['submitted_count'],
+            'delivered_count' => (int) $counts['delivered_count'],
+            'undelivered_count' => (int) $counts['undelivered_count'],
             'failed_count' => (int) $counts['failed_count'],
             'email_fallback_count' => $emailFallbackCount,
-            'pending_count' => (int) $counts['pending_count']
+            'pending_count' => (int) $counts['pending_count'],
+            'processed_count' => $processedCount
+        ];
+    }
+
+    public function sendCampaignUntilComplete($bulkMessageId, $batchSize = 50, $maxBatches = 10)
+    {
+        $summary = [
+            'success' => true,
+            'sent_count' => 0,
+            'submitted_count' => 0,
+            'delivered_count' => 0,
+            'undelivered_count' => 0,
+            'failed_count' => 0,
+            'pending_count' => 0,
+            'processed_count' => 0,
+            'batches' => 0,
+        ];
+
+        $maxBatches = max(1, (int) $maxBatches);
+        $batchSize = max(1, min((int) $batchSize, 500));
+
+        for ($batch = 0; $batch < $maxBatches; $batch++) {
+            $result = $this->sendCampaign($bulkMessageId, $batchSize);
+
+            if (empty($result['success'])) {
+                return $result;
+            }
+
+            $summary['batches']++;
+            $summary['sent_count'] = (int) ($result['submitted_count'] ?? $result['sent_count']);
+            $summary['submitted_count'] = (int) ($result['submitted_count'] ?? $result['sent_count']);
+            $summary['delivered_count'] = (int) ($result['delivered_count'] ?? 0);
+            $summary['undelivered_count'] = (int) ($result['undelivered_count'] ?? 0);
+            $summary['failed_count'] = (int) $result['failed_count'];
+            $summary['pending_count'] = (int) $result['pending_count'];
+            $summary['processed_count'] += (int) ($result['processed_count'] ?? 0);
+
+            if ((int) $result['pending_count'] === 0 || (int) ($result['processed_count'] ?? 0) === 0) {
+                break;
+            }
+        }
+
+        return $summary;
+    }
+
+    public function getDueCampaigns($limit = 10)
+    {
+        $sql = "SELECT bm.id
+                FROM bulk_messages bm
+                WHERE bm.message_type IN ('sms', 'both')
+                  AND (
+                    (bm.status = 'scheduled' AND bm.scheduled_at <= NOW())
+                    OR bm.status = 'sending'
+                  )
+                ORDER BY COALESCE(bm.scheduled_at, bm.created_at) ASC
+                LIMIT ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([max(1, (int) $limit)]);
+
+        return array_map('intval', array_column($stmt->fetchAll(PDO::FETCH_ASSOC), 'id'));
+    }
+
+    public function processDueCampaigns($batchSize = 50, $maxCampaigns = 10, $maxBatchesPerCampaign = 3)
+    {
+        $campaignIds = $this->getDueCampaigns($maxCampaigns);
+        $processedCampaigns = 0;
+        $processedRecipients = 0;
+        $submitted = 0;
+        $delivered = 0;
+        $undelivered = 0;
+        $failed = 0;
+        $pending = 0;
+        $campaignResults = [];
+
+        foreach ($campaignIds as $campaignId) {
+            $result = $this->sendCampaignUntilComplete($campaignId, $batchSize, $maxBatchesPerCampaign);
+            $processedCampaigns++;
+            $processedRecipients += (int) ($result['processed_count'] ?? 0);
+            $submitted += (int) ($result['submitted_count'] ?? $result['sent_count'] ?? 0);
+            $delivered += (int) ($result['delivered_count'] ?? 0);
+            $undelivered += (int) ($result['undelivered_count'] ?? 0);
+            $failed += (int) ($result['failed_count'] ?? 0);
+            $pending += (int) ($result['pending_count'] ?? 0);
+            $campaignResults[] = [
+                'campaign_id' => $campaignId,
+                'success' => !empty($result['success']),
+                'processed_count' => (int) ($result['processed_count'] ?? 0),
+                'sent_count' => (int) ($result['submitted_count'] ?? $result['sent_count'] ?? 0),
+                'submitted_count' => (int) ($result['submitted_count'] ?? $result['sent_count'] ?? 0),
+                'delivered_count' => (int) ($result['delivered_count'] ?? 0),
+                'undelivered_count' => (int) ($result['undelivered_count'] ?? 0),
+                'failed_count' => (int) ($result['failed_count'] ?? 0),
+                'pending_count' => (int) ($result['pending_count'] ?? 0),
+            ];
+        }
+
+        return [
+            'success' => true,
+            'campaign_count' => $processedCampaigns,
+            'processed_count' => $processedRecipients,
+            'sent_count' => $submitted,
+            'submitted_count' => $submitted,
+            'delivered_count' => $delivered,
+            'undelivered_count' => $undelivered,
+            'failed_count' => $failed,
+            'pending_count' => $pending,
+            'campaigns' => $campaignResults,
         ];
     }
 
@@ -309,15 +437,22 @@ class BulkSmsService
     {
         $sql = "SELECT bm.*, u.email AS created_by_name,
                        COALESCE(stats.total_count, 0) AS total_recipients,
-                       COALESCE(stats.sent_count, 0) AS sent_count,
-                       COALESCE(stats.failed_count, 0) AS failed_count
+                       COALESCE(stats.submitted_count, 0) AS submitted_count,
+                       COALESCE(stats.delivered_count, 0) AS delivered_count,
+                       COALESCE(stats.delivered_count, 0) AS sent_count,
+                       COALESCE(stats.failed_count, 0) AS failed_count,
+                       COALESCE(stats.undelivered_count, 0) AS undelivered_count,
+                       COALESCE(stats.pending_count, 0) AS pending_count
                 FROM bulk_messages bm
                 JOIN users u ON bm.created_by = u.id
                 LEFT JOIN (
                     SELECT bulk_message_id,
                            COUNT(*) AS total_count,
-                           SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) AS sent_count,
-                           SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed_count
+                           SUM(CASE WHEN status = 'submitted' THEN 1 ELSE 0 END) AS submitted_count,
+                           SUM(CASE WHEN status IN ('sent', 'delivered') THEN 1 ELSE 0 END) AS delivered_count,
+                           SUM(CASE WHEN status IN ('failed', 'rejected') THEN 1 ELSE 0 END) AS failed_count,
+                           SUM(CASE WHEN status IN ('undelivered', 'expired', 'unknown') THEN 1 ELSE 0 END) AS undelivered_count,
+                           SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending_count
                     FROM bulk_message_recipients
                     GROUP BY bulk_message_id
                 ) stats ON bm.id = stats.bulk_message_id
@@ -332,16 +467,23 @@ class BulkSmsService
     {
         $sql = "SELECT bm.*, u.email AS created_by_name,
                        COALESCE(stats.total_count, 0) AS total_recipients,
-                       COALESCE(stats.sent_count, 0) AS sent_count,
+                       COALESCE(stats.submitted_count, 0) AS submitted_count,
+                       COALESCE(stats.delivered_count, 0) AS delivered_count,
+                       COALESCE(stats.delivered_count, 0) AS sent_count,
                        COALESCE(stats.failed_count, 0) AS failed_count,
-                       ROUND((COALESCE(stats.sent_count, 0) / NULLIF(COALESCE(stats.total_count, 0), 0) * 100), 2) AS success_rate
+                       COALESCE(stats.undelivered_count, 0) AS undelivered_count,
+                       COALESCE(stats.pending_count, 0) AS pending_count,
+                       ROUND((COALESCE(stats.delivered_count, 0) / NULLIF(COALESCE(stats.total_count, 0), 0) * 100), 2) AS success_rate
                 FROM bulk_messages bm
                 JOIN users u ON bm.created_by = u.id
                 LEFT JOIN (
                     SELECT bulk_message_id,
                            COUNT(*) AS total_count,
-                           SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) AS sent_count,
-                           SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed_count
+                           SUM(CASE WHEN status = 'submitted' THEN 1 ELSE 0 END) AS submitted_count,
+                           SUM(CASE WHEN status IN ('sent', 'delivered') THEN 1 ELSE 0 END) AS delivered_count,
+                           SUM(CASE WHEN status IN ('failed', 'rejected') THEN 1 ELSE 0 END) AS failed_count,
+                           SUM(CASE WHEN status IN ('undelivered', 'expired', 'unknown') THEN 1 ELSE 0 END) AS undelivered_count,
+                           SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending_count
                     FROM bulk_message_recipients
                     GROUP BY bulk_message_id
                 ) stats ON bm.id = stats.bulk_message_id
@@ -391,14 +533,18 @@ class BulkSmsService
         return $stmt->execute($params);
     }
 
-    private function updateRecipientStatus($recipientId, $status, $errorMessage = null, $deliveryMethod = null, $providerMessageId = null, $providerResponse = null)
+    private function updateRecipientStatus($recipientId, $status, $errorMessage = null, $deliveryMethod = null, $providerMessageId = null, $providerStatus = null, $providerCause = null, $providerResponse = null)
     {
         $sql = "UPDATE bulk_message_recipients
                 SET status = ?,
-                    sent_at = CASE WHEN ? = 'sent' THEN NOW() ELSE sent_at END,
+                    sent_at = CASE WHEN ? IN ('sent', 'delivered') THEN NOW() ELSE sent_at END,
+                    submitted_at = CASE WHEN ? = 'submitted' THEN NOW() ELSE submitted_at END,
+                    delivered_at = CASE WHEN ? IN ('sent', 'delivered') THEN COALESCE(delivered_at, NOW()) ELSE delivered_at END,
                     error_message = ?,
                     delivery_method = ?,
                     provider_message_id = ?,
+                    provider_status = ?,
+                    provider_cause = ?,
                     provider_response = ?,
                     email_fallback_sent = ?,
                     email_sent_at = CASE WHEN ? = 'email' THEN NOW() ELSE email_sent_at END
@@ -411,9 +557,13 @@ class BulkSmsService
         return $stmt->execute([
             $status,
             $status,
+            $status,
+            $status,
             $errorMessage,
             $deliveryMethod,
             $providerMessageId,
+            $providerStatus,
+            $providerCause,
             $encodedResponse,
             $fallbackSent,
             $deliveryMethod,
@@ -436,8 +586,11 @@ class BulkSmsService
     {
         $sql = "SELECT
                     COUNT(*) AS total_count,
-                    SUM(CASE WHEN bmr.status = 'sent' THEN 1 ELSE 0 END) AS sent_count,
-                    SUM(CASE WHEN bmr.status = 'failed' THEN 1 ELSE 0 END) AS failed_count,
+                    SUM(CASE WHEN bmr.status = 'submitted' THEN 1 ELSE 0 END) AS submitted_count,
+                    SUM(CASE WHEN bmr.status IN ('sent', 'delivered') THEN 1 ELSE 0 END) AS delivered_count,
+                    SUM(CASE WHEN bmr.status IN ('sent', 'delivered') THEN 1 ELSE 0 END) AS sent_count,
+                    SUM(CASE WHEN bmr.status IN ('failed', 'rejected') THEN 1 ELSE 0 END) AS failed_count,
+                    SUM(CASE WHEN bmr.status IN ('undelivered', 'expired', 'unknown') THEN 1 ELSE 0 END) AS undelivered_count,
                     SUM(CASE WHEN bmr.status = 'pending' THEN 1 ELSE 0 END) AS pending_count,
                     SUM(CASE WHEN bmr.status = 'skipped' THEN 1 ELSE 0 END) AS skipped_count
                 FROM bulk_message_recipients bmr
@@ -447,11 +600,19 @@ class BulkSmsService
         $counts = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
 
         $updateSql = "UPDATE bulk_messages
-                      SET total_recipients = ?, sent_count = ?, failed_count = ?
+                      SET total_recipients = ?,
+                          sent_count = ?,
+                          submitted_count = ?,
+                          delivered_count = ?,
+                          undelivered_count = ?,
+                          failed_count = ?
                       WHERE id = ?";
         $this->db->prepare($updateSql)->execute([
             (int) ($counts['total_count'] ?? 0),
             (int) ($counts['sent_count'] ?? 0),
+            (int) ($counts['submitted_count'] ?? 0),
+            (int) ($counts['delivered_count'] ?? 0),
+            (int) ($counts['undelivered_count'] ?? 0),
             (int) ($counts['failed_count'] ?? 0),
             $bulkMessageId
         ]);
@@ -459,10 +620,41 @@ class BulkSmsService
         return [
             'total_count' => (int) ($counts['total_count'] ?? 0),
             'sent_count' => (int) ($counts['sent_count'] ?? 0),
+            'submitted_count' => (int) ($counts['submitted_count'] ?? 0),
+            'delivered_count' => (int) ($counts['delivered_count'] ?? 0),
+            'undelivered_count' => (int) ($counts['undelivered_count'] ?? 0),
             'failed_count' => (int) ($counts['failed_count'] ?? 0),
             'pending_count' => (int) ($counts['pending_count'] ?? 0),
             'skipped_count' => (int) ($counts['skipped_count'] ?? 0),
         ];
+    }
+
+    private function campaignStatusFromCounts(array $counts)
+    {
+        $pending = (int) ($counts['pending_count'] ?? 0);
+        $submitted = (int) ($counts['submitted_count'] ?? 0);
+        $delivered = (int) ($counts['delivered_count'] ?? $counts['sent_count'] ?? 0);
+        $failed = (int) ($counts['failed_count'] ?? 0);
+        $undelivered = (int) ($counts['undelivered_count'] ?? 0);
+        $total = (int) ($counts['total_count'] ?? 0);
+
+        if ($pending > 0) {
+            return 'sending';
+        }
+        if ($submitted > 0) {
+            return $delivered > 0 || $failed > 0 || $undelivered > 0 ? 'partially_delivered' : 'submitted';
+        }
+        if ($delivered > 0 && ($failed > 0 || $undelivered > 0)) {
+            return 'partially_delivered';
+        }
+        if ($delivered > 0 && $delivered === $total) {
+            return 'completed';
+        }
+        if ($failed > 0 || $undelivered > 0) {
+            return $delivered > 0 ? 'partially_delivered' : 'failed';
+        }
+
+        return 'failed';
     }
 
     public function deleteCampaign($bulkMessageId)
@@ -482,16 +674,33 @@ class BulkSmsService
         return [
             'total' => $counts['total_count'],
             'sent' => $counts['sent_count'],
+            'submitted' => $counts['submitted_count'],
+            'delivered' => $counts['delivered_count'],
+            'undelivered' => $counts['undelivered_count'],
             'failed' => $counts['failed_count'],
             'pending' => $counts['pending_count'],
             'skipped' => $counts['skipped_count'],
         ];
     }
 
+    public function refreshCampaignDeliveryStatus($bulkMessageId)
+    {
+        $counts = $this->recalculateCampaignCounts($bulkMessageId);
+        $this->updateCampaignStatus(
+            $bulkMessageId,
+            $this->campaignStatusFromCounts($counts),
+            false,
+            (int) $counts['submitted_count'] === 0 && (int) $counts['pending_count'] === 0
+        );
+        $this->db->prepare("UPDATE bulk_messages SET dlr_synced_at = NOW() WHERE id = ?")->execute([$bulkMessageId]);
+
+        return $counts;
+    }
+
     public function getActiveCampaignCount()
     {
         $sql = "SELECT COUNT(*) AS count FROM bulk_messages
-                WHERE message_type IN ('sms', 'both') AND status IN ('sending', 'scheduled')";
+                WHERE message_type IN ('sms', 'both') AND status IN ('sending', 'scheduled', 'submitted', 'partially_delivered')";
         $stmt = $this->db->prepare($sql);
         $stmt->execute();
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -502,7 +711,7 @@ class BulkSmsService
     {
         $sql = "SELECT COUNT(*) AS count
                 FROM bulk_message_recipients
-                WHERE recipient_type = 'sms' AND status = 'sent' AND DATE(sent_at) = CURDATE()";
+                WHERE recipient_type = 'sms' AND status IN ('sent', 'delivered') AND DATE(COALESCE(delivered_at, sent_at)) = CURDATE()";
         $stmt = $this->db->prepare($sql);
         $stmt->execute();
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -512,7 +721,7 @@ class BulkSmsService
     public function getTotalSentCount()
     {
         $sql = "SELECT COUNT(*) AS count FROM bulk_message_recipients
-                WHERE recipient_type = 'sms' AND status = 'sent'";
+                WHERE recipient_type = 'sms' AND status IN ('sent', 'delivered')";
         $stmt = $this->db->prepare($sql);
         $stmt->execute();
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -522,7 +731,7 @@ class BulkSmsService
     public function getFailedCount()
     {
         $sql = "SELECT COUNT(*) AS count FROM bulk_message_recipients
-                WHERE recipient_type = 'sms' AND status = 'failed'";
+                WHERE recipient_type = 'sms' AND status IN ('failed', 'undelivered', 'expired', 'rejected', 'unknown')";
         $stmt = $this->db->prepare($sql);
         $stmt->execute();
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -540,6 +749,11 @@ class BulkSmsService
 
     public function getSmsCredits()
     {
+        $accountStatus = $this->smsService->getAccountStatus();
+        if (!empty($accountStatus['success']) && $accountStatus['sms_balance'] !== null) {
+            return $accountStatus['sms_balance'];
+        }
+
         $sql = "SELECT balance FROM sms_credits LIMIT 1";
         $stmt = $this->db->prepare($sql);
         $stmt->execute();
@@ -583,7 +797,9 @@ class BulkSmsService
         $sql = "SELECT bmr.*, u.first_name, u.last_name, u.phone, u.email,
                        m.member_number, m.package, m.status AS member_status,
                        bmr.delivery_method, bmr.email_fallback_sent, bmr.email_sent_at,
-                       bmr.provider_message_id, bmr.provider_response
+                       bmr.provider_message_id, bmr.provider_status, bmr.provider_cause,
+                       bmr.provider_response, bmr.submitted_at, bmr.delivered_at,
+                       bmr.dlr_checked_at, bmr.dlr_attempts
                 FROM bulk_message_recipients bmr
                 JOIN users u ON bmr.user_id = u.id
                 JOIN members m ON u.id = m.user_id
@@ -601,6 +817,34 @@ class BulkSmsService
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    public function resetRecipientsForResend($campaignId, array $statuses = ['pending', 'failed'])
+    {
+        $allowed = array_values(array_intersect($statuses, ['pending', 'failed']));
+        if (empty($allowed)) {
+            $allowed = ['pending', 'failed'];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($allowed), '?'));
+        $sql = "UPDATE bulk_message_recipients
+                SET status = 'pending',
+                    error_message = NULL,
+                    sent_at = NULL,
+                    delivery_method = NULL,
+                    provider_message_id = NULL,
+                    provider_response = NULL,
+                    email_fallback_sent = 0,
+                    email_sent_at = NULL
+                WHERE bulk_message_id = ?
+                  AND status IN ({$placeholders})";
+        $params = array_merge([$campaignId], $allowed);
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+
+        $this->recalculateCampaignCounts($campaignId);
+
+        return $stmt->rowCount();
     }
 
     public function processQueue($batchSize = 100)
@@ -623,10 +867,18 @@ class BulkSmsService
                 $result = $this->smsService->sendSms($item['phone_number'], $item['message']);
 
                 if (!empty($result['success'])) {
-                    $this->updateQueueStatus($item['id'], 'sent');
+                    $this->updateQueueStatus(
+                        $item['id'],
+                        'submitted',
+                        null,
+                        $result['provider_message_id'] ?? $result['data']['transactionId'] ?? null,
+                        $result['provider_status'] ?? null,
+                        $result['provider_cause'] ?? null,
+                        $result
+                    );
                     $sentCount++;
                 } else {
-                    $this->updateQueueStatus($item['id'], 'failed', $result['error'] ?? 'Unknown error');
+                    $this->updateQueueStatus($item['id'], 'failed', $result['error'] ?? 'Unknown error', null, null, null, $result);
                     $failedCount++;
                 }
 
@@ -639,15 +891,224 @@ class BulkSmsService
 
         return [
             'sent_count' => $sentCount,
+            'submitted_count' => $sentCount,
             'failed_count' => $failedCount
         ];
     }
 
-    private function updateQueueStatus($queueId, $status, $errorMessage = null)
+    private function updateQueueStatus($queueId, $status, $errorMessage = null, $providerMessageId = null, $providerStatus = null, $providerCause = null, $providerResponse = null)
     {
-        $sql = "UPDATE sms_queue SET status = ?, sent_at = CASE WHEN ? = 'sent' THEN NOW() ELSE sent_at END, error_message = ? WHERE id = ?";
+        $sql = "UPDATE sms_queue
+                SET status = ?,
+                    sent_at = CASE WHEN ? IN ('sent', 'delivered') THEN NOW() ELSE sent_at END,
+                    submitted_at = CASE WHEN ? = 'submitted' THEN NOW() ELSE submitted_at END,
+                    delivered_at = CASE WHEN ? IN ('sent', 'delivered') THEN COALESCE(delivered_at, NOW()) ELSE delivered_at END,
+                    error_message = ?,
+                    provider_message_id = COALESCE(?, provider_message_id),
+                    provider_status = ?,
+                    provider_cause = ?,
+                    provider_response = ?
+                WHERE id = ?";
+        $encodedResponse = $providerResponse === null ? null : json_encode($providerResponse);
         $stmt = $this->db->prepare($sql);
-        return $stmt->execute([$status, $status, $errorMessage, $queueId]);
+        return $stmt->execute([
+            $status,
+            $status,
+            $status,
+            $status,
+            $errorMessage,
+            $providerMessageId,
+            $providerStatus,
+            $providerCause,
+            $encodedResponse,
+            $queueId
+        ]);
+    }
+
+    public function syncDeliveryStatuses($limit = 100)
+    {
+        $limit = max(1, min((int) $limit, 500));
+
+        $recipientResult = $this->syncCampaignRecipientDeliveryStatuses($limit);
+        $remaining = max(0, $limit - (int) ($recipientResult['checked_count'] ?? 0));
+        $queueResult = $this->syncQueueDeliveryStatuses($remaining > 0 ? $remaining : $limit);
+
+        return [
+            'success' => true,
+            'checked_count' => (int) ($recipientResult['checked_count'] ?? 0) + (int) ($queueResult['checked_count'] ?? 0),
+            'updated_count' => (int) ($recipientResult['updated_count'] ?? 0) + (int) ($queueResult['updated_count'] ?? 0),
+            'delivered_count' => (int) ($recipientResult['delivered_count'] ?? 0) + (int) ($queueResult['delivered_count'] ?? 0),
+            'undelivered_count' => (int) ($recipientResult['undelivered_count'] ?? 0) + (int) ($queueResult['undelivered_count'] ?? 0),
+            'failed_checks' => (int) ($recipientResult['failed_checks'] ?? 0) + (int) ($queueResult['failed_checks'] ?? 0),
+            'campaign_ids' => array_values(array_unique($recipientResult['campaign_ids'] ?? [])),
+        ];
+    }
+
+    private function syncCampaignRecipientDeliveryStatuses($limit)
+    {
+        $sql = "SELECT id, bulk_message_id, provider_message_id
+                FROM bulk_message_recipients
+                WHERE recipient_type = 'sms'
+                  AND status = 'submitted'
+                  AND provider_message_id IS NOT NULL
+                  AND (dlr_checked_at IS NULL OR dlr_checked_at <= DATE_SUB(NOW(), INTERVAL 10 MINUTE))
+                ORDER BY submitted_at ASC, id ASC
+                LIMIT ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([$limit]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $summary = [
+            'checked_count' => 0,
+            'updated_count' => 0,
+            'delivered_count' => 0,
+            'undelivered_count' => 0,
+            'failed_checks' => 0,
+            'campaign_ids' => [],
+        ];
+
+        foreach ($rows as $row) {
+            $summary['checked_count']++;
+            $dlr = $this->smsService->checkDeliveryStatus($row['provider_message_id']);
+
+            if (empty($dlr['success'])) {
+                $summary['failed_checks']++;
+                $this->markRecipientDlrChecked((int) $row['id'], null, $dlr['error'] ?? 'DLR check failed', $dlr);
+                continue;
+            }
+
+            $status = $dlr['status'] ?? 'unknown';
+            $this->markRecipientDlrChecked(
+                (int) $row['id'],
+                $status,
+                $dlr['provider_cause'] ?? null,
+                $dlr,
+                $dlr['provider_status'] ?? null,
+                $dlr['delivered_at'] ?? null
+            );
+
+            if ($status !== 'submitted') {
+                $summary['updated_count']++;
+                $summary['campaign_ids'][] = (int) $row['bulk_message_id'];
+            }
+            if ($status === 'delivered') {
+                $summary['delivered_count']++;
+            } elseif (in_array($status, ['undelivered', 'expired', 'rejected', 'unknown'], true)) {
+                $summary['undelivered_count']++;
+            }
+        }
+
+        foreach (array_unique($summary['campaign_ids']) as $campaignId) {
+            $counts = $this->recalculateCampaignCounts($campaignId);
+            $this->updateCampaignStatus($campaignId, $this->campaignStatusFromCounts($counts), false, (int) $counts['submitted_count'] === 0 && (int) $counts['pending_count'] === 0);
+            $this->db->prepare("UPDATE bulk_messages SET dlr_synced_at = NOW() WHERE id = ?")->execute([$campaignId]);
+        }
+
+        return $summary;
+    }
+
+    private function markRecipientDlrChecked($recipientId, $status = null, $providerCause = null, $providerResponse = null, $providerStatus = null, $deliveredAt = null)
+    {
+        $sql = "UPDATE bulk_message_recipients
+                SET status = COALESCE(?, status),
+                    provider_status = COALESCE(?, provider_status),
+                    provider_cause = COALESCE(?, provider_cause),
+                    provider_response = COALESCE(?, provider_response),
+                    delivered_at = CASE WHEN ? = 'delivered' THEN COALESCE(?, NOW()) ELSE delivered_at END,
+                    sent_at = CASE WHEN ? = 'delivered' THEN COALESCE(sent_at, NOW()) ELSE sent_at END,
+                    dlr_checked_at = NOW(),
+                    dlr_attempts = COALESCE(dlr_attempts, 0) + 1
+                WHERE id = ?";
+        $encodedResponse = $providerResponse === null ? null : json_encode($providerResponse);
+        return $this->db->prepare($sql)->execute([
+            $status,
+            $providerStatus,
+            $providerCause,
+            $encodedResponse,
+            $status,
+            $deliveredAt,
+            $status,
+            $recipientId
+        ]);
+    }
+
+    private function syncQueueDeliveryStatuses($limit)
+    {
+        $sql = "SELECT id, provider_message_id
+                FROM sms_queue
+                WHERE status = 'submitted'
+                  AND provider_message_id IS NOT NULL
+                  AND (dlr_checked_at IS NULL OR dlr_checked_at <= DATE_SUB(NOW(), INTERVAL 10 MINUTE))
+                ORDER BY submitted_at ASC, id ASC
+                LIMIT ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([$limit]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $summary = [
+            'checked_count' => 0,
+            'updated_count' => 0,
+            'delivered_count' => 0,
+            'undelivered_count' => 0,
+            'failed_checks' => 0,
+        ];
+
+        foreach ($rows as $row) {
+            $summary['checked_count']++;
+            $dlr = $this->smsService->checkDeliveryStatus($row['provider_message_id']);
+
+            if (empty($dlr['success'])) {
+                $summary['failed_checks']++;
+                $this->markQueueDlrChecked((int) $row['id'], null, $dlr['error'] ?? 'DLR check failed', $dlr);
+                continue;
+            }
+
+            $status = $dlr['status'] ?? 'unknown';
+            $this->markQueueDlrChecked(
+                (int) $row['id'],
+                $status,
+                $dlr['provider_cause'] ?? null,
+                $dlr,
+                $dlr['provider_status'] ?? null,
+                $dlr['delivered_at'] ?? null
+            );
+
+            if ($status !== 'submitted') {
+                $summary['updated_count']++;
+            }
+            if ($status === 'delivered') {
+                $summary['delivered_count']++;
+            } elseif (in_array($status, ['undelivered', 'expired', 'rejected', 'unknown'], true)) {
+                $summary['undelivered_count']++;
+            }
+        }
+
+        return $summary;
+    }
+
+    private function markQueueDlrChecked($queueId, $status = null, $providerCause = null, $providerResponse = null, $providerStatus = null, $deliveredAt = null)
+    {
+        $sql = "UPDATE sms_queue
+                SET status = COALESCE(?, status),
+                    provider_status = COALESCE(?, provider_status),
+                    provider_cause = COALESCE(?, provider_cause),
+                    provider_response = COALESCE(?, provider_response),
+                    delivered_at = CASE WHEN ? = 'delivered' THEN COALESCE(?, NOW()) ELSE delivered_at END,
+                    sent_at = CASE WHEN ? = 'delivered' THEN COALESCE(sent_at, NOW()) ELSE sent_at END,
+                    dlr_checked_at = NOW(),
+                    dlr_attempts = COALESCE(dlr_attempts, 0) + 1
+                WHERE id = ?";
+        $encodedResponse = $providerResponse === null ? null : json_encode($providerResponse);
+        return $this->db->prepare($sql)->execute([
+            $status,
+            $providerStatus,
+            $providerCause,
+            $encodedResponse,
+            $status,
+            $deliveredAt,
+            $status,
+            $queueId
+        ]);
     }
 
     private function replacePlaceholders($message, array $recipient)

@@ -35,6 +35,8 @@ $assertContains($memberModel, "m.status IN ('inactive', 'pending')", 'pending ap
 
 $assertContains($adminController, 'hasPaidRegistrationFee($memberId)', 'bulk approval should use the central registration fee check');
 $assertContains($adminController, 'activateMemberAfterRegistrationPayment($memberId)', 'bulk approval should use the central activation side effects');
+$assertContains($adminController, 'override_system_restrictions', 'bulk activation APIs should only bypass policy checks when the admin explicitly sends the override flag');
+$assertContains($adminController, 'getMemberActivationRestrictions', 'bulk activation APIs should report the same activation restrictions as the profile view');
 $assertNotContains($adminController, '$registrationFeeRequired = defined(\'REGISTRATION_FEE\')', 'bulk approval should not duplicate registration fee summing logic');
 
 $assertContains($reconciliationService, "payment_type = :payment_type", 'receipt verification should normalize existing payments to the requested type');

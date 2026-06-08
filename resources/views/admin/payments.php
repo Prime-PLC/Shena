@@ -1,7 +1,8 @@
 <?php 
-$totalPayments = $totalPayments ?? 0;
-$monthlyPayments = $monthlyPayments ?? 0;
-$pendingReconciliation = $pendingReconciliation ?? 0;
+$paymentSummary = $paymentSummary ?? [];
+$totalPayments = $paymentSummary['totalPayments'] ?? ($totalPayments ?? 0);
+$monthlyPayments = $paymentSummary['monthlyPayments'] ?? ($monthlyPayments ?? 0);
+$pendingReconciliation = $paymentSummary['pendingReconciliation'] ?? ($pendingReconciliation ?? 0);
 $successRate = $successRate ?? 0;
 ?>
 

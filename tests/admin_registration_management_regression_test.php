@@ -6,7 +6,8 @@ $checks = [
     [
         'file' => 'app/controllers/AdminController.php',
         'mustContain' => [
-            "'corporate_couple_count' => \$corporateCoupleCount",
+            'parseCorporateMembersFromPost',
+            'calculateAccountMonthlyContribution',
             "\$memberUserData = [",
             "\$memberRecordData = [",
             "\$this->userModel->update(\$member['user_id'], \$memberUserData)",
@@ -29,8 +30,11 @@ $checks = [
     [
         'file' => 'app/controllers/AgentDashboardController.php',
         'mustContain' => [
-            "'corporate_couple_count' => \$corporateCoupleCount",
-            '$monthlyContribution = $this->memberModel->calculateMonthlyContribution($memberForCalc, [])',
+            'MemberCorporateMember',
+            'parseCorporateMembersFromPost',
+            'calculateAccountMonthlyContribution',
+            '$this->corporateMemberModel->replaceForMember($memberId, $accountContribution[\'line_items\'])',
+            '$monthlyContribution = (float)$accountContribution[\'total_amount\']',
         ],
     ],
     [
@@ -46,14 +50,15 @@ $checks = [
     [
         'file' => 'resources/views/admin/register-member.php',
         'mustContain' => [
-            'membershipPlanData',
-            'data-monthly-contribution',
+            'registrationCorporateLineItems',
+            'addRegistrationCorporateRow',
             'corporate-total-preview',
         ],
         'mustNotContain' => [
             'name="sub_county"',
             'Sub County',
             'Sub-County',
+            'name="corporate_couple_count"',
             '+KES 150',
             '+KES 300',
         ],
@@ -94,16 +99,15 @@ $checks = [
     [
         'file' => 'resources/views/admin/members.php',
         'mustContain' => [
-            'member-quick-panel',
-            'openMemberManageModal',
-            'memberStatusSelect',
             'memberSearchForm',
-            'memberManageForm',
+            '/admin/members/view/',
             'name="search"',
             'name="package"',
             'name="return_to"',
         ],
         'mustNotContain' => [
+            'member-quick-panel',
+            'openMemberManageModal',
             '<i class="fas fa-edit"></i> Edit',
             '<i class="fas fa-money-bill-wave"></i> Payments',
             '<i class="fas fa-ban"></i> Suspend',
@@ -131,13 +135,13 @@ $checks = [
 $failed = false;
 
 require_once $root . '/app/services/MembershipPricingService.php';
-$corporatePricing = MembershipPricingService::calculateMonthlyContribution([
-    'tier' => 'executive',
-    'principal_age' => 40,
-    'corporate_couple_count' => 2,
-]);
-if (($corporatePricing['base_price'] ?? 0) !== 300 || ($corporatePricing['corporate_addon'] ?? 0) !== 600 || ($corporatePricing['total_price'] ?? 0) !== 900) {
-    fwrite(STDERR, "Corporate pricing should charge the selected plan amount for each additional corporate couple\n");
+$packages = require $root . '/config/packages.php';
+$accountPricing = MembershipPricingService::calculateAccountMonthlyContribution('executive_below_70', [
+    ['package_key' => 'executive_above_70'],
+    ['package_key' => 'couple_below_70'],
+], $packages);
+if (($accountPricing['main_amount'] ?? 0) !== 300 || ($accountPricing['corporate_total'] ?? 0) !== 650 || ($accountPricing['total_amount'] ?? 0) !== 950) {
+    fwrite(STDERR, "Corporate pricing should sum each selected corporate package independently\n");
     $failed = true;
 }
 

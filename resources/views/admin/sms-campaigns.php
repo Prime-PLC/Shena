@@ -12,7 +12,7 @@ if (empty($_SESSION['csrf_token'])) {
 
 <style>
     .page-header {
-        background: linear-gradient(135deg, #7F3D9E 0%, #7F3D9E 100%);
+        background: #7F3D9E;
         border-radius: 12px;
         padding: 2rem;
         margin-bottom: 2rem;
@@ -160,6 +160,16 @@ if (empty($_SESSION['csrf_token'])) {
     .status-badge.sending {
         background: rgba(59, 130, 246, 0.1);
         color: #3B82F6;
+    }
+
+    .status-badge.submitted {
+        background: rgba(59, 130, 246, 0.1);
+        color: #2563EB;
+    }
+
+    .status-badge.partially_delivered {
+        background: rgba(245, 158, 11, 0.1);
+        color: #92400E;
     }
 
     .status-badge.completed {
@@ -326,7 +336,7 @@ if (empty($_SESSION['csrf_token'])) {
     }
 
     .modal-header-modern {
-        background: linear-gradient(135deg, #7F3D9E 0%, #7F3D9E 100%);
+        background: #7F3D9E;
         color: white;
         padding: 1.5rem;
         border-radius: 12px 12px 0 0;
@@ -430,7 +440,7 @@ if (empty($_SESSION['csrf_token'])) {
 
     .progress-fill {
         height: 100%;
-        background: linear-gradient(90deg, #7F3D9E 0%, #7F3D9E 100%);
+        background: #7F3D9E;
         transition: width 0.3s ease;
     }
 
@@ -451,6 +461,12 @@ if (empty($_SESSION['csrf_token'])) {
         <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
             <button class="modern-btn primary" onclick="openModal('createCampaignModal')">
                 <i class="fas fa-plus"></i> Create Campaign
+            </button>
+            <button class="modern-btn secondary" onclick="processScheduledCampaigns()">
+                <i class="fas fa-clock"></i> Process Due
+            </button>
+            <button class="modern-btn secondary" onclick="syncDeliveryStatuses()">
+                <i class="fas fa-sync"></i> Sync Delivery
             </button>
             <button class="modern-btn success" onclick="openModal('quickSMSModal')">
                 <i class="fas fa-sms"></i> Quick SMS
@@ -479,7 +495,7 @@ if (empty($_SESSION['csrf_token'])) {
                 <i class="fas fa-check-circle"></i>
             </div>
             <p class="stat-value"><?php echo number_format($stats['sent_today'] ?? 0); ?></p>
-            <p class="stat-label">Sent Today</p>
+            <p class="stat-label">Delivered Today</p>
         </div>
     </div>
     <div class="col-md-3">
@@ -556,16 +572,17 @@ if (empty($_SESSION['csrf_token'])) {
                         <td><?php echo number_format($campaign['total_recipients']); ?></td>
                         <td>
                             <div>
-                                <span class="count-badge success"><?php echo $campaign['sent_count']; ?> sent</span>
-                                <span class="count-badge danger"><?php echo $campaign['failed_count']; ?> failed</span>
+                                <span class="count-badge success"><?php echo (int)($campaign['delivered_count'] ?? $campaign['sent_count'] ?? 0); ?> delivered</span>
+                                <span class="count-badge"><?php echo (int)($campaign['submitted_count'] ?? 0); ?> submitted</span>
+                                <span class="count-badge danger"><?php echo (int)($campaign['failed_count'] ?? 0) + (int)($campaign['undelivered_count'] ?? 0); ?> failed</span>
                                 <div class="progress-bar">
-                                    <div class="progress-fill" style="width: <?php echo ($campaign['total_recipients'] > 0) ? (($campaign['sent_count'] / $campaign['total_recipients']) * 100) : 0; ?>%"></div>
+                                    <div class="progress-fill" style="width: <?php echo ($campaign['total_recipients'] > 0) ? ((((int)($campaign['delivered_count'] ?? $campaign['sent_count'] ?? 0)) / $campaign['total_recipients']) * 100) : 0; ?>%"></div>
                                 </div>
                             </div>
                         </td>
                         <td>
                             <span class="status-badge <?php echo $campaign['status']; ?>">
-                                <?php echo ucfirst($campaign['status']); ?>
+                                <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $campaign['status']))); ?>
                             </span>
                         </td>
                         <td>
@@ -581,6 +598,17 @@ if (empty($_SESSION['csrf_token'])) {
                             <button class="action-btn" onclick="viewCampaign(<?php echo $campaign['id']; ?>)" title="View Details">
                                 <i class="fas fa-eye"></i>
                             </button>
+                            <button class="action-btn" onclick="downloadDeliveryReport(<?php echo $campaign['id']; ?>)" title="Download Delivery Report">
+                                <i class="fas fa-file-download"></i>
+                            </button>
+                            <?php
+                                $pendingRecipientCount = (int)($campaign['pending_count'] ?? max(0, (int)($campaign['total_recipients'] ?? 0) - (int)($campaign['sent_count'] ?? 0) - (int)($campaign['failed_count'] ?? 0)));
+                            ?>
+                            <?php if ((int)($campaign['failed_count'] ?? 0) > 0 || $pendingRecipientCount > 0): ?>
+                                <button class="action-btn warning" onclick="resendPendingFailed(<?php echo $campaign['id']; ?>)" title="Resend Pending/Failed">
+                                    <i class="fas fa-redo"></i>
+                                </button>
+                            <?php endif; ?>
                             <?php if ($campaign['status'] === 'draft' || $campaign['status'] === 'scheduled'): ?>
                                 <button class="action-btn" data-campaign="<?php echo $campaignEditJson; ?>" onclick="editSmsCampaign(this)" title="Edit">
                                     <i class="fas fa-edit"></i>
@@ -1002,6 +1030,82 @@ function viewCampaign(id) {
     window.location.href = '/admin/communications/campaign/' + id;
 }
 
+function downloadDeliveryReport(id) {
+    window.location.href = '/admin/communications/campaign/' + id + '/delivery-report';
+}
+
+function processScheduledCampaigns() {
+    fetch('/admin/communications/process-scheduled-campaigns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+    })
+    .then(parseJsonResponse)
+    .then(data => {
+        if (data.success) {
+            const processed = data.processed_count || 0;
+            const campaigns = data.campaign_count || 0;
+            ShenaApp.showNotification(`Processed ${processed} SMS recipient(s) across ${campaigns} campaign(s).`, 'success');
+            setTimeout(() => location.reload(), 800);
+        } else {
+            ShenaApp.showNotification(data.message || 'Failed to process due campaigns', 'error');
+        }
+    })
+    .catch(() => ShenaApp.showNotification('Network error occurred', 'error'));
+}
+
+function syncDeliveryStatuses() {
+    fetch('/admin/communications/sync-delivery-statuses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limit: 100 })
+    })
+    .then(parseJsonResponse)
+    .then(data => {
+        if (data.success) {
+            ShenaApp.showNotification(`Delivery sync checked ${data.checked_count || 0} SMS record(s); ${data.updated_count || 0} updated.`, 'success');
+            setTimeout(() => location.reload(), 800);
+        } else {
+            ShenaApp.showNotification(data.message || 'Failed to sync delivery statuses', 'error');
+        }
+    })
+    .catch(() => ShenaApp.showNotification('Network error occurred', 'error'));
+}
+
+function resendPendingFailed(id) {
+    const proceed = () => {
+        fetch('/admin/communications/campaign/' + id + '/resend-pending-failed', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        })
+        .then(parseJsonResponse)
+        .then(data => {
+            if (data.success) {
+                ShenaApp.showNotification(data.message || 'Resend started', 'success');
+                setTimeout(() => location.reload(), 800);
+            } else {
+                ShenaApp.showNotification(data.message || 'Failed to resend pending/failed SMS', 'error');
+            }
+        })
+        .catch(() => ShenaApp.showNotification('Network error occurred', 'error'));
+    };
+
+    if (window.ShenaApp && typeof ShenaApp.confirmAction === 'function') {
+        ShenaApp.confirmAction(
+            'Resend this campaign to every pending or failed recipient?',
+            proceed,
+            null,
+            { type: 'warning', title: 'Resend SMS', confirmText: 'Resend' }
+        );
+        return;
+    }
+
+    if (confirm('Resend this campaign to every pending or failed recipient?')) {
+        proceed();
+    }
+}
+
 function editSmsCampaign(button) {
     const campaign = JSON.parse(button.getAttribute('data-campaign') || '{}');
     document.getElementById('edit-campaign-id').value = campaign.id || '';
@@ -1056,7 +1160,7 @@ function sendCampaign(id) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                ShenaApp.showNotification('Campaign sending initiated!', 'success');
+                ShenaApp.showNotification(data.message || 'Campaign submitted to HostPinnacle.', 'success');
                 location.reload();
             } else {
                 ShenaApp.showNotification('Failed to send campaign: ' + (data.message || 'Unknown error'), 'error');
@@ -1238,7 +1342,7 @@ document.getElementById('quickSMSForm')?.addEventListener('submit', function(e) 
     .then(response => parseJsonResponse(response))
     .then(data => {
         if (data.success) {
-            ShenaApp.showNotification('SMS sent successfully!', 'success');
+            ShenaApp.showNotification(data.message || 'SMS submitted to HostPinnacle.', 'success');
             closeModal('quickSMSModal');
             location.reload();
         } else {

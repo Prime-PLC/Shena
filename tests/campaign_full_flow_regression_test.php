@@ -15,7 +15,8 @@ $checks = [
             "'member_name'",
             "'amount_due'",
             'recalculateCampaignCounts',
-            'SUM(CASE WHEN bmr.status = \'sent\' THEN 1 ELSE 0 END) AS sent_count',
+            "SUM(CASE WHEN bmr.status = 'submitted' THEN 1 ELSE 0 END) AS submitted_count",
+            "SUM(CASE WHEN bmr.status IN ('sent', 'delivered') THEN 1 ELSE 0 END) AS sent_count",
             'provider_response',
         ],
         'mustNotContain' => [

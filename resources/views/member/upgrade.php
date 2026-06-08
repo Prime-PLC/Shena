@@ -250,7 +250,7 @@ main {
 }
 
 .upgrade-guide-card {
-    background: linear-gradient(145deg, #FFF7ED 0%, #FEF3C7 100%);
+    background: #FFF8E1;
     border: 1px solid #FDE68A;
 }
 
@@ -437,7 +437,7 @@ main {
 
 .current-badge-new,
 .popular-badge-new,
-.premium-badge-new {
+.top-tier-badge-new {
     position: absolute;
     top: 16px;
     right: 16px;
@@ -459,7 +459,7 @@ main {
     color: #92400E;
 }
 
-.premium-badge-new {
+.top-tier-badge-new {
     background: #7F20B0;
     color: white;
 }
@@ -739,7 +739,7 @@ main {
         <p>Select the coverage level that best protects your family and see your exact upgrade cost instantly</p>
     </div>
     <?php $currentIndex = array_search($currentPackage, $packageOrder, true); ?>
-    <div class="plans-comparison-section">
+    <div class="plans-comparison-section upgrade-table-shell">
         <div class="plans-grid-new">
             <?php foreach ($packageOrder as $planKey): ?>
                 <?php
@@ -754,13 +754,13 @@ main {
                     <?php if ($isCurrent): ?>
                         <div class="current-badge-new">YOUR PLAN</div>
                     <?php elseif ($isPremium): ?>
-                        <div class="premium-badge-new"><i class="fas fa-crown"></i> PREMIUM</div>
+                        <div class="top-tier-badge-new"><i class="fas fa-shield-alt"></i> TOP TIER</div>
                     <?php elseif ($planKey === 'extended_family_1'): ?>
                         <div class="popular-badge-new">BEST VALUE</div>
                     <?php endif; ?>
 
                     <div class="plan-icon-new <?php echo $isPremium ? 'premium-icon' : ($planKey === 'individual' ? 'bronze-icon' : ($planKey === 'family' ? 'silver-icon' : 'gold-icon')); ?>">
-                        <i class="fas <?php echo $isPremium ? 'fa-crown' : ($planKey === 'individual' ? 'fa-user' : ($planKey === 'family' ? 'fa-user-friends' : 'fa-home')); ?>"></i>
+                        <i class="fas <?php echo $isPremium ? 'fa-shield-alt' : ($planKey === 'individual' ? 'fa-user' : ($planKey === 'family' ? 'fa-user-friends' : 'fa-home')); ?>"></i>
                     </div>
 
                     <h3 class="plan-name-new"><?php echo htmlspecialchars($labelMap[$planKey] ?? ucwords(str_replace('_', ' ', $planKey))); ?></h3>

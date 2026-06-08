@@ -471,7 +471,7 @@ class Member extends BaseModel
     public function evaluateDependentCoverageForAddition(array $member, array $existingDependents, string $relationship): array
     {
         $packageTier = $this->normalizePackageTier($member['package_key'] ?? ($member['package'] ?? 'individual'));
-        $limits = $this->getPlanCoverageLimitsByTier($packageTier);
+        $limits = $this->getPlanCoverageLimitsForMember($member);
         $bucket = $this->normalizeRelationshipBucket($relationship);
 
         $currentCount = 0;
@@ -492,6 +492,90 @@ class Member extends BaseModel
         ];
     }
 
+    public function normalizeDependentRelationship(string $relationship): string
+    {
+        $value = strtolower(trim($relationship));
+        $value = str_replace(['-', ' '], '_', $value);
+
+        $aliases = [
+            'wife' => 'spouse',
+            'husband' => 'spouse',
+            'son' => 'child',
+            'daughter' => 'child',
+            'father' => 'parent',
+            'mother' => 'parent',
+            'fatherinlaw' => 'father_in_law',
+            'motherinlaw' => 'mother_in_law',
+            'father_in_law' => 'father_in_law',
+            'mother_in_law' => 'mother_in_law',
+        ];
+
+        return $aliases[$value] ?? $value;
+    }
+
+    public function validateDependentAddition(array $member, array $existingDependents, array $dependentData, array $options = []): array
+    {
+        $relationship = $this->normalizeDependentRelationship((string)($dependentData['relationship'] ?? ''));
+        $result = [
+            'allowed' => false,
+            'requires_override' => false,
+            'relationship' => $relationship,
+            'message' => '',
+            'coverage' => null,
+        ];
+
+        $fullName = trim((string)($dependentData['full_name'] ?? ''));
+        $idNumber = trim((string)($dependentData['id_number'] ?? ''));
+        $dateOfBirth = trim((string)($dependentData['date_of_birth'] ?? ''));
+
+        if ($fullName === '' || $relationship === '' || $idNumber === '' || $dateOfBirth === '') {
+            $result['message'] = 'Please fill in dependant name, relationship, ID/birth certificate, and date of birth.';
+            return $result;
+        }
+
+        $validRelationships = ['spouse', 'child', 'parent', 'father_in_law', 'mother_in_law'];
+        if (!in_array($relationship, $validRelationships, true)) {
+            $result['message'] = 'Please select a valid dependant relationship.';
+            return $result;
+        }
+
+        $age = $this->calculateAge($dateOfBirth);
+        if ($age <= 0 || $age > 120) {
+            $result['message'] = 'Please enter a valid dependant date of birth.';
+            return $result;
+        }
+
+        if ($relationship === 'child' && $age >= 18) {
+            $result['message'] = 'Children must be below 18 years for dependant coverage.';
+            return $result;
+        }
+
+        $coverageCheck = $this->evaluateDependentCoverageForAddition($member, $existingDependents, $relationship);
+        $result['coverage'] = $coverageCheck;
+        if (empty($coverageCheck['allowed'])) {
+            $requiredPackage = $coverageCheck['required_package'] ?? null;
+            $result['message'] = !empty($requiredPackage)
+                ? 'This dependant is outside the selected plan limits. Update the member package to ' . ucfirst((string)$requiredPackage) . ' before adding this dependant.'
+                : 'This dependant is outside the selected plan limits. Update the member package before adding this dependant.';
+            return $result;
+        }
+
+        $status = strtolower((string)($member['status'] ?? ''));
+        if ($status !== 'active') {
+            $canOverride = !empty($options['allow_override']);
+            $overrideRequested = !empty($options['override_requested']);
+            if (!$canOverride || !$overrideRequested) {
+                $result['requires_override'] = $canOverride;
+                $result['message'] = 'Member is not active. Admin override is required to add a dependant before system status restrictions are cleared.';
+                return $result;
+            }
+        }
+
+        $result['allowed'] = true;
+        $result['requires_override'] = false;
+        return $result;
+    }
+
     /**
      * Get relationship slot limits by normalized package tier.
      *
@@ -510,6 +594,7 @@ class Member extends BaseModel
 
         if ($packageTier === 'family') {
             $default['spouse'] = 1;
+            $default['children'] = 10;
             return $default;
         }
 
@@ -531,6 +616,30 @@ class Member extends BaseModel
         return $default;
     }
 
+    private function getPlanCoverageLimitsForMember(array $member): array
+    {
+        $packageKey = (string)($member['package_key'] ?? '');
+        $packageName = (string)($member['package'] ?? '');
+        $membershipPackages = $GLOBALS['membership_packages'] ?? [];
+
+        if (empty($membershipPackages)) {
+            $configPath = dirname(__DIR__, 2) . '/config/packages.php';
+            if (is_file($configPath)) {
+                $membershipPackages = require $configPath;
+            }
+        }
+
+        foreach ([$packageKey, $packageName] as $candidate) {
+            if ($candidate !== '' && isset($membershipPackages[$candidate])) {
+                $package = $membershipPackages[$candidate];
+                return $this->extractDependentCoverageLimits($package);
+            }
+        }
+
+        $tier = $this->normalizePackageTier($packageKey !== '' ? $packageKey : $packageName);
+        return $this->getPlanCoverageLimitsByTier($tier);
+    }
+
     /**
      * Build plan coverage summary for dependent UI guidance.
      *
@@ -540,7 +649,7 @@ class Member extends BaseModel
     public function getPlanCoverageSummary(array $member): array
     {
         $tier = $this->normalizePackageTier($member['package_key'] ?? ($member['package'] ?? 'individual'));
-        $limits = $this->getPlanCoverageLimitsByTier($tier);
+        $limits = $this->getPlanCoverageLimitsForMember($member);
 
         return [
             'tier' => $tier,

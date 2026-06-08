@@ -545,7 +545,7 @@ class PaymentReconciliationService
             ];
         } catch (Exception $e) {
             error_log('Paybill verify error: ' . $e->getMessage());
-            return ['success' => false, 'message' => 'Verification failed: ' . $e->getMessage()];
+            return ['success' => false, 'message' => 'A payment verification service error occurred. Please check the code and try again.'];
         }
     }
     

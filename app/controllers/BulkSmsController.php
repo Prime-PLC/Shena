@@ -271,7 +271,7 @@ class BulkSmsController extends BaseController
         $result = $this->bulkSmsService->sendCampaign($campaignId, $batchSize);
         
         if ($result['success']) {
-            $message = "Sent: {$result['sent_count']}, Failed: {$result['failed_count']}, Pending: {$result['pending_count']}";
+        $message = "Submitted: {$result['sent_count']}, Failed: {$result['failed_count']}, Pending: {$result['pending_count']}";
             $this->setFlashMessage($message, 'success');
         } else {
             $this->setFlashMessage($result['error'], 'error');
@@ -349,10 +349,10 @@ class BulkSmsController extends BaseController
                     COUNT(CASE WHEN m.status = 'active' THEN 1 END) as active_count,
                     COUNT(CASE WHEN m.status = 'grace_period' THEN 1 END) as grace_period_count,
                     COUNT(CASE WHEN m.status = 'defaulted' THEN 1 END) as defaulted_count,
-                    COUNT(CASE WHEN m.package = 'individual' THEN 1 END) as individual_count,
-                    COUNT(CASE WHEN m.package = 'family' THEN 1 END) as family_count,
-                    COUNT(CASE WHEN m.package = 'extended_family_1' THEN 1 END) as extended_family_1_count,
-                    COUNT(CASE WHEN m.package = 'extended_family_2' THEN 1 END) as extended_family_2_count,
+                    COUNT(CASE WHEN m.package = 'individual' OR m.package_key LIKE 'individual_%' THEN 1 END) as individual_count,
+                    COUNT(CASE WHEN m.package = 'family' OR m.package_key LIKE 'couple_%' THEN 1 END) as family_count,
+                    COUNT(CASE WHEN m.package = 'extended_family_1' OR m.package_key LIKE 'couple_children_%' THEN 1 END) as extended_family_1_count,
+                    COUNT(CASE WHEN m.package = 'extended_family_2' OR m.package_key LIKE 'executive_%' THEN 1 END) as extended_family_2_count,
                     COUNT(CASE WHEN np.sms_enabled = 1 THEN 1 END) as sms_enabled_count
                 FROM members m
                 LEFT JOIN users u ON m.user_id = u.id
@@ -477,7 +477,7 @@ class BulkSmsController extends BaseController
             // If action is 'send', start sending immediately
             if ($action === 'send' && $sendTime === 'now') {
                 $this->bulkSmsService->sendCampaign($campaignId);
-                $successMsg = 'Campaign created and sending started! (' . count($recipients) . ' recipients)';
+                $successMsg = 'Campaign created and submitted to HostPinnacle for delivery tracking. (' . count($recipients) . ' recipients)';
             } elseif ($sendTime === 'scheduled') {
                 $successMsg = 'Campaign scheduled successfully for ' . date('M j, Y H:i', strtotime($scheduledAt));
             } else {
@@ -524,15 +524,16 @@ class BulkSmsController extends BaseController
                 throw new Exception('Campaign ID is required');
             }
             
-            $result = $this->bulkSmsService->sendCampaign($campaignId);
+            $result = $this->bulkSmsService->sendCampaignUntilComplete($campaignId, 50, 10);
             
             if ($result['success']) {
                 $this->json([
                     'success' => true,
-                    'message' => 'Campaign sending started',
+                    'message' => 'Campaign submitted to HostPinnacle. Delivery confirmation will update after DLR sync.',
                     'sent_count' => $result['sent_count'],
                     'failed_count' => $result['failed_count'],
-                    'pending_count' => $result['pending_count']
+                    'pending_count' => $result['pending_count'],
+                    'processed_count' => $result['processed_count'] ?? 0
                 ]);
             } else {
                 throw new Exception($result['error'] ?? 'Failed to send campaign');
@@ -583,17 +584,71 @@ class BulkSmsController extends BaseController
         header('Content-Type: application/json');
         
         try {
-            $result = $this->bulkSmsService->processQueue(100);
+            $scheduledResult = $this->bulkSmsService->processDueCampaigns(50, 10, 3);
+            $queueResult = $this->bulkSmsService->processQueue(100);
             
             $this->json([
                 'success' => true,
-                'message' => 'Queue processed',
-                'sent_count' => $result['sent_count'],
-                'failed_count' => $result['failed_count']
+                'message' => 'Scheduled campaigns and SMS queue processed',
+                'campaign_count' => $scheduledResult['campaign_count'] ?? 0,
+                'processed_count' => $scheduledResult['processed_count'] ?? 0,
+                'sent_count' => ($scheduledResult['sent_count'] ?? 0) + ($queueResult['sent_count'] ?? 0),
+                'submitted_count' => ($scheduledResult['submitted_count'] ?? $scheduledResult['sent_count'] ?? 0) + ($queueResult['submitted_count'] ?? $queueResult['sent_count'] ?? 0),
+                'delivered_count' => $scheduledResult['delivered_count'] ?? 0,
+                'failed_count' => ($scheduledResult['failed_count'] ?? 0) + ($queueResult['failed_count'] ?? 0),
+                'pending_count' => $scheduledResult['pending_count'] ?? 0,
+                'queue_sent_count' => $queueResult['sent_count'] ?? 0,
+                'queue_failed_count' => $queueResult['failed_count'] ?? 0
             ]);
             
         } catch (Exception $e) {
             error_log('Process queue error: ' . $e->getMessage());
+            $this->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    public function processScheduledCampaigns()
+    {
+        $this->requireRole(['admin', 'super_admin', 'manager']);
+        header('Content-Type: application/json');
+
+        try {
+            $result = $this->bulkSmsService->processDueCampaigns(50, 10, 3);
+            $this->json([
+                'success' => true,
+                'message' => 'Scheduled campaign processor completed',
+                'campaign_count' => $result['campaign_count'] ?? 0,
+                'processed_count' => $result['processed_count'] ?? 0,
+                'sent_count' => $result['sent_count'] ?? 0,
+                'failed_count' => $result['failed_count'] ?? 0,
+                'pending_count' => $result['pending_count'] ?? 0,
+            ]);
+        } catch (Throwable $e) {
+            error_log('Process scheduled SMS campaigns error: ' . $e->getMessage());
+            $this->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    public function syncDeliveryStatuses()
+    {
+        $this->requireRole(['admin', 'super_admin', 'manager']);
+        header('Content-Type: application/json');
+
+        try {
+            $input = json_decode(file_get_contents('php://input'), true) ?: [];
+            $limit = isset($input['limit']) ? (int) $input['limit'] : 100;
+            $result = $this->bulkSmsService->syncDeliveryStatuses($limit);
+            $this->json([
+                'success' => true,
+                'message' => 'SMS delivery statuses synced',
+                'checked_count' => $result['checked_count'] ?? 0,
+                'updated_count' => $result['updated_count'] ?? 0,
+                'delivered_count' => $result['delivered_count'] ?? 0,
+                'undelivered_count' => $result['undelivered_count'] ?? 0,
+                'failed_checks' => $result['failed_checks'] ?? 0,
+            ]);
+        } catch (Throwable $e) {
+            error_log('SMS delivery sync error: ' . $e->getMessage());
             $this->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
@@ -713,7 +768,7 @@ class BulkSmsController extends BaseController
                 throw new Exception($lastError ?: 'Failed to send SMS to any recipient.');
             }
 
-            $msg = "SMS sent to {$sent} recipient(s)";
+            $msg = "SMS submitted to HostPinnacle for {$sent} recipient(s). Delivery confirmation is not available for quick SMS.";
             if ($failed > 0) $msg .= " ({$failed} skipped)";
             echo json_encode(['success' => true, 'message' => $msg]);
             exit();
@@ -776,13 +831,16 @@ class BulkSmsController extends BaseController
             
             // Update scheduled_at to null and send
             $this->bulkSmsService->updateScheduledAt($campaignId, null);
-            $result = $this->bulkSmsService->sendCampaign($campaignId);
+            $result = $this->bulkSmsService->sendCampaignUntilComplete($campaignId, 50, 10);
             
             if ($result['success']) {
                 $this->json([
                     'success' => true,
-                    'message' => 'Campaign is being sent now',
-                    'sent_count' => $result['sent_count']
+                    'message' => 'Campaign submitted to HostPinnacle. Delivery confirmation will update after DLR sync.',
+                    'sent_count' => $result['sent_count'],
+                    'failed_count' => $result['failed_count'] ?? 0,
+                    'pending_count' => $result['pending_count'] ?? 0,
+                    'processed_count' => $result['processed_count'] ?? 0
                 ]);
             } else {
                 throw new Exception($result['error'] ?? 'Failed to send campaign');
@@ -820,6 +878,111 @@ class BulkSmsController extends BaseController
             'channel' => 'sms',
             'back_url' => '/admin/sms-campaigns'
         ]);
+    }
+
+    public function downloadDeliveryReport($id)
+    {
+        $this->requireRole(['admin', 'super_admin', 'manager']);
+
+        $campaign = $this->bulkSmsService->getCampaignById($id);
+        if (!$campaign) {
+            http_response_code(404);
+            echo 'Campaign not found';
+            return;
+        }
+
+        $recipients = $this->bulkSmsService->getCampaignRecipients($id);
+        $safeTitle = preg_replace('/[^A-Za-z0-9_-]+/', '_', (string)($campaign['title'] ?? 'sms_campaign'));
+        $filename = 'sms_delivery_report_' . $safeTitle . '_' . date('Ymd_His') . '.csv';
+
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+
+        $out = fopen('php://output', 'w');
+        fputcsv($out, [
+            'Campaign ID',
+            'Campaign Title',
+            'Recipient Name',
+            'Member Number',
+            'Phone',
+            'Status',
+            'Delivery Method',
+            'Provider Reference',
+            'Provider Status',
+            'Provider Cause',
+            'Submitted At',
+            'Delivered At',
+            'DLR Checked At',
+            'Error',
+            'Provider Response',
+        ]);
+
+        foreach ($recipients as $recipient) {
+            fputcsv($out, [
+                $campaign['id'] ?? $id,
+                $campaign['title'] ?? '',
+                trim(($recipient['first_name'] ?? '') . ' ' . ($recipient['last_name'] ?? '')),
+                $recipient['member_number'] ?? '',
+                $recipient['recipient_value'] ?? $recipient['phone'] ?? '',
+                $recipient['status'] ?? 'pending',
+                $recipient['delivery_method'] ?? '',
+                $recipient['provider_message_id'] ?? '',
+                $recipient['provider_status'] ?? '',
+                $recipient['provider_cause'] ?? '',
+                $recipient['submitted_at'] ?? $recipient['sent_at'] ?? '',
+                $recipient['delivered_at'] ?? '',
+                $recipient['dlr_checked_at'] ?? '',
+                $recipient['error_message'] ?? '',
+                $recipient['provider_response'] ?? '',
+            ]);
+        }
+
+        fclose($out);
+        exit;
+    }
+
+    public function resendPendingFailed($id)
+    {
+        $this->requireRole(['admin', 'super_admin', 'manager']);
+        header('Content-Type: application/json');
+
+        try {
+            $campaign = $this->bulkSmsService->getCampaignById($id);
+            if (!$campaign) {
+                throw new Exception('Campaign not found');
+            }
+
+            $resetCount = $this->bulkSmsService->resetRecipientsForResend((int)$id, ['pending', 'failed']);
+            if ($resetCount < 1) {
+                $this->json([
+                    'success' => true,
+                    'message' => 'No pending or failed recipients found for resend',
+                    'reset_count' => 0,
+                    'sent_count' => (int)($campaign['sent_count'] ?? 0),
+                    'failed_count' => (int)($campaign['failed_count'] ?? 0),
+                    'pending_count' => 0,
+                ]);
+                return;
+            }
+
+            $result = $this->bulkSmsService->sendCampaignUntilComplete((int)$id, 50, 10);
+            if (empty($result['success'])) {
+                throw new Exception($result['error'] ?? 'Failed to resend campaign recipients');
+            }
+
+            $this->json([
+                'success' => true,
+                'message' => 'Resend submitted for pending/failed recipients. Delivery confirmation will update after DLR sync.',
+                'reset_count' => $resetCount,
+                'sent_count' => $result['sent_count'] ?? 0,
+                'failed_count' => $result['failed_count'] ?? 0,
+                'pending_count' => $result['pending_count'] ?? 0,
+                'processed_count' => $result['processed_count'] ?? 0,
+            ]);
+        } catch (Throwable $e) {
+            error_log('Resend pending/failed SMS campaign error: ' . $e->getMessage());
+            $this->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
     }
     
     /**
@@ -962,8 +1125,12 @@ class BulkSmsController extends BaseController
                 throw new Exception('Campaign ID is required');
             }
             
-            // Update campaign status to paused
-            $sql = "UPDATE bulk_messages SET status = 'paused', updated_at = NOW() 
+            $setClauses = ["status = 'paused'"];
+            if ($this->bulkMessagesHasColumn('updated_at')) {
+                $setClauses[] = 'updated_at = NOW()';
+            }
+
+            $sql = "UPDATE bulk_messages SET " . implode(', ', $setClauses) . "
                     WHERE id = ? AND status = 'sending'";
             $stmt = $this->db->getConnection()->prepare($sql);
             $stmt->execute([$campaignId]);
@@ -997,7 +1164,12 @@ class BulkSmsController extends BaseController
                 throw new Exception('Campaign ID and schedule time are required');
             }
             
-            $sql = "UPDATE bulk_messages SET scheduled_at = ?, updated_at = NOW() 
+            $setClauses = ['scheduled_at = ?', "status = 'scheduled'"];
+            if ($this->bulkMessagesHasColumn('updated_at')) {
+                $setClauses[] = 'updated_at = NOW()';
+            }
+
+            $sql = "UPDATE bulk_messages SET " . implode(', ', $setClauses) . "
                     WHERE id = ? AND status IN ('scheduled', 'draft')";
             $stmt = $this->db->getConnection()->prepare($sql);
             $stmt->execute([$scheduledAt, $campaignId]);
@@ -1044,11 +1216,24 @@ class BulkSmsController extends BaseController
             $result = $this->smsService->sendSms($item['phone_number'], $item['message']);
             
             if ($result && $result['success']) {
-                $sql = "UPDATE sms_queue SET status = 'sent', sent_at = NOW() WHERE id = ?";
+                $sql = "UPDATE sms_queue
+                        SET status = 'submitted',
+                            submitted_at = NOW(),
+                            provider_message_id = ?,
+                            provider_status = ?,
+                            provider_cause = ?,
+                            provider_response = ?
+                        WHERE id = ?";
                 $stmt = $this->db->getConnection()->prepare($sql);
-                $stmt->execute([$itemId]);
+                $stmt->execute([
+                    $result['provider_message_id'] ?? $result['data']['transactionId'] ?? null,
+                    $result['provider_status'] ?? null,
+                    $result['provider_cause'] ?? null,
+                    json_encode($result),
+                    $itemId
+                ]);
                 
-                $this->json(['success' => true, 'message' => 'SMS sent successfully']);
+                $this->json(['success' => true, 'message' => 'SMS submitted to HostPinnacle. Awaiting delivery confirmation.']);
             } else {
                 $error = $result['error'] ?? 'Unknown error';
                 $sql = "UPDATE sms_queue SET status = 'failed', error_message = ?, retry_count = retry_count + 1 WHERE id = ?";

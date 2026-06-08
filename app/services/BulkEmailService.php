@@ -145,8 +145,13 @@ class BulkEmailService
             $sql .= " AND m.status = ?";
             $params[] = 'grace_period';
         } elseif ($targetAudience === 'defaulted') {
-            $sql .= " AND m.status = ?";
-            $params[] = 'defaulted';
+            $sql .= " AND m.status IN ('inactive', 'grace_period', 'defaulted')
+                      AND NOT EXISTS (
+                          SELECT 1 FROM payments p
+                          WHERE p.member_id = m.id
+                            AND p.status = 'completed'
+                            AND p.created_at >= DATE_SUB(CURDATE(), INTERVAL 60 DAY)
+                      )";
         } elseif ($targetAudience === 'new_members') {
             $sql .= " AND m.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)";
         } elseif ($targetAudience === 'custom') {

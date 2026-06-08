@@ -134,6 +134,7 @@ define('HOSTPINNACLE_USER_ID', envConfig('HOSTPINNACLE_USER_ID', 'oscar'));
 define('HOSTPINNACLE_API_KEY', envConfig('HOSTPINNACLE_API_KEY', ''));
 define('HOSTPINNACLE_SENDER_ID', envConfig('HOSTPINNACLE_SENDER_ID', 'SHENA'));
 define('HOSTPINNACLE_SMS_API_URL', envConfig('HOSTPINNACLE_SMS_API_URL', 'https://smsportal.hostpinnacle.co.ke/SMSApi/send'));
+define('HOSTPINNACLE_SMS_WEBHOOK_SECRET', envConfig('HOSTPINNACLE_SMS_WEBHOOK_SECRET', ''));
 
 // Security Settings - CRITICAL: Change these in production
 define('ENCRYPTION_KEY', envConfig('ENCRYPTION_KEY', bin2hex(random_bytes(16))));

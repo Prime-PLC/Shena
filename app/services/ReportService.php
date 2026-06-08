@@ -394,8 +394,8 @@ class ReportService
     {
         $sql = "SELECT bm.id, bm.title, bm.message_type, bm.target_audience, bm.status, bm.created_at,
                        COUNT(bmr.id) AS total_count,
-                       SUM(CASE WHEN bmr.status = 'sent' THEN 1 ELSE 0 END) AS sent_count,
-                       SUM(CASE WHEN bmr.status = 'failed' THEN 1 ELSE 0 END) AS failed_count
+                       SUM(CASE WHEN bmr.status IN ('sent', 'delivered') THEN 1 ELSE 0 END) AS sent_count,
+                       SUM(CASE WHEN bmr.status IN ('failed', 'rejected', 'undelivered', 'expired', 'unknown') THEN 1 ELSE 0 END) AS failed_count
                 FROM bulk_messages bm
                 LEFT JOIN bulk_message_recipients bmr ON bm.id = bmr.bulk_message_id
                 WHERE bm.created_at BETWEEN :date_from AND :date_to
@@ -515,8 +515,8 @@ class ReportService
     {
         $row = $this->db->fetch("SELECT
             COUNT(DISTINCT bm.id) AS total_campaigns,
-            SUM(CASE WHEN bmr.status = 'sent' THEN 1 ELSE 0 END) AS sent_count,
-            SUM(CASE WHEN bmr.status = 'failed' THEN 1 ELSE 0 END) AS failed_count
+            SUM(CASE WHEN bmr.status IN ('sent', 'delivered') THEN 1 ELSE 0 END) AS sent_count,
+            SUM(CASE WHEN bmr.status IN ('failed', 'rejected', 'undelivered', 'expired', 'unknown') THEN 1 ELSE 0 END) AS failed_count
             FROM bulk_messages bm
             LEFT JOIN bulk_message_recipients bmr ON bm.id = bmr.bulk_message_id
             WHERE bm.created_at BETWEEN :date_from AND :date_to", [

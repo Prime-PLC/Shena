@@ -293,17 +293,15 @@ foreach (($packages ?? []) as $packageKey => $package) {
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Corporate Couple Count</label>
-                    <select name="corporate_couple_count" class="form-select" id="corporateCoupleCount">
-                        <option value="0" <?php echo (($old['corporate_couple_count'] ?? '0') === '0') ? 'selected' : ''; ?>>None</option>
-                        <option value="1" <?php echo (($old['corporate_couple_count'] ?? '') === '1') ? 'selected' : ''; ?>>1 Additional Corporate Couple</option>
-                        <option value="2" <?php echo (($old['corporate_couple_count'] ?? '') === '2') ? 'selected' : ''; ?>>2 Additional Corporate Couples</option>
-                        <option value="3" <?php echo (($old['corporate_couple_count'] ?? '') === '3') ? 'selected' : ''; ?>>3 Additional Corporate Couples</option>
-                        <option value="4" <?php echo (($old['corporate_couple_count'] ?? '') === '4') ? 'selected' : ''; ?>>4 Additional Corporate Couples</option>
-                        <option value="5" <?php echo (($old['corporate_couple_count'] ?? '') === '5') ? 'selected' : ''; ?>>5 Additional Corporate Couples</option>
-                    </select>
-                    <small class="form-hint">Each corporate couple is charged at the selected plan amount.</small>
+                <div class="form-group full-width">
+                    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px;">
+                        <label class="form-label" style="margin:0;">Corporate Members</label>
+                        <button type="button" class="btn btn-secondary" onclick="addRegistrationCorporateRow()">
+                            <i class="fas fa-plus"></i> Add Corporate Member
+                        </button>
+                    </div>
+                    <div id="registrationCorporateLineItems"></div>
+                    <small class="form-hint">Each corporate member uses their own selected package and amount.</small>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Expected Monthly Contribution</label>
@@ -365,7 +363,7 @@ foreach (($packages ?? []) as $packageKey => $package) {
     if (!form || !window.localStorage) return;
     const membershipPlanData = <?php echo json_encode($membershipPlanData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
     const packageSelect = document.getElementById('packageSelect');
-    const corporateSelect = document.getElementById('corporateCoupleCount');
+    const corporateLineItems = document.getElementById('registrationCorporateLineItems');
     const corporateTotalPreview = document.getElementById('corporateTotalPreview');
     const sections = Array.from(form.querySelectorAll('.form-section[data-step]'));
     const indicators = Array.from(form.querySelectorAll('[data-step-indicator]'));
@@ -375,19 +373,60 @@ foreach (($packages ?? []) as $packageKey => $package) {
     let currentStep = 1;
     const initialStep = <?php echo json_encode(max(1, min(4, $initialStep))); ?>;
     const flashError = <?php echo json_encode($flashError); ?>;
+    let corporateRowIndex = 0;
+
+    function packageOptionsHtml(selectedKey) {
+        return Object.entries(membershipPlanData).map(function ([key, plan]) {
+            const selected = key === selectedKey ? 'selected' : '';
+            const label = (plan.name || key) + ' - KES ' + Number(plan.monthly_contribution || 0).toLocaleString();
+            return '<option value="' + key + '" ' + selected + '>' + label + '</option>';
+        }).join('');
+    }
+
+    window.addRegistrationCorporateRow = function (item = {}) {
+        if (!corporateLineItems) return;
+        if (!corporateLineItems.querySelector('.corporate-row')) {
+            corporateLineItems.innerHTML = '';
+        }
+        const index = corporateRowIndex++;
+        const row = document.createElement('div');
+        row.className = 'corporate-row';
+        row.style.cssText = 'display:grid;grid-template-columns:1fr 150px 1.4fr 110px 38px;gap:8px;align-items:center;margin-bottom:8px;';
+        row.innerHTML = `
+            <input class="form-input" name="corporate_members[${index}][label]" placeholder="Name / label" value="${String(item.label || '').replace(/"/g, '&quot;')}">
+            <input class="form-input" name="corporate_members[${index}][relationship]" placeholder="Relationship" value="${String(item.relationship || 'corporate').replace(/"/g, '&quot;')}">
+            <select class="form-select corporate-package" name="corporate_members[${index}][package_key]">
+                ${packageOptionsHtml(item.package_key || '')}
+            </select>
+            <div class="corporate-amount" style="font-weight:700;color:#111827;">KES 0</div>
+            <button type="button" class="btn btn-secondary" onclick="this.closest('.corporate-row').remove(); updateContributionPreview();" aria-label="Remove corporate member">
+                <i class="fas fa-times"></i>
+            </button>
+        `;
+        corporateLineItems.appendChild(row);
+        row.querySelector('.corporate-package')?.addEventListener('change', updateContributionPreview);
+        updateContributionPreview();
+    };
 
     function updateContributionPreview() {
-        if (!packageSelect || !corporateSelect || !corporateTotalPreview) return;
+        if (!packageSelect || !corporateTotalPreview) return;
         const selectedOption = packageSelect.options[packageSelect.selectedIndex];
         const packageKey = packageSelect.value;
-        const baseAmount = Number(selectedOption?.dataset.monthlyContribution || membershipPlanData[packageKey]?.monthly_contribution || 0);
-        const corporateCount = Number(corporateSelect.value || 0);
-        const total = baseAmount * (1 + corporateCount);
+        let total = Number(selectedOption?.dataset.monthlyContribution || membershipPlanData[packageKey]?.monthly_contribution || 0);
+        document.querySelectorAll('#registrationCorporateLineItems .corporate-row').forEach(function (row) {
+            const corporatePackageKey = row.querySelector('.corporate-package')?.value || '';
+            const amount = Number(membershipPlanData[corporatePackageKey]?.monthly_contribution || 0);
+            total += amount;
+            const amountEl = row.querySelector('.corporate-amount');
+            if (amountEl) amountEl.textContent = 'KES ' + amount.toLocaleString();
+        });
         corporateTotalPreview.textContent = 'KES ' + total.toLocaleString() + '/month';
     }
 
     packageSelect?.addEventListener('change', updateContributionPreview);
-    corporateSelect?.addEventListener('change', updateContributionPreview);
+    if (corporateLineItems) {
+        corporateLineItems.innerHTML = '<div style="font-size:13px;color:#6b7280;padding:10px;border:1px dashed #d1d5db;border-radius:8px;">No corporate members attached.</div>';
+    }
     updateContributionPreview();
 
     function showFlash(message, type) {

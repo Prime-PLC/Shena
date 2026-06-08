@@ -6,6 +6,7 @@ include __DIR__ . '/../layouts/agent-header.php';
 $coverageSummary = $coverage_summary ?? ['tier' => 'individual', 'limits' => ['spouse' => 0, 'children' => 0, 'parents' => 0, 'inlaws' => 0, 'other' => 0], 'total_slots' => 0];
 $planLimits = $coverageSummary['limits'] ?? ['spouse' => 0, 'children' => 0, 'parents' => 0, 'inlaws' => 0, 'other' => 0];
 $planTierLabel = ucfirst((string)($coverageSummary['tier'] ?? 'individual'));
+$dependantRelationshipOptions = $dependant_relationship_options ?? [];
 // Generate member initials
 $memberInitials = strtoupper(substr($member['first_name'] ?? 'M', 0, 1) . substr($member['last_name'] ?? 'M', 0, 1));
 
@@ -940,44 +941,6 @@ if (!empty($payment_history)) {
     </div>
 </div>
 
-<!-- Payment Assistance Modal -->
-<div class="modal fade" id="paymentAssistModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form method="POST" action="/agent/member-details/<?php echo (int)$member['id']; ?>/payment-assist">
-                <div class="modal-header">
-                    <h5 class="modal-title"><i class="fas fa-hand-holding-usd"></i> Payment Assistance</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <input type="hidden" name="csrf_token" value="<?php echo $csrf_token ?? ''; ?>">
-                    <div class="mb-3">
-                        <label class="form-label">Amount (KES) <span class="text-danger">*</span></label>
-                        <input type="number" name="amount" class="form-control" min="1" step="0.01" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Payment Method <span class="text-danger">*</span></label>
-                        <select name="payment_method" class="form-select" required>
-                            <option value="">Select method</option>
-                            <option value="mpesa">M-Pesa</option>
-                            <option value="bank">Bank Transfer</option>
-                            <option value="cash">Cash</option>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Notes</label>
-                        <textarea name="payment_notes" class="form-control" rows="3" placeholder="Add any payment guidance or notes"></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Send Request</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
 <!-- Add Dependent Modal -->
 <div class="modal fade" id="addDependentModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
@@ -995,7 +958,12 @@ if (!empty($payment_history)) {
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Relationship <span class="text-danger">*</span></label>
-                        <input type="text" name="relationship" class="form-control" placeholder="e.g., Spouse, Child" required>
+                        <select name="relationship" class="form-control" required>
+                            <option value="">Select relationship...</option>
+                            <?php foreach ($dependantRelationshipOptions as $option): ?>
+                                <option value="<?php echo htmlspecialchars($option['value'] ?? ''); ?>"><?php echo htmlspecialchars($option['label'] ?? ''); ?></option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">ID Number <span class="text-danger">*</span></label>
@@ -1009,14 +977,10 @@ if (!empty($payment_history)) {
                         <label class="form-label">Phone Number (Optional for minors)</label>
                         <input type="tel" name="phone_number" class="form-control">
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Percentage (%) <span class="text-danger">*</span></label>
-                        <input type="number" name="percentage" class="form-control" min="1" max="100" value="100" required>
-                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Add Dependent</button>
+                    <button type="submit" class="btn btn-primary" <?php echo empty($dependantRelationshipOptions) ? 'disabled' : ''; ?>>Add Dependent</button>
                 </div>
             </form>
         </div>
@@ -1110,7 +1074,12 @@ async function submitAgentPayment(memberId) {
         const response = await fetch('/agent/member-details/' + memberId + '/payment-assist', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone_number: phone, amount: amount, payment_type: paymentType })
+            body: JSON.stringify({
+                csrf_token: '<?php echo htmlspecialchars($csrf_token ?? '', ENT_QUOTES); ?>',
+                phone_number: phone,
+                amount: amount,
+                payment_type: paymentType
+            })
         });
 
         const data = await response.json();

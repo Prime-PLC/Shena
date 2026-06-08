@@ -7,6 +7,7 @@ require_once __DIR__ . '/../models/Agent.php';
 require_once __DIR__ . '/../models/User.php';
 require_once __DIR__ . '/../models/Member.php';
 require_once __DIR__ . '/../models/Beneficiary.php';
+require_once __DIR__ . '/../models/MemberCorporateMember.php';
 require_once __DIR__ . '/../models/PayoutRequest.php';
 require_once __DIR__ . '/../models/Resource.php';
 require_once __DIR__ . '/../services/InAppNotificationService.php';
@@ -22,6 +23,7 @@ class AgentDashboardController extends BaseController
     private $userModel;
     private $memberModel;
     private $beneficiaryModel;
+    private $corporateMemberModel;
     private $payoutRequestModel;
     private $paymentService;
 
@@ -35,8 +37,89 @@ class AgentDashboardController extends BaseController
         $this->userModel = new User();
         $this->memberModel = new Member();
         $this->beneficiaryModel = new Beneficiary();
+        $this->corporateMemberModel = new MemberCorporateMember();
         $this->payoutRequestModel = new PayoutRequest();
         $this->paymentService = new PaymentService();
+    }
+
+    private function friendlyErrorMessage(Throwable $e, string $fallback): string
+    {
+        error_log($fallback . ': ' . $e->getMessage());
+        return $fallback . ' Please review the information and try again.';
+    }
+
+    private function parseCorporateMembersFromPost(): array
+    {
+        global $membership_packages;
+
+        $rows = $_POST['corporate_members'] ?? [];
+        if (!is_array($rows)) {
+            return [];
+        }
+
+        $items = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $packageKey = $this->sanitizeInput($row['package_key'] ?? '');
+            $label = $this->sanitizeInput($row['label'] ?? '');
+            $relationship = $this->sanitizeInput($row['relationship'] ?? 'corporate');
+
+            if ($packageKey === '' && $label === '') {
+                continue;
+            }
+
+            if (!isset($membership_packages[$packageKey])) {
+                throw new Exception('Invalid corporate member package selected.');
+            }
+
+            $items[] = [
+                'label' => $label !== '' ? $label : 'Corporate member',
+                'relationship' => $relationship !== '' ? $relationship : 'corporate',
+                'package_key' => $packageKey,
+            ];
+        }
+
+        return $items;
+    }
+
+    private function relationshipOptionsForMember(array $member, array $dependents): array
+    {
+        $coverage = $this->memberModel->getPlanCoverageSummary($member);
+        $limits = $coverage['limits'] ?? [];
+        $counts = [
+            'spouse' => 0,
+            'child' => 0,
+            'parent' => 0,
+            'father_in_law' => 0,
+            'mother_in_law' => 0,
+        ];
+
+        foreach ($dependents as $dependent) {
+            $relationship = $this->memberModel->normalizeDependentRelationship((string)($dependent['relationship'] ?? ''));
+            if (isset($counts[$relationship])) {
+                $counts[$relationship]++;
+            }
+        }
+
+        $options = [];
+        if ((int)($limits['spouse'] ?? 0) > $counts['spouse']) {
+            $options[] = ['value' => 'spouse', 'label' => 'Spouse'];
+        }
+        if ((int)($limits['children'] ?? 0) > $counts['child']) {
+            $options[] = ['value' => 'child', 'label' => 'Child'];
+        }
+        if ((int)($limits['parents'] ?? 0) > $counts['parent']) {
+            $options[] = ['value' => 'parent', 'label' => 'Parent'];
+        }
+        if ((int)($limits['inlaws'] ?? 0) > ($counts['father_in_law'] + $counts['mother_in_law'])) {
+            $options[] = ['value' => 'father_in_law', 'label' => 'Father-in-Law'];
+            $options[] = ['value' => 'mother_in_law', 'label' => 'Mother-in-Law'];
+        }
+
+        return $options;
     }
 
 
@@ -156,12 +239,12 @@ class AgentDashboardController extends BaseController
                 }
             } catch (Exception $e) {
                 error_log('Database update error: ' . $e->getMessage());
-                $_SESSION['error'] = 'Failed to update profile in database: ' . $e->getMessage();
+                    $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Failed to update profile.');
             }
 
         } catch (Exception $e) {
             error_log('Profile update error: ' . $e->getMessage());
-            $_SESSION['error'] = 'Failed to update profile. Please try again. Error: ' . $e->getMessage();
+            $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Failed to update profile.');
         }
 
         $this->redirect('/agent/profile');
@@ -197,7 +280,7 @@ class AgentDashboardController extends BaseController
         if ($searchQuery !== '') {
             $needle = strtolower($searchQuery);
             $members = array_filter($members, function ($member) use ($needle) {
-                $fullName = strtolower($member['full_name'] ?? '');
+                $fullName = strtolower(trim(($member['full_name'] ?? '') . ' ' . ($member['first_name'] ?? '') . ' ' . ($member['last_name'] ?? '')));
                 $memberNumber = strtolower($member['member_number'] ?? '');
                 $idNumber = strtolower($member['id_number'] ?? '');
                 return strpos($fullName, $needle) !== false
@@ -332,7 +415,7 @@ class AgentDashboardController extends BaseController
                 'next_of_kin' => $_POST['next_of_kin'] ?? '',
                 'next_of_kin_phone' => $_POST['next_of_kin_phone'] ?? '',
                 'package' => $_POST['package'] ?? '',
-                'corporate_couple_count' => $_POST['corporate_couple_count'] ?? 0
+                'corporate_members' => $_POST['corporate_members'] ?? []
             ];
 
             // Validate email if provided
@@ -399,7 +482,13 @@ class AgentDashboardController extends BaseController
 
             global $membership_packages;
             $packageKey = $_POST['package'] ?? '';
-            $corporateCoupleCount = max(0, (int)($_POST['corporate_couple_count'] ?? 0));
+            $corporateMembers = $this->parseCorporateMembersFromPost();
+            $accountContribution = MembershipPricingService::calculateAccountMonthlyContribution(
+                $packageKey,
+                $corporateMembers,
+                $membership_packages ?? []
+            );
+            $corporateCoupleCount = count($accountContribution['line_items']);
             $normalizedPackage = $this->memberModel->normalizePackageTier($packageKey, $membership_packages[$packageKey] ?? []);
             
             $memberStmt = $this->db->getConnection()->prepare(
@@ -419,13 +508,7 @@ class AgentDashboardController extends BaseController
                 error_log('Agent reg age calc error: ' . $e->getMessage());
             }
 
-            $memberForCalc = [
-                'date_of_birth' => $_POST['date_of_birth'] ?? null,
-                'package' => $packageKey,
-                'package_key' => $packageKey,
-                'corporate_couple_count' => $corporateCoupleCount
-            ];
-            $monthlyContribution = $this->memberModel->calculateMonthlyContribution($memberForCalc, []);
+            $monthlyContribution = (float)$accountContribution['total_amount'];
 
             $memberStmt->execute([
                 ':user_id' => $userId,
@@ -447,6 +530,7 @@ class AgentDashboardController extends BaseController
             ]);
             // Grab member id for linking and notifications
             $memberId = (int)$this->db->getConnection()->lastInsertId();
+            $this->corporateMemberModel->replaceForMember($memberId, $accountContribution['line_items']);
 
             $this->db->getConnection()->commit();
 
@@ -567,7 +651,7 @@ class AgentDashboardController extends BaseController
 
         } catch (Exception $e) {
             error_log('Password update error: ' . $e->getMessage());
-            $_SESSION['error'] = 'Failed to update password. Please try again. Error: ' . $e->getMessage();
+            $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Failed to update password.');
         }
 
         $this->redirect('/agent/profile');
@@ -728,6 +812,7 @@ class AgentDashboardController extends BaseController
         // Get member's dependents/beneficiaries
         $dependents = $this->memberModel->getMemberDependents($memberId);
         $coverageSummary = $this->memberModel->getPlanCoverageSummary($member);
+        $dependantRelationshipOptions = $this->relationshipOptionsForMember($member, $dependents ?: []);
         
         // Get payment history
         $paymentHistory = $this->memberModel->getMemberPaymentHistory($memberId);
@@ -738,6 +823,7 @@ class AgentDashboardController extends BaseController
             'member' => $member,
             'dependents' => $dependents,
             'coverage_summary' => $coverageSummary,
+            'dependant_relationship_options' => $dependantRelationshipOptions,
             'payment_history' => $paymentHistory,
             'csrf_token' => $this->generateCsrfToken()
         ];
@@ -805,6 +891,16 @@ class AgentDashboardController extends BaseController
         $input = json_decode(file_get_contents('php://input'), true);
         if (!$input) {
             $input = $_POST;
+        }
+        if (isset($input['csrf_token'])) {
+            $_POST['csrf_token'] = $input['csrf_token'];
+        }
+
+        try {
+            $this->validateCsrf();
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'error' => 'Your session expired. Refresh the page and try again.']);
+            return;
         }
 
         $amount = (float)($input['amount'] ?? 0);
@@ -889,7 +985,7 @@ class AgentDashboardController extends BaseController
             'id_number' => $this->sanitizeInput($_POST['id_number'] ?? ''),
             'date_of_birth' => $this->sanitizeInput($_POST['date_of_birth'] ?? ''),
             'phone_number' => null,
-            'percentage' => (float)($_POST['percentage'] ?? 0)
+            'percentage' => 0
         ];
 
         $dependentPhoneInput = $this->sanitizeInput($_POST['phone_number'] ?? '');
@@ -897,62 +993,27 @@ class AgentDashboardController extends BaseController
             $dependentData['phone_number'] = formatKenyanPhone($dependentPhoneInput);
         }
 
-        if ($dependentData['full_name'] === '' || $dependentData['relationship'] === '' || $dependentData['id_number'] === '' || $dependentData['date_of_birth'] === '') {
-            $_SESSION['error'] = 'Please fill in all required dependent fields.';
-            $this->redirect('/agent/member-details/' . (int)$memberId);
-            return;
-        }
-
-        if ($dependentData['percentage'] <= 0 || $dependentData['percentage'] > 100) {
-            $_SESSION['error'] = 'Percentage must be between 1 and 100.';
-            $this->redirect('/agent/member-details/' . (int)$memberId);
-            return;
-        }
-
-        $currentTotal = $this->beneficiaryModel->validateBeneficiaryPercentages($memberId);
-        if (($currentTotal + $dependentData['percentage']) > 100) {
-            $_SESSION['error'] = 'Total beneficiary percentage cannot exceed 100%.';
-            $this->redirect('/agent/member-details/' . (int)$memberId);
-            return;
-        }
-
-        try {
-            $dependentDob = $dependentData['date_of_birth'] ?? '';
-            if (!is_string($dependentDob)) {
-                $dependentDob = '';
-            }
-            $dependentAge = $this->memberModel->calculateAge($dependentDob);
-            if ($dependentAge <= 0 || $dependentAge > 120) {
-                $_SESSION['error'] = 'Please enter a valid dependent date of birth.';
-                $this->redirect('/agent/member-details/' . (int)$memberId);
-                return;
-            }
-        } catch (Exception $e) {
-            error_log('Dependent age calc error: ' . $e->getMessage());
-            $_SESSION['error'] = 'Please enter a valid dependent date of birth.';
-            $this->redirect('/agent/member-details/' . (int)$memberId);
-            return;
-        }
-
         $currentDependents = $this->beneficiaryModel->getActiveBeneficiaries($memberId) ?: [];
-        $coverageCheck = $this->memberModel->evaluateDependentCoverageForAddition(
+        $policy = $this->memberModel->validateDependentAddition(
             $member,
             $currentDependents,
-            (string) ($dependentData['relationship'] ?? '')
+            $dependentData
         );
 
-        if (empty($coverageCheck['allowed'])) {
-            $requiredPackage = $coverageCheck['required_package'] ?? null;
+        if (empty($policy['allowed'])) {
+            $coverageCheck = $policy['coverage'] ?? [];
+            $requiredPackage = is_array($coverageCheck) ? ($coverageCheck['required_package'] ?? null) : null;
             if (!empty($requiredPackage)) {
-                $_SESSION['error'] = 'Dependent exceeds current plan coverage. Ask member to upgrade to ' . ucfirst($requiredPackage) . ' first.';
+                $_SESSION['error'] = (string)($policy['message'] ?? ('Dependent exceeds current plan coverage. Ask member to upgrade to ' . ucfirst($requiredPackage) . ' first.'));
                 $this->redirect('/agent/member-details/' . (int)$memberId);
                 return;
             }
 
-            $_SESSION['error'] = 'Dependent exceeds available coverage limits for this member.';
+            $_SESSION['error'] = (string)($policy['message'] ?? 'Dependent exceeds available coverage limits for this member.');
             $this->redirect('/agent/member-details/' . (int)$memberId);
             return;
         }
+        $dependentData['relationship'] = (string)($policy['relationship'] ?? $dependentData['relationship']);
 
         try {
             $oldMonthly = (int)($member['monthly_contribution'] ?? 0);
@@ -974,7 +1035,7 @@ class AgentDashboardController extends BaseController
                 $_SESSION['success'] = 'Dependent added successfully.';
             }
         } catch (Exception $e) {
-            $_SESSION['error'] = 'Failed to add dependent: ' . $e->getMessage();
+            $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Failed to add dependent.');
         }
 
         $this->redirect('/agent/member-details/' . (int)$memberId);

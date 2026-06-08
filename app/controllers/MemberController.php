@@ -24,6 +24,33 @@ class MemberController extends BaseController
         $this->beneficiaryModel = new Beneficiary();
         $this->claimModel = new Claim();
     }
+
+    private function friendlyErrorMessage(Throwable $e, string $fallback): string
+    {
+        error_log($fallback . ': ' . $e->getMessage());
+        return $fallback . ' Please review the information and try again.';
+    }
+
+    private function normalizeBeneficiaryRelationship(string $relationship): string
+    {
+        $value = strtolower(trim($relationship));
+        $value = str_replace(['-', ' '], '_', $value);
+
+        $aliases = [
+            'wife' => 'spouse',
+            'husband' => 'spouse',
+            'son' => 'child',
+            'daughter' => 'child',
+            'father' => 'parent',
+            'mother' => 'parent',
+            'father_in_law' => 'father_in_law',
+            'mother_in_law' => 'mother_in_law',
+            'fatherinlaw' => 'father_in_law',
+            'motherinlaw' => 'mother_in_law',
+        ];
+
+        return $aliases[$value] ?? $value;
+    }
     
     public function dashboard()
     {
@@ -154,7 +181,7 @@ class MemberController extends BaseController
         // Dashboard stats
         $stats = [
             'total_payments' => is_array($allPayments) ? count(array_filter($allPayments, fn($p) => $p['status'] === 'completed')) : 0,
-            'active_claims' => is_array($recentClaims) ? count(array_filter($recentClaims, fn($c) => isset($c['status']) && $c['status'] === 'active')) : 0
+            'active_claims' => is_array($recentClaims) ? count(array_filter($recentClaims, fn($c) => in_array($c['status'] ?? '', ['submitted', 'under_review', 'approved', 'services_arranged'], true))) : 0
         ];
 
         $data = [
@@ -1010,95 +1037,46 @@ class MemberController extends BaseController
                 return;
             }
 
-            if (!$this->ensureActiveMembership($member, '/beneficiaries')) {
-                return;
-            }
-            
             error_log('Member found: ' . $member['id']);
-            
+
             $beneficiaryData = [
                 'member_id' => $member['id'],
                 'full_name' => $this->sanitizeInput($_POST['full_name'] ?? ''),
-                'relationship' => $this->sanitizeInput($_POST['relationship'] ?? ''),
+                'relationship' => $this->normalizeBeneficiaryRelationship($this->sanitizeInput($_POST['relationship'] ?? '')),
                 'id_number' => $this->sanitizeInput($_POST['id_number'] ?? ''),
                 'date_of_birth' => $this->sanitizeInput($_POST['date_of_birth'] ?? ''),
                 'phone_number' => null,
-                'percentage' => (float)($_POST['percentage'] ?? 100)
+                'percentage' => 0
             ];
 
             $beneficiaryPhoneInput = $this->sanitizeInput($_POST['phone_number'] ?? '');
             if ($beneficiaryPhoneInput !== '') {
                 $beneficiaryData['phone_number'] = formatKenyanPhone($beneficiaryPhoneInput);
             }
-            
-            error_log('Beneficiary data: ' . print_r($beneficiaryData, true));
-            
-            // Validate required fields
-            if (empty($beneficiaryData['full_name']) || empty($beneficiaryData['relationship']) || 
-                empty($beneficiaryData['id_number']) || empty($beneficiaryData['date_of_birth'])) {
-                error_log('Validation failed: missing required fields');
-                $_SESSION['error'] = 'Please fill in all required fields including date of birth.';
-                $this->redirect('/beneficiaries');
-                return;
-            }
-            
-            // Validate percentage
-            if ($beneficiaryData['percentage'] <= 0 || $beneficiaryData['percentage'] > 100) {
-                error_log('Validation failed: invalid percentage');
-                $_SESSION['error'] = 'Percentage must be between 1 and 100.';
-                $this->redirect('/beneficiaries');
-                return;
-            }
 
-            try {
-                $beneficiaryDob = $beneficiaryData['date_of_birth'] ?? '';
-                if (!is_string($beneficiaryDob)) {
-                    $beneficiaryDob = '';
-                }
-                $benAge = $this->memberModel->calculateAge($beneficiaryDob);
-                if ($benAge <= 0 || $benAge > 120) {
-                    $_SESSION['error'] = 'Please enter a valid beneficiary date of birth.';
-                    $this->redirect('/beneficiaries');
-                    return;
-                }
-            } catch (Exception $e) {
-                error_log('Beneficiary age calc error: ' . $e->getMessage());
-                $_SESSION['error'] = 'Please enter a valid beneficiary date of birth.';
-                $this->redirect('/beneficiaries');
-                return;
-            }
+            error_log('Beneficiary data: ' . print_r($beneficiaryData, true));
 
             $currentDependents = $this->beneficiaryModel->getActiveBeneficiaries($member['id']) ?: [];
-            $coverageCheck = $this->memberModel->evaluateDependentCoverageForAddition(
+            $policy = $this->memberModel->validateDependentAddition(
                 $member,
                 $currentDependents,
-                (string) ($beneficiaryData['relationship'] ?? '')
+                $beneficiaryData
             );
 
-            if (empty($coverageCheck['allowed'])) {
-                $requiredPackage = $coverageCheck['required_package'] ?? null;
+            if (empty($policy['allowed'])) {
+                $coverageCheck = $policy['coverage'] ?? [];
+                $requiredPackage = is_array($coverageCheck) ? ($coverageCheck['required_package'] ?? null) : null;
                 if (!empty($requiredPackage)) {
-                    $_SESSION['error'] = 'This beneficiary is outside your current plan coverage. Please upgrade to ' . ucfirst($requiredPackage) . ' to continue.';
+                    $_SESSION['error'] = (string)($policy['message'] ?? ('This beneficiary is outside your current plan coverage. Please upgrade to ' . ucfirst($requiredPackage) . ' to continue.'));
                     $this->redirect('/member/upgrade');
                     return;
                 }
 
-                $_SESSION['error'] = 'This beneficiary is outside your current plan coverage. Please review your plan limits.';
+                $_SESSION['error'] = (string)($policy['message'] ?? 'This beneficiary is outside your current plan coverage. Please review your plan limits.');
                 $this->redirect('/beneficiaries');
                 return;
             }
-            
-            // Check total percentage
-            $currentTotal = $this->beneficiaryModel->validateBeneficiaryPercentages($member['id']);
-            error_log('Current total percentage: ' . $currentTotal);
-            
-            if (($currentTotal + $beneficiaryData['percentage']) > 100) {
-                error_log('Validation failed: percentage exceeds 100');
-                $_SESSION['error'] = 'Total beneficiary percentage cannot exceed 100%.';
-                $this->redirect('/beneficiaries');
-                return;
-            }
-            
+            $beneficiaryData['relationship'] = (string)($policy['relationship'] ?? $beneficiaryData['relationship']);
             $beneficiaryId = $this->beneficiaryModel->addBeneficiary($beneficiaryData);
             error_log('Beneficiary added with ID: ' . $beneficiaryId);
 
@@ -1130,7 +1108,7 @@ class MemberController extends BaseController
         } catch (Exception $e) {
             error_log('Add beneficiary error: ' . $e->getMessage());
             error_log('Stack trace: ' . $e->getTraceAsString());
-            $_SESSION['error'] = 'Failed to add beneficiary: ' . $e->getMessage();
+            $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Failed to add beneficiary.');
         }
         
         $this->redirect('/beneficiaries');
@@ -1477,7 +1455,7 @@ class MemberController extends BaseController
             error_log('Stack trace: ' . $e->getTraceAsString());
             
             if (DEBUG_MODE) {
-                $_SESSION['error'] = 'Failed to submit claim: ' . $e->getMessage();
+                $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Failed to submit claim.');
             } else {
                 $_SESSION['error'] = 'An error occurred while submitting your claim. Please try again or contact support if the problem persists.';
             }
@@ -1514,20 +1492,12 @@ class MemberController extends BaseController
             
             $updateData = [
                 'full_name' => $this->sanitizeInput($_POST['full_name'] ?? ''),
-                'relationship' => $this->sanitizeInput($_POST['relationship'] ?? ''),
+                'relationship' => $this->normalizeBeneficiaryRelationship($this->sanitizeInput($_POST['relationship'] ?? '')),
                 'id_number' => $this->sanitizeInput($_POST['id_number'] ?? ''),
                 'date_of_birth' => $this->sanitizeInput($_POST['date_of_birth'] ?? null),
                 'phone_number' => $this->sanitizeInput($_POST['phone_number'] ?? ''),
-                'percentage' => (float)($_POST['percentage'] ?? 0)
+                'percentage' => 0
             ];
-            
-            // Validate percentage
-            $currentTotal = $this->beneficiaryModel->validateBeneficiaryPercentages($member['id'], $beneficiaryId);
-            if (($currentTotal + $updateData['percentage']) > 100) {
-                $_SESSION['error'] = 'Total beneficiary percentage cannot exceed 100%.';
-                $this->redirect('/beneficiaries');
-                return;
-            }
             
             $this->beneficiaryModel->updateBeneficiary($beneficiaryId, $updateData);
             $_SESSION['success'] = 'Beneficiary updated successfully.';
@@ -1637,7 +1607,7 @@ class MemberController extends BaseController
         try {
             $calculation = $upgradeService->calculateUpgradeCost($member['id'], $defaultTargetPackage);
         } catch (Exception $e) {
-            $_SESSION['error'] = $e->getMessage();
+            $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Unable to load upgrade options.');
             $this->redirect('/member/dashboard');
             return;
         }
@@ -1745,7 +1715,7 @@ class MemberController extends BaseController
             ]);
             
         } catch (Exception $e) {
-            $this->json(['error' => $e->getMessage()], 500);
+            $this->json(['error' => 'Unable to process the upgrade request. Please try again.'], 500);
         }
     }
     
@@ -1786,7 +1756,7 @@ class MemberController extends BaseController
             ]);
             
         } catch (Exception $e) {
-            $this->json(['error' => $e->getMessage()], 500);
+            $this->json(['error' => 'Unable to cancel the upgrade request. Please try again.'], 500);
         }
     }
     
@@ -1828,7 +1798,7 @@ class MemberController extends BaseController
             ]);
             
         } catch (Exception $e) {
-            $this->json(['error' => $e->getMessage()], 500);
+            $this->json(['error' => 'Unable to check upgrade status. Please try again.'], 500);
         }
     }
     

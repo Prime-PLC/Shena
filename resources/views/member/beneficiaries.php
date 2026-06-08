@@ -9,14 +9,50 @@ $maxBeneficiaries = (int)($coverageSummary['total_slots'] ?? 0);
 $availableSlots = max(0, $maxBeneficiaries - count($beneficiaries));
 $planTierLabel = ucfirst((string)($coverageSummary['tier'] ?? 'individual'));
 $planTier = strtolower((string)($coverageSummary['tier'] ?? 'individual'));
+$relationshipCounts = [
+    'spouse' => 0,
+    'child' => 0,
+    'parent' => 0,
+    'father_in_law' => 0,
+    'mother_in_law' => 0,
+];
+$normalizeRelation = static function ($relationship): string {
+    $value = strtolower(trim((string)$relationship));
+    $value = str_replace(['-', ' '], '_', $value);
+    $aliases = [
+        'wife' => 'spouse',
+        'husband' => 'spouse',
+        'son' => 'child',
+        'daughter' => 'child',
+        'father' => 'parent',
+        'mother' => 'parent',
+        'fatherinlaw' => 'father_in_law',
+        'motherinlaw' => 'mother_in_law',
+    ];
+    return $aliases[$value] ?? $value;
+};
+foreach ($beneficiaries as $beneficiary) {
+    $relation = $normalizeRelation($beneficiary['relationship'] ?? '');
+    if (isset($relationshipCounts[$relation])) {
+        $relationshipCounts[$relation]++;
+    }
+}
 
-// Build allowed relationship options based on plan tier
 $relationOptions = [];
-if ((int)($planLimits['spouse'] ?? 0) > 0)   $relationOptions[] = 'Spouse';
-if ((int)($planLimits['children'] ?? 0) > 0)  $relationOptions[] = 'Child';
-if ((int)($planLimits['parents'] ?? 0) > 0)   { $relationOptions[] = 'Father'; $relationOptions[] = 'Mother'; }
-if ((int)($planLimits['inlaws'] ?? 0) > 0)    { $relationOptions[] = 'Father-in-Law'; $relationOptions[] = 'Mother-in-Law'; }
-if (empty($relationOptions))                    $relationOptions = ['Spouse', 'Child', 'Parent', 'Sibling', 'Other'];
+if ((int)($planLimits['spouse'] ?? 0) > $relationshipCounts['spouse']) {
+    $relationOptions[] = ['value' => 'spouse', 'label' => 'Spouse'];
+}
+if ((int)($planLimits['children'] ?? 0) > $relationshipCounts['child']) {
+    $relationOptions[] = ['value' => 'child', 'label' => 'Child'];
+}
+if ((int)($planLimits['parents'] ?? 0) > $relationshipCounts['parent']) {
+    $relationOptions[] = ['value' => 'parent', 'label' => 'Parent'];
+}
+$inlawSlotsUsed = $relationshipCounts['father_in_law'] + $relationshipCounts['mother_in_law'];
+if ((int)($planLimits['inlaws'] ?? 0) > $inlawSlotsUsed) {
+    $relationOptions[] = ['value' => 'father_in_law', 'label' => 'Father-in-Law'];
+    $relationOptions[] = ['value' => 'mother_in_law', 'label' => 'Mother-in-Law'];
+}
 ?>
 
 <style>
@@ -146,7 +182,7 @@ main {
     width: 64px;
     height: 64px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #EC4899, #F472B6);
+    background: #7F3D9E;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -157,7 +193,7 @@ main {
 }
 
 .beneficiary-avatar.male {
-    background: linear-gradient(135deg, #3B82F6, #60A5FA);
+    background: #5E2B7A;
 }
 
 .beneficiary-info h3 {
@@ -431,7 +467,7 @@ main {
 }
 </style>
 
-<div class="beneficiaries-container">
+<div class="beneficiaries-container dependant-shell">
     <div class="page-header">
         <div class="page-title">
             <h1>Manage Dependents & Beneficiaries</h1>
@@ -515,7 +551,7 @@ main {
                 <?php else: ?>
                 <div class="add-member-card" style="border-color:#F87171; cursor:default;" onclick="window.location.href='/member/upgrade'">
                     <div class="add-icon" style="background:#FEE2E2;">
-                        <i class="fas fa-crown" style="color:#DC2626;"></i>
+                        <i class="fas fa-layer-group" style="color:#7F3D9E;"></i>
                     </div>
                     <h4 style="color:#DC2626;">Plan Limit Reached</h4>
                     <p><?php echo $maxBeneficiaries > 0 ? "All {$maxBeneficiaries} slot(s) used." : "Your current plan does not include dependents."; ?> Upgrade to add more family members.</p>
@@ -583,9 +619,9 @@ main {
 
 <!-- Upgrade CTA Card -->
 <div class="upgrade-cta-section">
-    <div class="upgrade-cta-card">
+    <div class="dependant-upgrade-card">
         <div class="upgrade-icon">
-            <i class="fas fa-crown"></i>
+            <i class="fas fa-layer-group"></i>
         </div>
         <div class="upgrade-content">
             <h2>Unlock More Coverage for Your Loved Ones</h2>
@@ -668,8 +704,8 @@ main {
     }
 }
 
-.upgrade-cta-card {
-    background: linear-gradient(135deg, #7F20B0 0%, #a855f7 50%, #F59E0B 100%);
+.dependant-upgrade-card {
+    background: #7F3D9E;
     border-radius: 20px;
     padding: 3rem;
     position: relative;
@@ -678,12 +714,12 @@ main {
     transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
-.upgrade-cta-card:hover {
+.dependant-upgrade-card:hover {
     transform: translateY(-5px);
     box-shadow: 0 15px 50px rgba(127, 32, 176, 0.4);
 }
 
-.upgrade-cta-card::before {
+.dependant-upgrade-card::before {
     content: '';
     position: absolute;
     top: -50%;
@@ -876,7 +912,7 @@ main {
 }
 
 @media (max-width: 768px) {
-    .upgrade-cta-card {
+    .dependant-upgrade-card {
         padding: 2rem 1.5rem;
     }
     
@@ -937,7 +973,7 @@ main {
                         <select name="relationship" id="editRelationship" class="form-control" required>
                             <option value="">Select relationship...</option>
                             <?php foreach ($relationOptions as $rel): ?>
-                            <option value="<?php echo $rel; ?>"><?php echo htmlspecialchars($rel); ?></option>
+                                <option value="<?php echo htmlspecialchars($rel['value']); ?>"><?php echo htmlspecialchars($rel['label']); ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
@@ -952,10 +988,6 @@ main {
                     <div class="mb-3">
                         <label class="form-label">Phone Number (Optional for minors)</label>
                         <input type="tel" name="phone_number" id="editPhoneNumber" class="form-control" value="<?php echo getOldValue('phone_number_edit') ?: ''; ?>">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Percentage (%) *</label>
-                        <input type="number" name="percentage" id="editPercentage" class="form-control" min="1" max="100" value="<?php echo getOldValue('percentage_edit') ?: '100'; ?>" required>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -984,10 +1016,10 @@ main {
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Relationship *</label>
-                        <select name="relationship" class="form-control" required>
+                        <select name="relationship" class="form-control" required <?php echo empty($relationOptions) ? 'disabled' : ''; ?>>
                             <option value="">Select relationship...</option>
                             <?php foreach ($relationOptions as $rel): ?>
-                            <option value="<?php echo $rel; ?>" <?php echo (getOldValue('relationship') === $rel) ? 'selected' : ''; ?>><?php echo htmlspecialchars($rel); ?></option>
+                            <option value="<?php echo htmlspecialchars($rel['value']); ?>" <?php echo (getOldValue('relationship') === $rel['value']) ? 'selected' : ''; ?>><?php echo htmlspecialchars($rel['label']); ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
@@ -996,21 +1028,17 @@ main {
                         <input type="text" name="id_number" class="form-control" value="<?php echo getOldValue('id_number'); ?>" required>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Date of Birth</label>
-                        <input type="date" name="date_of_birth" class="form-control" min="1900-01-01" max="<?php echo date('Y-m-d'); ?>" value="<?php echo getOldValue('date_of_birth'); ?>">
+                        <label class="form-label">Date of Birth *</label>
+                        <input type="date" name="date_of_birth" class="form-control" min="1900-01-01" max="<?php echo date('Y-m-d'); ?>" value="<?php echo getOldValue('date_of_birth'); ?>" required>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Phone Number (Optional for minors)</label>
                         <input type="tel" name="phone_number" class="form-control" value="<?php echo getOldValue('phone_number'); ?>">
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Percentage (%) *</label>
-                        <input type="number" name="percentage" class="form-control" min="1" max="100" value="<?php echo getOldValue('percentage') ?: '100'; ?>" required>
-                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Add Beneficiary</button>
+                    <button type="submit" class="btn btn-primary" <?php echo empty($relationOptions) ? 'disabled' : ''; ?>>Add Beneficiary</button>
                 </div>
             </form>
         </div>
@@ -1039,7 +1067,6 @@ function editBeneficiary(id) {
     document.getElementById('editIdNumber').value = beneficiary.id_number;
     document.getElementById('editDateOfBirth').value = beneficiary.date_of_birth || '';
     document.getElementById('editPhoneNumber').value = beneficiary.phone_number || '';
-    document.getElementById('editPercentage').value = beneficiary.percentage;
     
     new bootstrap.Modal(document.getElementById('editBeneficiaryModal')).show();
 }

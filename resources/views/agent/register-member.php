@@ -615,17 +615,13 @@ foreach (($packages ?? []) as $packageKey => $package) {
                 </div>
 
                 <div class="form-grid" style="margin-top: 16px;">
-                    <div class="form-group">
-                        <label for="corporate_couple_count" class="form-label">Corporate Couple Count</label>
-                        <select class="form-select" id="corporate_couple_count" name="corporate_couple_count">
-                            <option value="0" <?php echo $getOldValue('corporate_couple_count') === '0' ? 'selected' : ''; ?>>None</option>
-                            <option value="1" <?php echo $getOldValue('corporate_couple_count') === '1' ? 'selected' : ''; ?>>1 Additional Corporate Couple</option>
-                            <option value="2" <?php echo $getOldValue('corporate_couple_count') === '2' ? 'selected' : ''; ?>>2 Additional Corporate Couples</option>
-                            <option value="3" <?php echo $getOldValue('corporate_couple_count') === '3' ? 'selected' : ''; ?>>3 Additional Corporate Couples</option>
-                            <option value="4" <?php echo $getOldValue('corporate_couple_count') === '4' ? 'selected' : ''; ?>>4 Additional Corporate Couples</option>
-                            <option value="5" <?php echo $getOldValue('corporate_couple_count') === '5' ? 'selected' : ''; ?>>5 Additional Corporate Couples</option>
-                        </select>
-                        <small class="form-hint">Each corporate couple is charged at the selected plan amount.</small>
+                    <div class="form-group" style="grid-column: 1 / -1;">
+                        <label class="form-label">Corporate Members</label>
+                        <div id="agentCorporateLineItems" class="corporate-line-items"></div>
+                        <button type="button" class="btn-reset" onclick="addAgentCorporateRow()" style="margin-top: 10px;">
+                            <i class="fas fa-plus"></i> Add Corporate Member
+                        </button>
+                        <small class="form-hint">Each corporate member uses the exact package selected for that person.</small>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Expected Monthly Contribution</label>
@@ -696,23 +692,50 @@ const memberSubmitBtn = memberForm.querySelector('.step-submit');
 let memberCurrentStep = 1;
 const memberInitialStep = <?php echo json_encode(max(1, min(6, $initialStep))); ?>;
 const membershipPlanData = <?php echo json_encode($membershipPlanData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
-const memberCorporateSelect = document.getElementById('corporate_couple_count');
+const agentCorporateLineItems = document.getElementById('agentCorporateLineItems');
 const memberCorporateTotalPreview = document.getElementById('corporateTotalPreview');
+let agentCorporateIndex = 0;
 
 function updateMemberContributionPreview() {
-    if (!memberCorporateSelect || !memberCorporateTotalPreview) return;
+    if (!memberCorporateTotalPreview) return;
     const selectedPackage = memberForm.querySelector('input[name="package"]:checked');
     const packageKey = selectedPackage ? selectedPackage.value : '';
     const baseAmount = Number(selectedPackage?.dataset.monthlyContribution || membershipPlanData[packageKey]?.monthly_contribution || 0);
-    const corporateCount = Number(memberCorporateSelect.value || 0);
-    const total = baseAmount * (1 + corporateCount);
+    let corporateTotal = 0;
+    agentCorporateLineItems?.querySelectorAll('[data-corporate-package]').forEach(function(field) {
+        const selectedCorporatePackage = field.value;
+        corporateTotal += Number(membershipPlanData[selectedCorporatePackage]?.monthly_contribution || 0);
+    });
+    const total = baseAmount + corporateTotal;
     memberCorporateTotalPreview.textContent = 'KES ' + total.toLocaleString() + '/month';
+}
+
+function addAgentCorporateRow() {
+    if (!agentCorporateLineItems) return;
+    const row = document.createElement('div');
+    row.className = 'corporate-line-row';
+    row.style.cssText = 'display:grid; grid-template-columns:1fr 1fr auto; gap:10px; margin-top:10px;';
+    row.innerHTML = `
+        <input type="text" class="form-input" name="corporate_members[${agentCorporateIndex}][label]" placeholder="Name or label">
+        <select class="form-select" name="corporate_members[${agentCorporateIndex}][package_key]" data-corporate-package required>
+            <option value="">Select package</option>
+            ${Object.keys(membershipPlanData).map(function(key) {
+                const plan = membershipPlanData[key] || {};
+                return `<option value="${key}">${plan.name || key} - KES ${(Number(plan.monthly_contribution || 0)).toLocaleString()}</option>`;
+            }).join('')}
+        </select>
+        <button type="button" class="btn-reset" onclick="this.closest('.corporate-line-row').remove(); updateMemberContributionPreview();">
+            <i class="fas fa-times"></i>
+        </button>
+    `;
+    agentCorporateLineItems.appendChild(row);
+    row.querySelector('[data-corporate-package]').addEventListener('change', updateMemberContributionPreview);
+    agentCorporateIndex++;
 }
 
 memberForm.querySelectorAll('input[name="package"]').forEach(function (field) {
     field.addEventListener('change', updateMemberContributionPreview);
 });
-memberCorporateSelect?.addEventListener('change', updateMemberContributionPreview);
 updateMemberContributionPreview();
 
 function showMemberStep(step) {

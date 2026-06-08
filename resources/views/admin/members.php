@@ -7,6 +7,13 @@ $packages = $packages ?? [];
 $search = $search ?? '';
 $status = $status ?? 'all';
 $package = $package ?? 'all';
+$membershipPlanData = [];
+foreach ($packages as $packageKey => $packageOption) {
+    $membershipPlanData[$packageKey] = [
+        'name' => $packageOption['name'] ?? $packageKey,
+        'monthly_contribution' => (float)($packageOption['monthly_contribution'] ?? 0),
+    ];
+}
 $pendingValidationError = $_SESSION['pending_validation_error'] ?? '';
 $pendingValidationMemberId = (int)($_SESSION['pending_validation_member_id'] ?? 0);
 $pendingValidationCode = $_SESSION['pending_validation_code'] ?? '';
@@ -371,13 +378,6 @@ $buildMemberFilterUrl = function (string $targetStatus) use ($search, $package) 
 
     .entity-modal .btn-close {
         filter: brightness(0) invert(1);
-    }
-
-    .member-quick-panel .modal-content {
-        border: 0;
-        border-radius: 14px;
-        overflow: hidden;
-        box-shadow: 0 22px 70px rgba(17, 24, 39, 0.28);
     }
 
     .entity-modal .modal-body {
@@ -1452,7 +1452,26 @@ $buildMemberFilterUrl = function (string $targetStatus) use ($search, $package) 
                                 'next_of_kin' => $member['next_of_kin'] ?? '',
                                 'next_of_kin_relationship' => $member['next_of_kin_relationship'] ?? '',
                                 'next_of_kin_phone' => $member['next_of_kin_phone'] ?? '',
+                                'monthly_contribution_raw' => (float)($member['monthly_contribution'] ?? 0),
                                 'monthly_contribution' => 'KES ' . number_format((float)($member['monthly_contribution'] ?? 0), 2),
+                                'corporate_members' => array_map(function ($item) {
+                                    return [
+                                        'label' => $item['label'] ?? '',
+                                        'relationship' => $item['relationship'] ?? 'corporate',
+                                        'package_key' => $item['package_key'] ?? '',
+                                        'package_name' => $item['package_name'] ?? ($item['package_key'] ?? ''),
+                                        'monthly_contribution' => (float)($item['monthly_contribution'] ?? 0),
+                                    ];
+                                }, $member['corporate_members'] ?? []),
+                                'dependants' => array_map(function ($item) {
+                                    return [
+                                        'full_name' => $item['full_name'] ?? '',
+                                        'relationship' => $item['relationship'] ?? '',
+                                        'id_number' => $item['id_number'] ?? '',
+                                        'date_of_birth' => $item['date_of_birth'] ?? '',
+                                    ];
+                                }, $member['beneficiaries'] ?? []),
+                                'dependant_relationship_options' => $member['dependant_relationship_options'] ?? [],
                                 'last_payment_amount' => 'KES ' . number_format($member['last_payment_amount'] ?? 0, 2),
                                 'last_payment_date' => $lastPaymentDate,
                                 'agent_number' => $member['agent_number'] ?? 'N/A',
@@ -1468,9 +1487,9 @@ $buildMemberFilterUrl = function (string $targetStatus) use ($search, $package) 
                                         <?php echo strtoupper(substr($member['first_name'] ?? 'M', 0, 1) . substr($member['last_name'] ?? 'M', 0, 1)); ?>
                                     </div>
                                     <div class="member-details">
-                                        <button type="button" class="member-name" data-member="<?php echo $memberModalJson; ?>" onclick="openMemberModal(this)" style="border: 0; background: transparent; padding: 0; cursor: pointer;">
+                                        <a class="member-name" href="/admin/members/view/<?php echo (int)($member['id'] ?? 0); ?>" style="border: 0; background: transparent; padding: 0; cursor: pointer; text-decoration:none;">
                                             <?php echo htmlspecialchars($memberName); ?>
-                                        </button>
+                                        </a>
                                     </div>
                                 </div>
                             </td>
@@ -1500,12 +1519,12 @@ $buildMemberFilterUrl = function (string $targetStatus) use ($search, $package) 
                             </td>
                             <td>
                                 <div class="action-group">
-                                    <button type="button" class="row-action primary" data-member="<?php echo $memberModalJson; ?>" onclick="openMemberModal(this)" aria-label="View member details">
+                                    <a class="row-action primary" href="/admin/members/view/<?php echo (int)($member['id'] ?? 0); ?>" aria-label="View member details">
                                         <i class="fas fa-eye"></i> View
-                                    </button>
-                                    <button type="button" class="row-action success" data-member="<?php echo $memberModalJson; ?>" onclick="openMemberManageModal(this)">
+                                    </a>
+                                    <a class="row-action success" href="/admin/members/view/<?php echo (int)($member['id'] ?? 0); ?>">
                                         <i class="fas fa-sliders-h"></i> Manage
-                                    </button>
+                                    </a>
                                 </div>
                             </td>
                         </tr>
@@ -1578,120 +1597,6 @@ $buildMemberFilterUrl = function (string $targetStatus) use ($search, $package) 
                     <p>No pending approvals</p>
                 </div>
             <?php endif; ?>
-        </div>
-    </div>
-</div>
-
-<!-- Member Quick Management Panel -->
-<div class="modal fade entity-modal member-quick-panel" id="memberQuickPanel" tabindex="-1" aria-labelledby="memberQuickPanelLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content">
-            <form method="POST" id="memberManageForm">
-                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
-                <input type="hidden" name="return_to" value="/admin/members">
-                <div class="modal-header">
-                    <div>
-                        <h5 class="modal-title" id="memberQuickPanelLabel">Manage Member</h5>
-                        <div id="memberQuickSubtitle" style="font-size:13px;opacity:.85;margin-top:2px;"></div>
-                    </div>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label class="form-label" for="memberManageFirstName">First Name</label>
-                            <input class="form-input" id="memberManageFirstName" name="first_name" required>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="memberManageLastName">Last Name</label>
-                            <input class="form-input" id="memberManageLastName" name="last_name" required>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="memberManageIdNumber">National ID</label>
-                            <input class="form-input" id="memberManageIdNumber" name="id_number" required>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="memberManagePhone">Phone</label>
-                            <input class="form-input" id="memberManagePhone" name="phone" required>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="memberManageEmail">Email</label>
-                            <input class="form-input" id="memberManageEmail" name="email" type="email">
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="memberManageDateOfBirth">Date of Birth</label>
-                            <input class="form-input" id="memberManageDateOfBirth" name="date_of_birth" type="date">
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="memberManageGender">Gender</label>
-                            <select class="form-select" id="memberManageGender" name="gender">
-                                <option value="">Not set</option>
-                                <option value="male">Male</option>
-                                <option value="female">Female</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="memberStatusSelect">Member Status</label>
-                            <select name="status" id="memberStatusSelect" class="form-select">
-                                <option value="active">Active</option>
-                                <option value="inactive">Inactive</option>
-                                <option value="suspended">Suspended</option>
-                                <option value="grace_period">Grace Period</option>
-                                <option value="defaulted">Defaulted</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="memberManagePackage">Package</label>
-                            <select class="form-select" id="memberManagePackage" name="package_key" required>
-                                <?php foreach ($packages as $packageKey => $packageOption): ?>
-                                    <option value="<?php echo htmlspecialchars($packageKey); ?>">
-                                        <?php echo htmlspecialchars($packageOption['name'] ?? $packageKey); ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="memberManageCorporateCount">Corporate Couple Count</label>
-                            <select class="form-select" id="memberManageCorporateCount" name="corporate_couple_count">
-                                <?php for ($i = 0; $i <= 5; $i++): ?>
-                                    <option value="<?php echo $i; ?>"><?php echo $i === 0 ? 'None' : $i . ' additional'; ?></option>
-                                <?php endfor; ?>
-                            </select>
-                        </div>
-                        <div class="form-group" style="grid-column:1 / -1;">
-                            <label class="form-label">Monthly payable amount</label>
-                            <div class="form-input" id="memberManageMonthlyContribution" style="background:#f9fafb;font-weight:700;"></div>
-                        </div>
-                        <div class="form-group" style="grid-column:1 / -1;">
-                            <label class="form-label" for="memberManageAddress">Address</label>
-                            <textarea class="form-input" id="memberManageAddress" name="address" rows="2"></textarea>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="memberManageNokName">Next of Kin</label>
-                            <input class="form-input" id="memberManageNokName" name="nok_name">
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="memberManageNokPhone">Next of Kin Phone</label>
-                            <input class="form-input" id="memberManageNokPhone" name="nok_phone">
-                        </div>
-                        <div class="form-group" style="grid-column:1 / -1;">
-                            <label class="form-label" for="memberManageNokRelationship">Next of Kin Relationship</label>
-                            <input class="form-input" id="memberManageNokRelationship" name="nok_relationship">
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-danger me-auto" id="memberManageDeleteButton" onclick="openMemberDeleteConfirm()">
-                        <i class="fas fa-trash-alt"></i> Delete / Archive
-                    </button>
-                    <a href="#" class="btn btn-outline-secondary" id="memberManagePaymentsLink">
-                        <i class="fas fa-credit-card"></i> Payments
-                    </a>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-save"></i> Save Member
-                    </button>
-                </div>
-            </form>
         </div>
     </div>
 </div>
@@ -1821,48 +1726,6 @@ function openMemberModal(button) {
     new bootstrap.Modal(document.getElementById('memberDetailModal')).show();
 }
 
-let selectedManagedMember = null;
-
-function setFormValue(id, value) {
-    const field = document.getElementById(id);
-    if (field) field.value = value || '';
-}
-
-function openMemberManageModal(button) {
-    const member = JSON.parse(button.getAttribute('data-member') || '{}');
-    selectedManagedMember = member;
-    setText('memberQuickSubtitle', (member.name || 'N/A') + ' | ' + (member.member_number || 'N/A'));
-    const form = document.getElementById('memberManageForm');
-    form.action = '/admin/members/update/' + encodeURIComponent(member.id || '');
-    setFormValue('memberManageFirstName', member.first_name);
-    setFormValue('memberManageLastName', member.last_name);
-    setFormValue('memberManageIdNumber', member.national_id);
-    setFormValue('memberManagePhone', member.phone);
-    setFormValue('memberManageEmail', member.email === 'N/A' ? '' : member.email);
-    setFormValue('memberManageDateOfBirth', member.date_of_birth);
-    setFormValue('memberManageGender', member.gender);
-    setFormValue('memberStatusSelect', member.status || 'inactive');
-    setFormValue('memberManagePackage', member.package_key || '');
-    setFormValue('memberManageCorporateCount', String(member.corporate_couple_count || 0));
-    setFormValue('memberManageAddress', member.address);
-    setFormValue('memberManageNokName', member.next_of_kin);
-    setFormValue('memberManageNokPhone', member.next_of_kin_phone);
-    setFormValue('memberManageNokRelationship', member.next_of_kin_relationship);
-    setText('memberManageMonthlyContribution', member.monthly_contribution);
-    document.getElementById('memberManagePaymentsLink').href = member.payments_url || '#';
-    new bootstrap.Modal(document.getElementById('memberQuickPanel')).show();
-}
-
-function openMemberDeleteConfirm() {
-    if (!selectedManagedMember || !selectedManagedMember.id) return;
-    const form = document.getElementById('memberDeleteArchiveForm');
-    form.action = '/admin/members/delete/' + encodeURIComponent(selectedManagedMember.id);
-    setText('memberDeleteSubtitle', (selectedManagedMember.name || 'N/A') + ' | ' + (selectedManagedMember.member_number || 'N/A'));
-    setFormValue('memberDeleteConfirmNumber', '');
-    setFormValue('memberArchiveReason', '');
-    new bootstrap.Modal(document.getElementById('memberDeleteConfirmModal')).show();
-}
-
 function confirmMemberStatus(event, message, type) {
     const form = event.currentTarget.closest('form');
     ShenaApp.confirmAction(
@@ -1924,9 +1787,11 @@ function filterMembersByStatus(status) {
 }
 
 // Bulk approve - IMPLEMENTED
-function bulkApprove() {
+function bulkApprove(overrideSystemRestrictions = false) {
     ShenaApp.confirmAction(
-        'Approve all pending members in this view?',
+        overrideSystemRestrictions
+            ? 'Override system restrictions and activate the skipped pending members?'
+            : 'Approve all pending members in this view?',
         async function() {
             try {
                 const response = await fetch('/admin-api/members/bulk-approve', {
@@ -1934,12 +1799,23 @@ function bulkApprove() {
                     headers: {
                         'Content-Type': 'application/json',
                         'X-Requested-With': 'XMLHttpRequest'
-                    }
+                    },
+                    body: JSON.stringify({ override_system_restrictions: overrideSystemRestrictions })
                 });
                 
                 const data = await response.json();
                 
                 if (data.success) {
+                    if (data.requires_override) {
+                        const details = Array.isArray(data.errors) && data.errors.length ? '\n\n' + data.errors.join('\n') : '';
+                        ShenaApp.confirmAction(
+                            'Some members are blocked by unpaid registration, activation, or status requirements.' + details + '\n\nOverride these restrictions and activate them anyway?',
+                            function() { bulkApprove(true); },
+                            null,
+                            { type: 'warning', title: 'Override Activation Checks', confirmText: 'Override & Activate' }
+                        );
+                        return;
+                    }
                     ShenaApp.showNotification(data.message || `Successfully approved ${data.approved_count || 0} members`, 'success');
                     setTimeout(() => window.location.reload(), 1500);
                 } else {
@@ -1950,14 +1826,16 @@ function bulkApprove() {
             }
         },
         null,
-        { type: 'primary', title: 'Bulk Approval' }
+        { type: overrideSystemRestrictions ? 'warning' : 'primary', title: 'Bulk Approval' }
     );
 }
 
 // Bulk reactivate - IMPLEMENTED
-function bulkReactivate() {
+function bulkReactivate(overrideSystemRestrictions = false) {
     ShenaApp.confirmAction(
-        'Reactivate selected suspended members?',
+        overrideSystemRestrictions
+            ? 'Override system restrictions and reactivate skipped members?'
+            : 'Reactivate selected suspended members?',
         async function() {
             try {
                 const response = await fetch('/admin-api/members/bulk-reactivate', {
@@ -1965,12 +1843,23 @@ function bulkReactivate() {
                     headers: {
                         'Content-Type': 'application/json',
                         'X-Requested-With': 'XMLHttpRequest'
-                    }
+                    },
+                    body: JSON.stringify({ override_system_restrictions: overrideSystemRestrictions })
                 });
                 
                 const data = await response.json();
                 
                 if (data.success) {
+                    if (data.requires_override) {
+                        const details = Array.isArray(data.errors) && data.errors.length ? '\n\n' + data.errors.join('\n') : '';
+                        ShenaApp.confirmAction(
+                            'Some members are blocked by unpaid registration, activation, or status requirements.' + details + '\n\nOverride these restrictions and reactivate them anyway?',
+                            function() { bulkReactivate(true); },
+                            null,
+                            { type: 'warning', title: 'Override Reactivation Checks', confirmText: 'Override & Reactivate' }
+                        );
+                        return;
+                    }
                     ShenaApp.showNotification(data.message || `Successfully reactivated ${data.reactivated_count || 0} members`, 'success');
                     setTimeout(() => window.location.reload(), 1500);
                 } else {
