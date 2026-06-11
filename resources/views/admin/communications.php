@@ -814,7 +814,7 @@ document.getElementById('smsForm')?.addEventListener('submit', function(e) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            ShenaApp.showNotification(data.message || 'SMS submitted to HostPinnacle.', 'success');
+            ShenaApp.showNotification(data.message || 'SMS submitted.', 'success');
             closeModal('smsModal');
             location.reload();
         } else {

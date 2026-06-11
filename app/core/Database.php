@@ -61,7 +61,15 @@ class Database
         try {
             $this->connect();
             $stmt = $this->connection->prepare($sql);
-            $stmt->execute($params);
+            foreach ($params as $key => $value) {
+                $parameter = is_int($key) ? $key + 1 : ':' . ltrim((string)$key, ':');
+                $type = is_int($value) ? PDO::PARAM_INT : PDO::PARAM_STR;
+                if ($value === null) {
+                    $type = PDO::PARAM_NULL;
+                }
+                $stmt->bindValue($parameter, $value, $type);
+            }
+            $stmt->execute();
             return $stmt;
         } catch (PDOException $e) {
             error_log("Database query error: " . $e->getMessage());

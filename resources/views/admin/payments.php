@@ -4,6 +4,33 @@ $totalPayments = $paymentSummary['totalPayments'] ?? ($totalPayments ?? 0);
 $monthlyPayments = $paymentSummary['monthlyPayments'] ?? ($monthlyPayments ?? 0);
 $pendingReconciliation = $paymentSummary['pendingReconciliation'] ?? ($pendingReconciliation ?? 0);
 $successRate = $successRate ?? 0;
+$paymentFilters = $payment_filters ?? [];
+$paymentPagination = $payment_pagination ?? [
+    'current_page' => 1,
+    'total_pages' => 1,
+    'per_page' => 50,
+    'total_items' => count($payments ?? []),
+];
+$paymentFilterValue = static function (string $key) use ($paymentFilters): string {
+    return htmlspecialchars((string)($paymentFilters[$key] ?? ''), ENT_QUOTES, 'UTF-8');
+};
+$paymentPageUrl = static function (int $page) use ($paymentFilters, $paymentPagination): string {
+    $query = array_filter($paymentFilters, static function ($value) {
+        return $value !== '' && $value !== null && $value !== 'all';
+    });
+    $query['page'] = max(1, $page);
+    $query['per_page'] = (int)($paymentPagination['per_page'] ?? 50);
+    return '/admin/payments?' . http_build_query($query);
+};
+$paymentExportUrl = '/admin/reports/export?' . http_build_query(array_filter([
+    'type' => 'payments',
+    'format' => 'csv',
+    'status' => ($paymentFilters['status'] ?? '') !== 'all' ? ($paymentFilters['status'] ?? '') : '',
+    'date_from' => $paymentFilters['date_from'] ?? '',
+    'date_to' => $paymentFilters['date_to'] ?? '',
+], static function ($value) {
+    return $value !== '' && $value !== null;
+}));
 ?>
 
 <?php include_once __DIR__ . '/../layouts/admin-header.php'; ?>
@@ -230,6 +257,31 @@ $successRate = $successRate ?? 0;
     .filter-group {
         display: flex;
         gap: 12px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .payment-filter-form {
+        display: grid;
+        grid-template-columns: minmax(220px, 1.5fr) repeat(6, minmax(130px, 1fr)) auto auto;
+        gap: 12px;
+        align-items: center;
+        width: 100%;
+    }
+
+    .payment-filter-form .search-box {
+        max-width: none;
+    }
+
+    .payment-filter-form select,
+    .payment-filter-form input[type="date"] {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #E5E7EB;
+        border-radius: 8px;
+        font-size: 14px;
+        background: white;
+        color: #374151;
     }
 
     .filter-btn {
@@ -245,11 +297,51 @@ $successRate = $successRate ?? 0;
         display: flex;
         align-items: center;
         gap: 8px;
+        text-decoration: none;
+        white-space: nowrap;
     }
 
     .filter-btn:hover {
         border-color: #7F3D9E;
         color: #7F3D9E;
+    }
+
+    .filter-btn.primary {
+        background: #7F3D9E;
+        border-color: #7F3D9E;
+        color: white;
+    }
+
+    .filter-btn.primary:hover {
+        color: white;
+        background: #6B2F87;
+    }
+
+    .payment-pagination {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-top: 16px;
+        color: #6B7280;
+        font-size: 13px;
+    }
+
+    .payment-pagination-controls {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .payment-pagination .disabled {
+        opacity: .5;
+        pointer-events: none;
+    }
+
+    @media (max-width: 1200px) {
+        .payment-filter-form {
+            grid-template-columns: repeat(2, minmax(180px, 1fr));
+        }
     }
 
     .custom-table {
@@ -581,24 +673,49 @@ $successRate = $successRate ?? 0;
     <!-- All Payments Tab -->
     <div class="tab-content active" id="content-all">
         <div class="table-header">
-            <div class="search-box">
-                <i class="fas fa-search"></i>
-                <input type="text" placeholder="Search payments by member, transaction ID...">
-            </div>
-            <div class="filter-group">
-                <button class="filter-btn">
-                    <i class="fas fa-calendar"></i>
-                    Date Range
-                </button>
-                <button class="filter-btn">
+            <form class="payment-filter-form" id="paymentFiltersForm" method="GET" action="/admin/payments">
+                <?php if (!empty($member_id)): ?>
+                    <input type="hidden" name="member_id" value="<?php echo (int)$member_id; ?>">
+                <?php endif; ?>
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="search" id="paymentSearchInput" name="search" value="<?php echo $paymentFilterValue('search'); ?>" placeholder="Search payments, receipt, member, phone...">
+                </div>
+                <select name="status" aria-label="Payment status">
+                    <?php foreach (['all' => 'All statuses', 'pending' => 'Pending', 'completed' => 'Completed', 'failed' => 'Failed', 'cancelled' => 'Cancelled'] as $value => $label): ?>
+                        <option value="<?php echo $value; ?>" <?php echo (($paymentFilters['status'] ?? 'all') === $value) ? 'selected' : ''; ?>><?php echo $label; ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <select name="payment_method" aria-label="Payment method">
+                    <?php foreach (['all' => 'All methods', 'mpesa' => 'M-Pesa', 'bank' => 'Bank', 'cash' => 'Cash', 'cheque' => 'Cheque'] as $value => $label): ?>
+                        <option value="<?php echo $value; ?>" <?php echo (($paymentFilters['payment_method'] ?? 'all') === $value) ? 'selected' : ''; ?>><?php echo $label; ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <select name="payment_type" aria-label="Payment type">
+                    <?php foreach (['all' => 'All types', 'registration' => 'Registration', 'monthly' => 'Monthly', 'reactivation' => 'Reactivation', 'penalty' => 'Penalty'] as $value => $label): ?>
+                        <option value="<?php echo $value; ?>" <?php echo (($paymentFilters['payment_type'] ?? 'all') === $value) ? 'selected' : ''; ?>><?php echo $label; ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <select name="reconciliation_status" aria-label="Reconciliation status">
+                    <?php foreach (['all' => 'All reconciliation', 'pending' => 'Pending', 'matched' => 'Matched', 'unmatched' => 'Unmatched', 'manual' => 'Manual'] as $value => $label): ?>
+                        <option value="<?php echo $value; ?>" <?php echo (($paymentFilters['reconciliation_status'] ?? 'all') === $value) ? 'selected' : ''; ?>><?php echo $label; ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <input type="date" name="date_from" value="<?php echo $paymentFilterValue('date_from'); ?>" aria-label="Date from">
+                <input type="date" name="date_to" value="<?php echo $paymentFilterValue('date_to'); ?>" aria-label="Date to">
+                <button type="submit" class="filter-btn primary">
                     <i class="fas fa-filter"></i>
-                    Filter
+                    Apply
                 </button>
-                <button class="filter-btn">
+                <a class="filter-btn" href="/admin/payments">
+                    <i class="fas fa-redo"></i>
+                    Reset
+                </a>
+                <a class="filter-btn" href="<?php echo htmlspecialchars($paymentExportUrl); ?>">
                     <i class="fas fa-download"></i>
                     Export
-                </button>
-            </div>
+                </a>
+            </form>
         </div>
 
         <table class="custom-table">
@@ -645,24 +762,30 @@ $successRate = $successRate ?? 0;
                 <?php endif; ?>
             </tbody>
         </table>
+        <div class="payment-pagination" id="paymentPagination">
+            <div>
+                Viewing <?php echo count($payments ?? []); ?> of <?php echo (int)($paymentPagination['total_items'] ?? 0); ?> payments
+            </div>
+            <div class="payment-pagination-controls">
+                <a class="filter-btn <?php echo ((int)($paymentPagination['current_page'] ?? 1) <= 1) ? 'disabled' : ''; ?>" href="<?php echo htmlspecialchars($paymentPageUrl(max(1, (int)($paymentPagination['current_page'] ?? 1) - 1))); ?>">Previous</a>
+                <span>Page <?php echo (int)($paymentPagination['current_page'] ?? 1); ?> of <?php echo max(1, (int)($paymentPagination['total_pages'] ?? 1)); ?></span>
+                <a class="filter-btn <?php echo ((int)($paymentPagination['current_page'] ?? 1) >= (int)($paymentPagination['total_pages'] ?? 1)) ? 'disabled' : ''; ?>" href="<?php echo htmlspecialchars($paymentPageUrl((int)($paymentPagination['current_page'] ?? 1) + 1)); ?>">Next</a>
+            </div>
+        </div>
     </div>
 
     <!-- M-Pesa Payments Tab -->
     <div class="tab-content" id="content-mpesa">
         <div class="table-header">
-            <div class="search-box">
-                <i class="fas fa-search"></i>
-                <input type="text" placeholder="Search M-Pesa transactions...">
-            </div>
             <div class="filter-group">
-                <button class="filter-btn">
-                    <i class="fas fa-calendar"></i>
-                    Date Range
-                </button>
-                <button class="filter-btn">
+                <a class="filter-btn primary" href="/admin/payments?payment_method=mpesa">
+                    <i class="fas fa-mobile-alt"></i>
+                    Show M-Pesa
+                </a>
+                <a class="filter-btn" href="<?php echo htmlspecialchars($paymentExportUrl); ?>">
                     <i class="fas fa-download"></i>
                     Export
-                </button>
+                </a>
             </div>
         </div>
 
@@ -873,6 +996,21 @@ $successRate = $successRate ?? 0;
 </div>
 
 <script>
+const paymentFiltersForm = document.getElementById('paymentFiltersForm');
+const paymentSearchInput = document.getElementById('paymentSearchInput');
+let paymentSearchTimer = null;
+
+paymentSearchInput?.addEventListener('input', function() {
+    clearTimeout(paymentSearchTimer);
+    paymentSearchTimer = setTimeout(() => {
+        paymentFiltersForm?.submit();
+    }, 450);
+});
+
+paymentFiltersForm?.querySelectorAll('select, input[type="date"]').forEach((field) => {
+    field.addEventListener('change', () => paymentFiltersForm.submit());
+});
+
 function showTab(tabName) {
     // Hide all tabs
     document.querySelectorAll('.tab-content').forEach(tab => {

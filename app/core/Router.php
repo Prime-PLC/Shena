@@ -173,6 +173,7 @@ class Router
         $this->addRoute('POST', '/admin/communications/create-campaign', 'BulkSmsController@createCampaign');
         $this->addRoute('POST', '/admin/communications/send-campaign', 'BulkSmsController@sendCampaign');
         $this->addRoute('POST', '/admin/communications/cancel-campaign', 'BulkSmsController@cancelCampaign');
+        $this->addRoute('POST', '/admin/communications/delete-campaign', 'BulkSmsController@deleteCampaign');
         $this->addRoute('POST', '/admin/communications/process-queue', 'BulkSmsController@processQueue');
         $this->addRoute('POST', '/admin/communications/process-scheduled-campaigns', 'BulkSmsController@processScheduledCampaigns');
         $this->addRoute('POST', '/admin/communications/sync-delivery-statuses', 'BulkSmsController@syncDeliveryStatuses');
@@ -185,6 +186,7 @@ class Router
         $this->addRoute('POST', '/admin/communications/retry-queue-item', 'BulkSmsController@retryQueueItem');
         $this->addRoute('POST', '/admin/communications/delete-queue-item', 'BulkSmsController@deleteQueueItem');
         $this->addRoute('GET', '/admin/communications/campaign/{id}', 'BulkSmsController@viewCampaign');
+        $this->addRoute('GET', '/admin/communications/campaign/{id}/preview-recipient', 'BulkSmsController@previewCampaignRecipient');
         $this->addRoute('GET', '/admin/communications/campaign/{id}/delivery-report', 'BulkSmsController@downloadDeliveryReport');
         $this->addRoute('POST', '/admin/communications/campaign/{id}/resend-pending-failed', 'BulkSmsController@resendPendingFailed');
         $this->addRoute('GET', '/admin/communications/templates', 'BulkSmsController@templates');
@@ -197,12 +199,15 @@ class Router
         $this->addRoute('POST', '/admin/email-campaigns/create', 'BulkEmailController@createCampaign');
         $this->addRoute('POST', '/admin/email-campaigns/send', 'BulkEmailController@sendCampaign');
         $this->addRoute('POST', '/admin/email-campaigns/cancel', 'BulkEmailController@cancelCampaign');
+        $this->addRoute('POST', '/admin/email-campaigns/delete', 'BulkEmailController@deleteCampaign');
         $this->addRoute('POST', '/admin/email-campaigns/edit', 'BulkEmailController@editCampaign');
         $this->addRoute('POST', '/admin/email-campaigns/pause', 'BulkEmailController@pauseCampaign');
         $this->addRoute('POST', '/admin/email-campaigns/reschedule', 'BulkEmailController@reschedule');
         $this->addRoute('POST', '/admin/email-campaigns/retry-failed', 'BulkEmailController@retryFailed');
         $this->addRoute('POST', '/admin/email-campaigns/quick-email', 'BulkEmailController@quickEmail');
+        $this->addRoute('GET', '/admin/email-campaigns/preview-recipients', 'BulkEmailController@previewRecipients');
         $this->addRoute('GET', '/admin/email-campaigns/campaign/{id}', 'BulkEmailController@viewCampaign');
+        $this->addRoute('GET', '/admin/email-campaigns/campaign/{id}/preview-recipient', 'BulkEmailController@previewCampaignRecipient');
         $this->addRoute('GET', '/admin/email-campaigns/templates', 'BulkEmailController@templates');
         
         $this->addRoute('GET', '/admin/settings', 'AdminController@settings');

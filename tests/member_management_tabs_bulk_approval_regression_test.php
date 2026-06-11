@@ -29,6 +29,8 @@ $assertContains($membersView, '$buildMemberFilterUrl(\'grace_period\')', 'grace 
 $assertNotContains($membersView, 'onclick="switchTab(\'active\')"', 'active member tab must not be a client-only panel switch');
 $assertContains($membersView, 'name="status"', 'filter form should still submit the status filter');
 $assertContains($membersView, 'value="pending_approval"', 'filter form should expose pending approval status');
+$assertContains($membersView, 'memberSearchInput?.addEventListener(\'input\'', 'member search should auto-submit while typing.');
+$assertContains($membersView, 'memberSearchForm.submit()', 'member search auto-submit should use the existing filter form.');
 
 $assertContains($memberModel, '$status === \'pending_approval\'', 'member query should understand pending approval as inactive or pending');
 $assertContains($memberModel, "m.status IN ('inactive', 'pending')", 'pending approval filter should include both inactive and pending members');

@@ -203,6 +203,7 @@ class BulkSmsService
         $sql = "SELECT bmr.*, u.first_name, u.last_name, u.email, u.phone,
                        m.member_number, m.package, m.status AS member_status,
                        COALESCE(m.monthly_contribution, 0) AS amount_due
+                       COALESCE(m.monthly_contribution, 0) AS amount_due
                 FROM bulk_message_recipients bmr
                 INNER JOIN users u ON bmr.user_id = u.id
                 INNER JOIN members m ON u.id = m.user_id
@@ -660,7 +661,7 @@ class BulkSmsService
     public function deleteCampaign($bulkMessageId)
     {
         $campaign = $this->getCampaignById($bulkMessageId);
-        if (!$campaign || $campaign['status'] !== 'draft') {
+        if (!$campaign || $campaign['status'] === 'sending') {
             return false;
         }
 
@@ -761,12 +762,92 @@ class BulkSmsService
         return $result['balance'] ?? 0;
     }
 
-    public function getQueueItems($limit = 50)
+    public function getQueueItems($filters = [], $limit = 50, $offset = 0)
     {
-        $sql = "SELECT * FROM sms_queue ORDER BY priority DESC, created_at ASC LIMIT ?";
+        if (is_int($filters)) {
+            $limit = $filters;
+            $filters = [];
+        }
+
+        [$where, $params] = $this->buildQueueFilterClause($filters);
+        $limit = max(1, min((int) $limit, 200));
+        $offset = max(0, (int) $offset);
+
+        $sql = "SELECT sq.*, u.first_name, u.last_name, m.member_number
+                FROM sms_queue sq
+                LEFT JOIN users u ON sq.user_id = u.id
+                LEFT JOIN members m ON u.id = m.user_id
+                {$where}
+                ORDER BY sq.created_at DESC, sq.id DESC
+                LIMIT ? OFFSET ?";
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([$limit]);
+        $stmt->execute(array_merge($params, [$limit, $offset]));
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    public function getQueueItemsCount(array $filters = [])
+    {
+        [$where, $params] = $this->buildQueueFilterClause($filters);
+        $stmt = $this->db->prepare("SELECT COUNT(*) AS count
+                                    FROM sms_queue sq
+                                    LEFT JOIN users u ON sq.user_id = u.id
+                                    LEFT JOIN members m ON u.id = m.user_id
+                                    {$where}");
+        $stmt->execute($params);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return (int) ($result['count'] ?? 0);
+    }
+
+    private function buildQueueFilterClause(array $filters = [])
+    {
+        $where = [];
+        $params = [];
+
+        if (!empty($filters['status']) && $filters['status'] !== 'all') {
+            $where[] = 'sq.status = ?';
+            $params[] = $filters['status'];
+        }
+
+        if (!empty($filters['search'])) {
+            $where[] = "(sq.phone_number LIKE ? OR sq.message LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ? OR m.member_number LIKE ?)";
+            $term = '%' . $filters['search'] . '%';
+            array_push($params, $term, $term, $term, $term, $term);
+        }
+
+        if (!empty($filters['date_from'])) {
+            $where[] = 'sq.created_at >= ?';
+            $params[] = $filters['date_from'];
+        }
+
+        if (!empty($filters['date_to'])) {
+            $where[] = 'sq.created_at <= ?';
+            $params[] = $filters['date_to'] . ' 23:59:59';
+        }
+
+        return [empty($where) ? '' : 'WHERE ' . implode(' AND ', $where), $params];
+    }
+
+    public function queueQuickSms(array $recipients, string $message, int $createdBy = 0)
+    {
+        $stmt = $this->db->prepare("
+            INSERT INTO sms_queue (
+                phone_number, message, priority, status, user_id, scheduled_at, bulk_message_id
+            ) VALUES (?, ?, 'normal', 'pending', ?, NULL, NULL)
+        ");
+
+        $ids = [];
+        foreach ($recipients as $recipient) {
+            $phone = $this->smsService->formatPhoneNumber($recipient['phone'] ?? '');
+            $personalized = $this->replacePlaceholders($message, $recipient);
+            $stmt->execute([
+                $phone,
+                $personalized,
+                $recipient['user_id'] ?? null,
+            ]);
+            $ids[] = (int) $this->db->lastInsertId();
+        }
+
+        return $ids;
     }
 
     public function getTemplates()
@@ -893,6 +974,55 @@ class BulkSmsService
             'sent_count' => $sentCount,
             'submitted_count' => $sentCount,
             'failed_count' => $failedCount
+        ];
+    }
+
+    public function processQueueByIds(array $queueIds)
+    {
+        $queueIds = array_values(array_filter(array_map('intval', $queueIds)));
+        if (empty($queueIds)) {
+            return ['sent_count' => 0, 'submitted_count' => 0, 'failed_count' => 0, 'processed_count' => 0];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($queueIds), '?'));
+        $stmt = $this->db->prepare("SELECT * FROM sms_queue WHERE status = 'pending' AND id IN ({$placeholders}) ORDER BY id ASC");
+        $stmt->execute($queueIds);
+        $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $submitted = 0;
+        $failed = 0;
+        $processed = 0;
+
+        foreach ($items as $item) {
+            $processed++;
+            try {
+                $result = $this->smsService->sendSms($item['phone_number'], $item['message']);
+                if (!empty($result['success'])) {
+                    $this->updateQueueStatus(
+                        $item['id'],
+                        'submitted',
+                        null,
+                        $result['provider_message_id'] ?? $result['data']['transactionId'] ?? null,
+                        $result['provider_status'] ?? null,
+                        $result['provider_cause'] ?? null,
+                        $result
+                    );
+                    $submitted++;
+                } else {
+                    $this->updateQueueStatus($item['id'], 'failed', $result['error'] ?? 'Unknown error', null, null, null, $result);
+                    $failed++;
+                }
+            } catch (Throwable $e) {
+                $this->updateQueueStatus($item['id'], 'failed', $e->getMessage());
+                $failed++;
+            }
+        }
+
+        return [
+            'sent_count' => $submitted,
+            'submitted_count' => $submitted,
+            'failed_count' => $failed,
+            'processed_count' => $processed
         ];
     }
 

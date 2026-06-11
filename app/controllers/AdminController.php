@@ -285,17 +285,17 @@ class AdminController extends BaseController
     public function showLogin()
     {
         // Check if already logged in as admin
-        if (isset($_SESSION['user_id']) && isset($_SESSION['user_role']) && 
+        if (isset($_SESSION['user_id']) && isset($_SESSION['user_role']) &&
             in_array($_SESSION['user_role'], ['super_admin', 'manager'])) {
             header('Location: /admin/dashboard');
             exit();
         }
-        
+
         $data = [
             'title' => 'Admin Login - ' . APP_NAME,
             'error' => $_SESSION['error'] ?? null
         ];
-        
+
         unset($_SESSION['error']);
         $this->view('admin.login', $data);
     }
@@ -355,7 +355,7 @@ class AdminController extends BaseController
                 $_SESSION['error'] = 'Login failed due to a server/database issue. Please verify database setup and try again.';
             }
         }
-        
+
         header('Location: /admin-login');
         exit();
     }
@@ -380,7 +380,7 @@ class AdminController extends BaseController
     public function dashboard()
     {
         $this->requireAdminAccess();
-        
+
         // Gather dashboard statistics
         $data = [
             'title' => 'Admin Dashboard',
@@ -403,7 +403,7 @@ class AdminController extends BaseController
             'recent_activities' => $this->getRecentActivities(5),
             'alerts' => $this->getDashboardAlerts()
         ];
-        
+
         $this->view('admin.dashboard', $data);
     }
 
@@ -413,45 +413,45 @@ class AdminController extends BaseController
     public function members()
     {
         $this->requireAdminAccess();
-        
+
         $search = $_GET['search'] ?? '';
         $status = $_GET['status'] ?? 'all';
         $package = $_GET['package'] ?? 'all';
         $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
         $perPage = 50; // Show 50 members per page for better performance
-        
+
         $members = $this->memberModel->getAllMembersWithDetails($search, $status, $package);
-        
+
         // Calculate statistics
         $totalMembers = $this->memberModel->getTotalMembers();
         $activeMembers = $this->memberModel->getActiveMembers();
         $gracePeriodMembers = 0;
         $defaultRate = 0;
-        
+
         // Count grace period members
         foreach ($members as $member) {
             if ($member['status'] === 'grace_period') {
                 $gracePeriodMembers++;
             }
         }
-        
+
         // Calculate default rate
         if ($totalMembers > 0) {
             $inactiveMembers = $this->memberModel->getInactiveMembers();
             $defaultRate = ($inactiveMembers / $totalMembers) * 100;
         }
-        
+
         // Paginate members
         $totalItems = count($members);
         $totalPages = ceil($totalItems / $perPage);
         $offset = ($page - 1) * $perPage;
         $members = array_slice($members, $offset, $perPage);
         $members = $this->enrichMembersForManagement($members);
-        
+
         // Get pending approvals (members with pending status)
         $pendingMembers = $this->memberModel->getPendingMembers();
         $pending_approvals = [];
-        
+
         // Ensure $pendingMembers is an array before iterating
         if (is_array($pendingMembers)) {
             foreach ($pendingMembers as $pending) {
@@ -466,11 +466,11 @@ class AdminController extends BaseController
                 ];
             }
         }
-        
+
         // Get most recent pending claim for emergency alert
         $recentClaims = $this->claimModel->getPendingClaims();
         $recent_claim = null;
-        
+
         if (!empty($recentClaims)) {
             // Get the first pending claim
             $claim = $recentClaims[0];
@@ -482,7 +482,7 @@ class AdminController extends BaseController
                 'date_of_death' => $claim['date_of_death'] ?? null
             ];
         }
-        
+
         $data = [
             'title' => 'Members - Admin',
             'members' => $members,
@@ -506,7 +506,7 @@ class AdminController extends BaseController
                 'total_items' => $totalItems
             ]
         ];
-        
+
         $this->view('admin.members', $data);
     }
 
@@ -530,22 +530,22 @@ class AdminController extends BaseController
     public function exportMembersCSV()
     {
         $this->requireAdminAccess();
-        
+
         $search = $_GET['search'] ?? '';
         $status = $_GET['status'] ?? 'all';
         $package = $_GET['package'] ?? 'all';
-        
+
         $members = $this->memberModel->getAllMembersWithDetails($search, $status, $package);
-        
+
         // Set headers for CSV download
         header('Content-Type: text/csv');
         header('Content-Disposition: attachment; filename="members_' . date('Y-m-d_His') . '.csv"');
         header('Pragma: no-cache');
         header('Expires: 0');
-        
+
         // Open output stream
         $output = fopen('php://output', 'w');
-        
+
         // Add CSV headers
         fputcsv($output, [
             'Member Number',
@@ -577,7 +577,7 @@ class AdminController extends BaseController
                 $member['last_payment_amount'] ?? ''
             ], ',', '"', '\\', '');
         }
-        
+
         fclose($output);
         exit;
     }
@@ -588,7 +588,7 @@ class AdminController extends BaseController
     public function registerMember()
     {
         $this->requireAdminAccess();
-        
+
         if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             // Show registration form
             global $membership_packages;
@@ -598,11 +598,11 @@ class AdminController extends BaseController
                 'tier_definitions' => MembershipPricingService::getTierDefinitions(),
                 'csrf_token' => $this->generateCsrfToken()
             ];
-            
+
             $this->view('admin.register-member', $data);
             return;
         }
-        
+
         // Handle POST - process registration
         try {
             $this->validateCsrf();
@@ -813,16 +813,16 @@ class AdminController extends BaseController
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $memberId = $id ?? ($_POST['member_id'] ?? 0);
-            
+
             if ($memberId) {
                 $member = $this->memberModel->find($memberId);
-                
+
                 if (!$member) {
                     $_SESSION['error'] = 'Member not found.';
                     $this->redirect('/admin/members');
                     return;
                 }
-                
+
                 $paymentModel = new Payment();
                 $activationResult = $this->activateMemberByPolicy(
                     $member,
@@ -859,26 +859,26 @@ class AdminController extends BaseController
     public function deactivateMember($id = null)
     {
         $this->requireAdminAccess();
-        
+
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $memberId = $id ?? ($_POST['member_id'] ?? 0);
-            
+
             if ($memberId) {
                 // Update member status
                 $this->memberModel->update($memberId, ['status' => 'inactive']);
-                
+
                 // Update user status
                 $member = $this->memberModel->find($memberId);
                 if ($member) {
                     $this->userModel->update($member['user_id'], ['status' => 'inactive']);
                 }
-                
+
                 $_SESSION['success'] = 'Member deactivated successfully!';
             } else {
                 $_SESSION['error'] = 'Invalid member ID.';
             }
         }
-        
+
         $this->redirect('/admin/members');
     }
 
@@ -889,19 +889,19 @@ class AdminController extends BaseController
     public function bulkApproveMembers()
     {
         $this->requireAdminAccess();
-        
+
         header('Content-Type: application/json');
-        
+
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             echo json_encode(['success' => false, 'message' => 'Invalid request method']);
             exit();
         }
-        
+
         try {
             $input = json_decode(file_get_contents('php://input'), true);
             $memberIds = $input['member_ids'] ?? [];
             $overrideSystemRestrictions = $this->activationOverrideRequestedFromInput($input ?: []);
-            
+
             if (empty($memberIds)) {
                 $pendingMembers = $this->memberModel->getPendingMembers();
                 $memberIds = array_column($pendingMembers ?: [], 'id');
@@ -910,25 +910,25 @@ class AdminController extends BaseController
                     exit();
                 }
             }
-            
+
             $paymentModel = new Payment();
             $activatedCount = 0;
             $skippedCount = 0;
             $errors = [];
-            
+
             $db = Database::getInstance()->getConnection();
             $db->beginTransaction();
-            
+
             foreach ($memberIds as $memberId) {
                 try {
                     $member = $this->memberModel->find($memberId);
-                    
+
                     if (!$member) {
                         $errors[] = "Member ID {$memberId} not found";
                         $skippedCount++;
                         continue;
                     }
-                    
+
                     $activationResult = $this->activateMemberByPolicy($member, $paymentModel, $overrideSystemRestrictions);
                     if (!empty($activationResult['requires_override'])) {
                         $errors[] = "Member {$member['member_number']}: Requires override - " . implode(' ', $activationResult['restrictions']);
@@ -943,15 +943,15 @@ class AdminController extends BaseController
                     }
 
                     $activatedCount++;
-                    
+
                 } catch (Exception $e) {
                     $errors[] = "Member ID {$memberId}: " . $e->getMessage();
                     $skippedCount++;
                 }
             }
-            
+
             $db->commit();
-            
+
             echo json_encode([
                 'success' => true,
                 'message' => "{$activatedCount} members activated, {$skippedCount} skipped",
@@ -961,7 +961,7 @@ class AdminController extends BaseController
                 'errors' => $errors
             ]);
             exit();
-            
+
         } catch (Exception $e) {
             $db = Database::getInstance()->getConnection();
             if ($db->inTransaction()) {
@@ -980,19 +980,19 @@ class AdminController extends BaseController
     public function bulkReactivateMembers()
     {
         $this->requireAdminAccess();
-        
+
         header('Content-Type: application/json');
-        
+
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             echo json_encode(['success' => false, 'message' => 'Invalid request method']);
             exit();
         }
-        
+
         try {
             $input = json_decode(file_get_contents('php://input'), true);
             $memberIds = $input['member_ids'] ?? [];
             $overrideSystemRestrictions = $this->activationOverrideRequestedFromInput($input ?: []);
-            
+
             if (empty($memberIds)) {
                 $memberIds = array_column($this->memberModel->getInactiveMembersList() ?: [], 'id');
                 if (empty($memberIds)) {
@@ -1000,19 +1000,19 @@ class AdminController extends BaseController
                     exit();
                 }
             }
-            
+
             $reactivatedCount = 0;
             $skippedCount = 0;
             $errors = [];
             $paymentModel = new Payment();
-            
+
             $db = Database::getInstance()->getConnection();
             $db->beginTransaction();
-            
+
             foreach ($memberIds as $memberId) {
                 try {
                     $member = $this->memberModel->find($memberId);
-                    
+
                     if (!$member) {
                         $errors[] = "Member ID {$memberId} not found";
                         $skippedCount++;
@@ -1033,15 +1033,15 @@ class AdminController extends BaseController
                     }
 
                     $reactivatedCount++;
-                    
+
                 } catch (Exception $e) {
                     $errors[] = "Member ID {$memberId}: " . $e->getMessage();
                     $skippedCount++;
                 }
             }
-            
+
             $db->commit();
-            
+
             echo json_encode([
                 'success' => true,
                 'message' => "{$reactivatedCount} members reactivated, {$skippedCount} skipped",
@@ -1051,7 +1051,7 @@ class AdminController extends BaseController
                 'errors' => $errors
             ]);
             exit();
-            
+
         } catch (Exception $e) {
             $db = Database::getInstance()->getConnection();
             if ($db->inTransaction()) {
@@ -1069,21 +1069,21 @@ class AdminController extends BaseController
     public function viewMember($id)
     {
         $this->requireAdminAccess();
-        
+
         // Get member details (include user email/phone)
         $member = $this->memberModel->getMemberById($id);
-        
+
         if (!$member) {
             $_SESSION['error'] = 'Member not found.';
             $this->redirect('/admin/members');
             return;
         }
-        
+
         // Get member statistics
         $payments = $this->paymentModel->getMemberPayments($id);
         $totalContributions = array_sum(array_column($payments, 'amount'));
         $lastPayment = !empty($payments) ? $payments[0] : null;
-        
+
         // Calculate membership duration
         $membershipMonths = 0;
         if (!empty($member['registration_date'])) {
@@ -1095,7 +1095,7 @@ class AdminController extends BaseController
             $now = new DateTime();
             $membershipMonths = $registrationDate->diff($now)->m + ($registrationDate->diff($now)->y * 12);
         }
-        
+
         $corporateMembers = $this->corporateMemberModel->getActiveForMember((int)$id) ?: [];
         $beneficiaries = $this->beneficiaryModel->getActiveBeneficiaries((int)$id) ?: [];
         $coverageSummary = $this->memberModel->getPlanCoverageSummary($member);
@@ -1124,7 +1124,7 @@ class AdminController extends BaseController
                 $member['agent_email'] = $agent['email'] ?? $agent['user_email'] ?? null;
             }
         }
-        
+
         $data = [
             'title' => 'Member Details - Admin',
             'member' => $member,
@@ -1144,7 +1144,7 @@ class AdminController extends BaseController
                 'membership_months' => $membershipMonths
             ]
         ];
-        
+
         $this->view('admin.member-details', $data);
     }
 
@@ -1154,22 +1154,22 @@ class AdminController extends BaseController
     public function editMember($id)
     {
         $this->requireAdminAccess();
-        
+
         $member = $this->memberModel->getMemberById($id);
-        
+
         if (!$member) {
             $_SESSION['error'] = 'Member not found.';
             $this->redirect('/admin/members');
             return;
         }
-        
+
         $data = [
             'title' => 'Edit Member - Admin',
             'member' => $member,
             'packages' => $GLOBALS['membership_packages'] ?? [],
             'csrf_token' => $this->generateCsrfToken()
         ];
-        
+
         $this->view('admin.member-edit', $data);
     }
 
@@ -1179,12 +1179,12 @@ class AdminController extends BaseController
     public function updateMember($id)
     {
         $this->requireAdminAccess();
-        
+
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             $this->redirect('/admin/members/edit/' . $id);
             return;
         }
-        
+
         $member = $this->memberModel->getMemberById($id);
         if (!$member) {
             $_SESSION['error_message'] = 'Member not found.';
@@ -1274,7 +1274,7 @@ class AdminController extends BaseController
             }
             $_SESSION['error_message'] = $this->friendlyErrorMessage($e, 'Failed to update member.');
         }
-        
+
         $this->redirect($returnTo);
     }
 
@@ -1582,12 +1582,12 @@ class AdminController extends BaseController
     public function suspendMember($id)
     {
         $this->requireAdminAccess();
-        
+
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $this->memberModel->update($id, ['status' => 'suspended']);
             $_SESSION['success_message'] = 'Member suspended successfully!';
         }
-        
+
         $this->redirect('/admin/members/view/' . $id);
     }
 
@@ -1615,29 +1615,49 @@ class AdminController extends BaseController
     public function payments()
     {
         $this->requireAdminAccess();
-        
-        $status = $_GET['status'] ?? 'all';
+
+        $status = $this->queryString('status', 'all');
         $memberId = isset($_GET['member_id']) ? (int)$_GET['member_id'] : null;
-        
-        $conditions = [];
-        if ($status !== 'all') {
-            $conditions['status'] = $status;
-        }
+        $filters = [
+            'search' => $this->queryString('search'),
+            'status' => $this->queryString('status', 'all'),
+            'date_from' => $this->queryString('date_from'),
+            'date_to' => $this->queryString('date_to'),
+            'payment_method' => $this->queryString('payment_method'),
+            'payment_type' => $this->queryString('payment_type'),
+            'reconciliation_status' => $this->queryString('reconciliation_status'),
+        ];
         if ($memberId) {
-            $conditions['member_id'] = $memberId;
+            $filters['member_id'] = $memberId;
         }
-        
+        $page = max(1, (int)($_GET['page'] ?? 1));
+        $perPage = max(10, min(100, (int)($_GET['per_page'] ?? 50)));
+        $offset = ($page - 1) * $perPage;
+
         $reconciliationService = new PaymentReconciliationService();
         $reconStats = $reconciliationService->getReconciliationStats();
         $unmatchedPayments = $reconciliationService->getUnmatchedPayments();
         $auditLogs = $reconciliationService->getRecentReconciliationLogs(5);
         $paymentSummary = $this->getAdminPaymentSummary($reconStats ?? []);
+        $totalFilteredPayments = $this->paymentModel->getAllPaymentsWithDetailsCount($filters);
+        $totalPaymentPages = max(1, (int)ceil($totalFilteredPayments / $perPage));
+        if ($page > $totalPaymentPages) {
+            $page = $totalPaymentPages;
+            $offset = ($page - 1) * $perPage;
+        }
 
         $data = [
             'title' => 'Payments - Admin',
-            'payments' => $this->paymentModel->getAllPaymentsWithDetails($conditions),
+            'payments' => $this->paymentModel->getAllPaymentsWithDetails($filters, $perPage, $offset),
             'status' => $status,
             'member_id' => $memberId,
+            'payment_filters' => $filters,
+            'payment_pagination' => [
+                'current_page' => $page,
+                'total_pages' => $totalPaymentPages,
+                'per_page' => $perPage,
+                'total_items' => $totalFilteredPayments,
+            ],
             'paymentSummary' => $paymentSummary,
             'totalPayments' => $paymentSummary['totalPayments'],
             'monthlyPayments' => $paymentSummary['monthlyPayments'],
@@ -1646,8 +1666,18 @@ class AdminController extends BaseController
             'unmatched_payments' => $unmatchedPayments ?? [],
             'audit_logs' => $auditLogs ?? [],
         ];
-        
+
         $this->view('admin.payments', $data);
+    }
+
+    private function queryString(string $key, string $default = ''): string
+    {
+        $value = $_GET[$key] ?? $default;
+        if (is_array($value)) {
+            return $default;
+        }
+
+        return trim((string)$value);
     }
 
     private function getAdminPaymentSummary(array $reconStats = []): array
@@ -1670,17 +1700,17 @@ class AdminController extends BaseController
     public function claims()
     {
         $this->requireAdminAccess();
-        
+
         $status = $_GET['status'] ?? 'all';
-        
+
         $conditions = [];
         if ($status !== 'all') {
             $conditions['status'] = $status;
         }
-        
+
         // Get all claims
         $allClaims = $this->claimModel->getAllClaimsWithDetails($conditions);
-        
+
         // Check for cash alternative requests
         $cashAlternativeRequests = [];
         foreach ($allClaims as $claim) {
@@ -1688,7 +1718,7 @@ class AdminController extends BaseController
                 $cashAlternativeRequests[] = $claim;
             }
         }
-        
+
         // Calculate statistics and format data
         $pendingClaims = 0;
         $approvedClaims = 0;
@@ -1696,27 +1726,27 @@ class AdminController extends BaseController
         $totalClaimAmount = 0;
         $pending_claims = [];
         $completed_claims = [];
-        
+
         // Format claims data for the view
         foreach ($allClaims as &$claim) {
             // Generate claim number if not exists
             $claim['claim_number'] = 'CLM-' . date('Y') . '-' . str_pad($claim['id'], 4, '0', STR_PAD_LEFT);
-            
+
             // Format member name
             $claim['member_name'] = $claim['first_name'] . ' ' . $claim['last_name'];
-            
+
             // Use claim_amount as amount
             $claim['amount'] = $claim['claim_amount'] ?? 0;
-            
+
             // Format submitted date
             $claim['submitted_date'] = $claim['created_at'];
-            
+
             // Get package/plan info
             $claim['plan'] = $claim['settlement_type'] ?? 'services';
-            
+
             // Calculate totals
             $totalClaimAmount += $claim['amount'];
-            
+
             // Categorize claims
             if ($claim['status'] === 'submitted' || $claim['status'] === 'under_review') {
                 $pendingClaims++;
@@ -1730,7 +1760,7 @@ class AdminController extends BaseController
                 $rejectedClaims++;
             }
         }
-        
+
         $data = [
             'title' => 'Claims - Admin',
             'claims' => $allClaims,
@@ -1745,7 +1775,7 @@ class AdminController extends BaseController
             'status' => $status,
             'csrf_token' => $this->generateCsrfToken()
         ];
-        
+
         $this->view('admin.claims', $data);
     }
 
@@ -1853,19 +1883,19 @@ class AdminController extends BaseController
 
         $this->view('admin.claim-view', $data);
     }
-    
+
     /**
      * View Completed Claims
      */
     public function viewCompletedClaims()
     {
         $this->requireAdminAccess();
-        
+
         $data = [
             'title' => 'Completed Claims - Admin',
             'claims' => $this->claimModel->getAllClaimsWithDetails(['status' => 'completed'])
         ];
-        
+
         $this->view('admin.claims-completed', $data);
     }
 
@@ -1875,12 +1905,12 @@ class AdminController extends BaseController
     public function approveClaim()
     {
         $this->requireAdminAccess();
-        
+
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $claimId = $_POST['claim_id'] ?? 0;
             $deliveryDate = $_POST['services_delivery_date'] ?? date('Y-m-d');
             $notes = $_POST['notes'] ?? '';
-            
+
             if ($claimId) {
                 try {
                     $claim = $this->claimModel->find($claimId);
@@ -1897,27 +1927,27 @@ class AdminController extends BaseController
                     if ($member['status'] === 'defaulted') {
                         throw new Exception('Cannot approve claim. Member is in default status.');
                     }
-                    
+
                     if ($member['status'] !== 'active') {
                         throw new Exception('Cannot approve claim. Member must be active.');
                     }
-                    
+
                     // Check maturity period completion
                     if (!empty($member['maturity_ends'])) {
                         $maturityDate = new DateTime($member['maturity_ends']);
                         $today = new DateTime();
-                        
+
                         if ($today < $maturityDate) {
                             throw new Exception('Cannot approve claim. Maturity period not completed.');
                         }
                     }
-                    
+
                     // Check required documents per policy Section 8
                     $claimDocumentModel = new ClaimDocument();
                     $documents = $claimDocumentModel->getClaimDocuments($claimId);
                     $requiredDocs = ['id_copy', 'chief_letter', 'mortuary_invoice'];
                     $uploadedTypes = array_column($documents, 'document_type');
-                    
+
                     foreach ($requiredDocs as $docType) {
                         if (!in_array($docType, $uploadedTypes)) {
                             throw new Exception("Required document missing: {$docType}");
@@ -1927,7 +1957,7 @@ class AdminController extends BaseController
                     // Approve for standard service delivery
                     $this->claimModel->approveClaimForServices($claimId, $deliveryDate, $notes);
                     $this->sendClaimLifecycleSms($claimId, 'approved');
-                    
+
                     // Send notification to member
                     if (class_exists('EmailService')) {
                         try {
@@ -1937,38 +1967,38 @@ class AdminController extends BaseController
                             error_log('Email notification failed: ' . $e->getMessage());
                         }
                     }
-                    
+
                     $message = 'Claim approved for standard service delivery. Proceed to arrange services.';
-                    
+
                     // Check if AJAX request
-                    if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && 
+                    if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) &&
                         strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
                         header('Content-Type: application/json');
                         echo json_encode(['success' => true, 'message' => $message]);
                         exit();
                     }
-                    
+
                     $_SESSION['success'] = $message;
                 } catch (Exception $e) {
                     error_log('Claim approval error: ' . $e->getMessage());
                     $errorMessage = 'Failed to approve claim: ' . $e->getMessage();
-                    
+
                     // Check if AJAX request
-                    if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && 
+                    if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) &&
                         strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
                         header('Content-Type: application/json');
                         echo json_encode(['success' => false, 'message' => $errorMessage]);
                         exit();
                     }
-                    
+
                     $_SESSION['error'] = $errorMessage;
                 }
             }
         }
-        
+
         $this->redirect('/admin/claims');
     }
-    
+
     /**
      * Approve Claim for Cash Alternative (KSH 20,000)
      * Per Policy Section 12: Only in exceptional circumstances
@@ -1976,23 +2006,23 @@ class AdminController extends BaseController
     public function approveClaimCashAlternative()
     {
         $this->requireAdminAccess();
-        
+
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $claimId = $_POST['claim_id'] ?? 0;
             $reason = $_POST['cash_alternative_reason'] ?? '';
             $requestedBy = $_POST['requested_by'] ?? 'company';
-            
+
             if ($claimId) {
                 try {
                     $claim = $this->claimModel->find($claimId);
                     if (!$claim) {
                         throw new Exception('Claim not found.');
                     }
-                    
+
                     if (strlen($reason) < 20) {
                         throw new Exception('Detailed reason required (minimum 20 characters).');
                     }
-                    
+
                     // Approve for cash alternative
                     $this->claimModel->approveClaimForCashAlternative(
                         $claimId,
@@ -2001,62 +2031,62 @@ class AdminController extends BaseController
                         $_SESSION['user_id']
                     );
                     $this->sendClaimLifecycleSms($claimId, 'approved');
-                    
+
                     $message = 'Claim approved for KSH 20,000 cash alternative. Agreement must be signed before payment.';
-                    
+
                     // Check if AJAX request
-                    if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && 
+                    if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) &&
                         strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
                         header('Content-Type: application/json');
                         echo json_encode(['success' => true, 'message' => $message]);
                         exit();
                     }
-                    
+
                     $_SESSION['success'] = $message;
-                    
+
                 } catch (Exception $e) {
                     error_log('Cash alternative approval error: ' . $e->getMessage());
                     $errorMessage = 'Failed to approve cash alternative: ' . $e->getMessage();
-                    
+
                     // Check if AJAX request
-                    if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && 
+                    if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) &&
                         strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
                         header('Content-Type: application/json');
                         echo json_encode(['success' => false, 'message' => $errorMessage]);
                         exit();
                     }
-                    
+
                     $_SESSION['error'] = $errorMessage;
                 }
             }
         }
-        
+
         $this->redirect('/admin/claims');
     }
-    
+
     /**
      * Track Service Delivery for Approved Claims
      */
     public function trackServiceDelivery($claimId = null)
     {
         $this->requireAdminAccess();
-        
+
         if (!$claimId && isset($_GET['claim_id'])) {
             $claimId = (int)$_GET['claim_id'];
         }
-        
+
         if (!$claimId) {
             $_SESSION['error'] = 'Invalid claim ID.';
             $this->redirect('/admin/claims');
             return;
         }
-        
+
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Update service completion status
             $serviceType = $_POST['service_type'] ?? '';
             $completed = isset($_POST['completed']) ? (bool)$_POST['completed'] : true;
             $serviceNotes = $_POST['service_notes'] ?? '';
-            
+
             try {
                 $checklistModel = new ClaimServiceChecklist();
                 $checklistModel->markServiceCompleted($claimId, $serviceType, $_SESSION['user_id'], $serviceNotes);
@@ -2161,11 +2191,11 @@ class AdminController extends BaseController
                 error_log('Service tracking error: ' . $e->getMessage());
                 $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Failed to update service status.');
             }
-            
+
             $this->redirect('/admin/claims/track/' . $claimId);
             return;
         }
-        
+
         // Load claim and service checklist
         $claim = $this->claimModel->getClaimDetails($claimId);
         if (!$claim) {
@@ -2173,32 +2203,32 @@ class AdminController extends BaseController
             $this->redirect('/admin/claims');
             return;
         }
-        
+
         $checklistModel = new ClaimServiceChecklist();
         $checklist = $checklistModel->getClaimChecklist($claimId);
         $completionPercentage = $checklistModel->getCompletionPercentage($claimId);
-        
+
         $data = [
             'title' => 'Track Service Delivery - Claim #' . $claimId,
             'claim' => $claim,
             'checklist' => $checklist,
             'completion_percentage' => $completionPercentage
         ];
-        
+
         $this->view('admin.claims-track-services', $data);
     }
-    
+
     /**
      * Complete Claim After All Services Delivered
      */
     public function completeClaim()
     {
         $this->requireAdminAccess();
-        
+
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $claimId = $_POST['claim_id'] ?? 0;
             $completionNotes = $_POST['completion_notes'] ?? '';
-            
+
             if ($claimId) {
                 try {
                     $this->claimModel->completeClaim($claimId, $completionNotes);
@@ -2210,7 +2240,7 @@ class AdminController extends BaseController
                 }
             }
         }
-        
+
         $this->redirect('/admin/claims');
     }
 
@@ -2220,11 +2250,11 @@ class AdminController extends BaseController
     public function rejectClaim()
     {
         $this->requireAdminAccess();
-        
+
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $claimId = $_POST['claim_id'] ?? 0;
             $reason = $_POST['reason'] ?? '';
-            
+
             if ($claimId && $this->claimModel->rejectClaim($claimId, $reason)) {
                 $this->sendClaimLifecycleSms($claimId, 'rejected', $reason);
                 $_SESSION['success'] = 'Claim rejected successfully!';
@@ -2232,7 +2262,7 @@ class AdminController extends BaseController
                 $_SESSION['error'] = 'Failed to reject claim.';
             }
         }
-        
+
         header('Location: /admin/claims');
         exit();
     }
@@ -2562,14 +2592,14 @@ class AdminController extends BaseController
     public function communications()
     {
         $this->requireAdminAccess();
-        
+
         // Load BulkSmsService for campaign management
         require_once __DIR__ . '/../services/BulkSmsService.php';
         $bulkSmsService = new BulkSmsService();
-        
+
         $type = $_GET['type'] ?? 'all';
         $status = $_GET['status'] ?? 'all';
-        
+
         // Get campaigns
         $filters = [
             'status' => $_GET['campaign_status'] ?? '',
@@ -2577,13 +2607,13 @@ class AdminController extends BaseController
             'date_to' => $_GET['date_to'] ?? ''
         ];
         $campaigns = $bulkSmsService->getAllCampaigns($filters);
-        
+
         // Get queue items
         $queue_items = $bulkSmsService->getQueueItems(50);
-        
+
         // Get templates
         $templates = $bulkSmsService->getTemplates();
-        
+
         // Get statistics
         $stats = [
             'active_campaigns' => $bulkSmsService->getActiveCampaignCount(),
@@ -2591,7 +2621,7 @@ class AdminController extends BaseController
             'queue_pending' => $bulkSmsService->getQueuePendingCount(),
             'sms_credits' => $bulkSmsService->getSmsCredits()
         ];
-        
+
         $data = [
             'title' => 'Communications - Admin',
             'type' => $type,
@@ -2602,7 +2632,7 @@ class AdminController extends BaseController
             'templates' => $templates,
             'stats' => $stats
         ];
-        
+
         $this->view('admin.sms-campaigns', $data);
     }
 
@@ -2618,13 +2648,13 @@ class AdminController extends BaseController
             'type' => $_GET['type'] ?? 'all',
             'date' => $_GET['date'] ?? 'all'
         ]);
-        
+
         $data = [
             'title' => 'System Notifications - Admin',
             'notifications' => $notifications,
             'csrf_token' => $this->generateCsrfToken()
         ];
-        
+
         $this->view('admin.notifications', $data);
     }
 
@@ -2898,20 +2928,20 @@ class AdminController extends BaseController
     public function sendEmail()
     {
         $this->requireAdminAccess();
-        
+
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $recipientType = $_POST['recipient_type'] ?? $_POST['recipients'] ?? '';
             $subject = htmlspecialchars(strip_tags($_POST['subject'] ?? ''), ENT_QUOTES);
             $message = htmlspecialchars(strip_tags($_POST['message'] ?? ''), ENT_QUOTES);
-            
+
             if ($subject && $message && $recipientType) {
                 // Get recipient list based on selection
                 $memberList = $this->getRecipientList($recipientType);
-                
+
                 if (!empty($memberList)) {
                     // Log communication attempt
                     $this->logCommunication('email', $recipientType, $subject, $message, count($memberList));
-                    
+
                     $_SESSION['success'] = 'Email sent to ' . count($memberList) . ' members successfully!';
                 } else {
                     $_SESSION['error'] = 'No recipients found for the selected criteria.';
@@ -2920,7 +2950,7 @@ class AdminController extends BaseController
                 $_SESSION['error'] = 'Please fill in all required fields.';
             }
         }
-        
+
         header('Location: /admin/communications');
         exit();
     }
@@ -2981,7 +3011,7 @@ class AdminController extends BaseController
 
         echo json_encode([
             'success' => true,
-            'message' => 'SMS queued and submitted to HostPinnacle for ' . (int)($queueResult['submitted_count'] ?? $queueResult['sent_count'] ?? 0) . ' member(s). Delivery confirmation will update through SMS queue DLR sync.',
+            'message' => 'SMS queued and submitted for ' . (int)($queueResult['submitted_count'] ?? $queueResult['sent_count'] ?? 0) . ' member(s). Delivery confirmation will update through SMS delivery sync.',
             'queued_count' => $queued,
             'submitted_count' => (int)($queueResult['submitted_count'] ?? $queueResult['sent_count'] ?? 0),
             'failed_count' => (int)($queueResult['failed_count'] ?? 0),
@@ -3057,19 +3087,19 @@ class AdminController extends BaseController
             $db = Database::getInstance();
             $query = "SELECT * FROM communications WHERE 1=1";
             $params = [];
-            
+
             if ($type !== 'all') {
                 $query .= " AND type = ?";
                 $params[] = $type;
             }
-            
+
             if ($status !== 'all') {
                 $query .= " AND status = ?";
                 $params[] = $status;
             }
-            
+
             $query .= " ORDER BY sent_at DESC LIMIT 50";
-            
+
             $result = $db->query($query, $params);
             return $result ? $result->fetchAll(PDO::FETCH_ASSOC) : [];
         } catch (Exception $e) {
@@ -3087,10 +3117,10 @@ class AdminController extends BaseController
     public function settings()
     {
         $this->requireAdminAccess();
-        
+
         $settingsService = new SettingsService();
         $dbSettings = $settingsService->getAll();
-        
+
         // Merge DB settings with defaults or constants if not in DB
         $settings = array_merge([
             'app_name' => defined('APP_NAME') ? APP_NAME : 'Shena Companion',
@@ -3101,7 +3131,7 @@ class AdminController extends BaseController
             'maturation_period_under_80' => 4, // Align logic naming
             'maturation_period_80_and_above' => 5,
         ], $dbSettings);
-        
+
         // Ensure values are present via lookup if keys differ
         // Note: system_settings keys should be lower_snake_case
         if (!isset($settings['registration_fee'])) $settings['registration_fee'] = get_system_setting('registration_fee', 200);
@@ -3111,12 +3141,12 @@ class AdminController extends BaseController
         if (!isset($_SESSION['csrf_token'])) {
             $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
         }
-        
+
         $data = [
             'title' => 'Settings - Admin',
             'settings' => $settings
         ];
-        
+
         $this->view('admin.settings', $data);
     }
 
@@ -3126,7 +3156,7 @@ class AdminController extends BaseController
     public function updateSettings()
     {
         $this->requireAdminAccess();
-        
+
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 // Validate CSRF token
@@ -3136,9 +3166,9 @@ class AdminController extends BaseController
 
                 $settingsService = new SettingsService();
                 $editableSettings = [
-                    'registration_fee', 
-                    'reactivation_fee', 
-                    'grace_period_under_80', 
+                    'registration_fee',
+                    'reactivation_fee',
+                    'grace_period_under_80',
                     'grace_period_80_and_above',
                     'app_name',
                     'admin_email'
@@ -3149,14 +3179,14 @@ class AdminController extends BaseController
                         $settingsService->set($key, $_POST[$key]);
                     }
                 }
-                
+
                 $_SESSION['success'] = 'Settings updated successfully to database!';
-                
+
             } catch (Exception $e) {
                 $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Error updating settings.');
             }
         }
-        
+
         $this->redirect('/admin/settings');
     }
 
@@ -3166,18 +3196,18 @@ class AdminController extends BaseController
     public function viewMpesaConfig()
     {
         $this->requireAdminAccess();
-        
+
         $db = Database::getInstance()->getConnection();
-        
+
         // Get current configuration
         $stmt = $db->query("SELECT * FROM mpesa_config ORDER BY id DESC LIMIT 1");
         $config = $stmt->fetch(PDO::FETCH_ASSOC);
-        
+
         $data = [
             'title' => 'M-Pesa Configuration - ' . APP_NAME,
             'config' => $config ?: []
         ];
-        
+
         $this->view('admin.mpesa-config', $data);
     }
 
@@ -3187,21 +3217,21 @@ class AdminController extends BaseController
     public function updateMpesaConfig()
     {
         $this->requireAdminAccess();
-        
+
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             $this->redirect('/admin/mpesa-config');
             return;
         }
-        
+
         // CSRF validation
         if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== ($_SESSION['csrf_token'] ?? '')) {
             $_SESSION['error'] = 'Invalid request';
             $this->redirect('/admin/mpesa-config');
             return;
         }
-        
+
         $db = Database::getInstance()->getConnection();
-        
+
         $environment = $_POST['environment'] ?? 'sandbox';
         $consumerKey = $_POST['consumer_key'] ?? '';
         $consumerSecret = $_POST['consumer_secret'] ?? '';
@@ -3209,12 +3239,12 @@ class AdminController extends BaseController
         $passKey = $_POST['pass_key'] ?? '';
         $callbackUrl = $_POST['callback_url'] ?? '';
         $isActive = isset($_POST['is_active']) ? 1 : 0;
-        
+
         try {
             // Check if configuration exists
             $stmt = $db->query("SELECT id FROM mpesa_config LIMIT 1");
             $exists = $stmt->fetch(PDO::FETCH_ASSOC);
-            
+
             if ($exists) {
                 // Update existing
                 $stmt = $db->prepare("
@@ -3230,29 +3260,29 @@ class AdminController extends BaseController
                     WHERE id = ?
                 ");
                 $stmt->execute([
-                    $environment, $consumerKey, $consumerSecret, 
+                    $environment, $consumerKey, $consumerSecret,
                     $shortCode, $passKey, $callbackUrl, $isActive, $exists['id']
                 ]);
             } else {
                 // Insert new
                 $stmt = $db->prepare("
                     INSERT INTO mpesa_config (
-                        environment, consumer_key, consumer_secret, 
+                        environment, consumer_key, consumer_secret,
                         short_code, pass_key, callback_url, is_active
                     ) VALUES (?, ?, ?, ?, ?, ?, ?)
                 ");
                 $stmt->execute([
-                    $environment, $consumerKey, $consumerSecret, 
+                    $environment, $consumerKey, $consumerSecret,
                     $shortCode, $passKey, $callbackUrl, $isActive
                 ]);
             }
-            
+
             $_SESSION['success'] = 'M-Pesa configuration updated successfully';
-            
+
         } catch (Exception $e) {
             $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Error updating configuration.');
         }
-        
+
         $this->redirect('/admin/mpesa-config');
     }
 
@@ -3262,9 +3292,9 @@ class AdminController extends BaseController
     public function viewPlanUpgrades()
     {
         $this->requireAdminAccess();
-        
+
         $db = Database::getInstance()->getConnection();
-        
+
         // Get statistics
         $stats = [
             'pending' => 0,
@@ -3272,45 +3302,45 @@ class AdminController extends BaseController
             'cancelled' => 0,
             'total_revenue' => 0
         ];
-        
+
         $stmt = $db->query("
-            SELECT 
+            SELECT
                 status,
                 COUNT(*) as count,
                 SUM(prorated_amount) as total
             FROM plan_upgrade_requests
             GROUP BY status
         ");
-        
+
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             $stats[$row['status']] = $row['count'];
             if ($row['status'] === 'completed') {
                 $stats['total_revenue'] = $row['total'];
             }
         }
-        
+
         // Build filter query
         $where = ['1=1'];
         $params = [];
-        
+
         if (!empty($_GET['status'])) {
             $where[] = 'pur.status = ?';
             $params[] = $_GET['status'];
         }
-        
+
         if (!empty($_GET['from_date'])) {
             $where[] = 'DATE(pur.requested_at) >= ?';
             $params[] = $_GET['from_date'];
         }
-        
+
         if (!empty($_GET['to_date'])) {
             $where[] = 'DATE(pur.requested_at) <= ?';
             $params[] = $_GET['to_date'];
         }
-        
+
         // Get upgrade requests
         $sql = "
-            SELECT 
+            SELECT
                 pur.*,
                 u.first_name, u.last_name, m.member_number,
                 CONCAT(u.first_name, ' ', u.last_name) as member_name
@@ -3321,17 +3351,17 @@ class AdminController extends BaseController
             ORDER BY pur.requested_at DESC
             LIMIT 100
         ";
-        
+
         $stmt = $db->prepare($sql);
         $stmt->execute($params);
         $upgrades = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
+
         $data = [
             'title' => 'Plan Upgrade Management - ' . APP_NAME,
             'stats' => $stats,
             'upgrades' => $upgrades
         ];
-        
+
         $this->view('admin.plan-upgrades', $data);
     }
 
@@ -3341,45 +3371,45 @@ class AdminController extends BaseController
     public function completePlanUpgrade($id)
     {
         $this->requireAdminAccess();
-        
+
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             $this->redirect('/admin/plan-upgrades');
             return;
         }
-        
+
         $db = Database::getInstance()->getConnection();
-        
+
         try {
             $db->beginTransaction();
-            
+
             // Get upgrade request
             $stmt = $db->prepare("
-                SELECT * FROM plan_upgrade_requests 
+                SELECT * FROM plan_upgrade_requests
                 WHERE id = ? AND status = 'pending' AND payment_status = 'completed'
             ");
             $stmt->execute([$id]);
             $upgrade = $stmt->fetch(PDO::FETCH_ASSOC);
-            
+
             if (!$upgrade) {
                 throw new Exception('Upgrade request not found or not eligible for completion');
             }
-            
+
             // Update member package
             $stmt = $db->prepare("UPDATE members SET package = ? WHERE id = ?");
             $stmt->execute([$upgrade['to_package'], $upgrade['member_id']]);
-            
+
             // Update upgrade status
             $stmt = $db->prepare("
-                UPDATE plan_upgrade_requests 
+                UPDATE plan_upgrade_requests
                 SET status = 'completed', processed_at = NOW(), processed_by = ?
                 WHERE id = ?
             ");
             $stmt->execute([$_SESSION['user_id'], $id]);
-            
+
             // Insert into upgrade history
             $stmt = $db->prepare("
                 INSERT INTO plan_upgrade_history (
-                    member_id, from_package, to_package, 
+                    member_id, from_package, to_package,
                     amount, upgrade_date, processed_by
                 ) VALUES (?, ?, ?, ?, NOW(), ?)
             ");
@@ -3390,15 +3420,15 @@ class AdminController extends BaseController
                 $upgrade['prorated_amount'],
                 $_SESSION['user_id']
             ]);
-            
+
             $db->commit();
             $_SESSION['success'] = 'Upgrade completed successfully';
-            
+
         } catch (Exception $e) {
             $db->rollBack();
             $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Error completing upgrade.');
         }
-        
+
         $this->redirect('/admin/plan-upgrades');
     }
 
@@ -3408,42 +3438,42 @@ class AdminController extends BaseController
     public function cancelPlanUpgrade($id)
     {
         $this->requireAdminAccess();
-        
+
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             $this->redirect('/admin/plan-upgrades');
             return;
         }
-        
+
         $db = Database::getInstance()->getConnection();
-        
+
         try {
             $db->beginTransaction();
-            
+
             // Get upgrade request
             $stmt = $db->prepare("SELECT * FROM plan_upgrade_requests WHERE id = ?");
             $stmt->execute([$id]);
             $upgrade = $stmt->fetch(PDO::FETCH_ASSOC);
-            
+
             if (!$upgrade) {
                 throw new Exception('Upgrade request not found');
             }
-            
+
             // Update upgrade status
             $stmt = $db->prepare("
-                UPDATE plan_upgrade_requests 
+                UPDATE plan_upgrade_requests
                 SET status = 'cancelled', processed_at = NOW(), processed_by = ?
                 WHERE id = ?
             ");
             $stmt->execute([$_SESSION['user_id'], $id]);
-            
+
             // Record refund transaction if payment was completed
             if ($upgrade['payment_status'] === 'completed') {
                 $stmt = $db->prepare("
                     INSERT INTO financial_transactions (
-                        transaction_type, amount, member_id, 
+                        transaction_type, amount, member_id,
                         upgrade_request_id, status, description
                     ) VALUES (
-                        'refund', ?, ?, ?, 'completed', 
+                        'refund', ?, ?, ?, 'completed',
                         'Refund for cancelled plan upgrade'
                     )
                 ");
@@ -3453,15 +3483,15 @@ class AdminController extends BaseController
                     $id
                 ]);
             }
-            
+
             $db->commit();
             $_SESSION['success'] = 'Upgrade cancelled and refund processed';
-            
+
         } catch (Exception $e) {
             $db->rollBack();
             $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Error cancelling upgrade.');
         }
-        
+
         $this->redirect('/admin/plan-upgrades');
     }
 
@@ -3521,16 +3551,16 @@ class AdminController extends BaseController
     public function viewFinancialDashboard()
     {
         $this->requireAdminAccess();
-        
+
         $db = Database::getInstance()->getConnection();
-        
+
         // Date range from filters or default to current month
         $fromDate = $_GET['from_date'] ?? date('Y-m-01');
         $toDate = $_GET['to_date'] ?? date('Y-m-d');
-        
+
         // Get KPIs
         $stmt = $db->prepare("
-            SELECT 
+            SELECT
                 SUM(CASE WHEN transaction_type = 'payment' THEN amount ELSE 0 END) as total_payments,
                 SUM(CASE WHEN transaction_type = 'commission' THEN amount ELSE 0 END) as total_commissions,
                 SUM(CASE WHEN transaction_type = 'upgrade' THEN amount ELSE 0 END) as total_upgrades,
@@ -3543,12 +3573,12 @@ class AdminController extends BaseController
         ");
         $stmt->execute([$fromDate, $toDate]);
         $kpis = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        $kpis['net_revenue'] = ($kpis['total_payments'] + $kpis['total_upgrades']) - 
+
+        $kpis['net_revenue'] = ($kpis['total_payments'] + $kpis['total_upgrades']) -
                                ($kpis['total_commissions'] + $kpis['total_refunds']);
         $kpis['revenue_change'] = 0; // Calculate vs previous period if needed
         $kpis['total_revenue'] = $kpis['total_payments'] + $kpis['total_upgrades'];
-        
+
         // Get monthly summary
         $stmt = $db->query("
             SELECT * FROM vw_financial_summary
@@ -3556,17 +3586,17 @@ class AdminController extends BaseController
             LIMIT 12
         ");
         $monthlySummary = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
+
         // Get top agents
         $stmt = $db->query("
             SELECT * FROM vw_agent_leaderboard
             LIMIT 10
         ");
         $topAgents = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
+
         // Get recent transactions
         $stmt = $db->prepare("
-            SELECT 
+            SELECT
                 ft.*,
                 m.member_number,
                 m.package
@@ -3578,7 +3608,7 @@ class AdminController extends BaseController
         ");
         $stmt->execute([$fromDate, $toDate]);
         $recentTransactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
+
         $data = [
             'title' => 'Financial Dashboard - ' . APP_NAME,
             'kpis' => $kpis,
@@ -3586,7 +3616,7 @@ class AdminController extends BaseController
             'top_agents' => $topAgents,
             'recent_transactions' => $recentTransactions
         ];
-        
+
         $this->view('admin.financial-dashboard', $data);
     }
 
@@ -3596,24 +3626,24 @@ class AdminController extends BaseController
     public function payoutRequests()
     {
         $this->requireAdminAccess();
-        
+
         $status = $_GET['status'] ?? 'all';
         $agentId = $_GET['agent_id'] ?? null;
-        
+
         // Get payout requests based on filters
         if ($status !== 'all') {
             $payoutRequests = $this->payoutRequestModel->getAllPayouts($status);
         } else {
             $payoutRequests = $this->payoutRequestModel->getAllPayouts();
         }
-        
+
         // Filter by agent if specified
         if ($agentId) {
             $payoutRequests = array_filter($payoutRequests, function($request) use ($agentId) {
                 return $request['agent_id'] == $agentId;
             });
         }
-        
+
         // Get statistics
         $stats = [
             'total' => 0,
@@ -3623,7 +3653,7 @@ class AdminController extends BaseController
             'rejected' => 0,
             'total_amount' => 0
         ];
-        
+
         foreach ($payoutRequests as $request) {
             $stats['total']++;
             $stats[$request['status']]++;
@@ -3631,7 +3661,7 @@ class AdminController extends BaseController
                 $stats['total_amount'] += $request['amount'];
             }
         }
-        
+
         $data = [
             'title' => 'Payout Requests - Admin',
             'payout_requests' => $payoutRequests,
@@ -3639,35 +3669,35 @@ class AdminController extends BaseController
             'status_filter' => $status,
             'agent_id' => $agentId
         ];
-        
+
         $this->view('admin.payout-requests', $data);
     }
-    
+
     /**
      * Process (approve/reject) a payout request
      */
     public function processPayoutRequest($payoutId)
     {
         $this->requireAdminAccess();
-        
+
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             $_SESSION['error'] = 'Invalid request method.';
             $this->redirect('/admin/payouts');
             return;
         }
-        
+
         $action = $_POST['action'] ?? '';
         $paymentReference = $_POST['payment_reference'] ?? '';
         $adminNotes = $_POST['admin_notes'] ?? '';
-        
+
         $payout = $this->payoutRequestModel->getPayoutById($payoutId);
-        
+
         if (!$payout) {
             $_SESSION['error'] = 'Payout request not found.';
             $this->redirect('/admin/payouts');
             return;
         }
-        
+
         // Handle mark_paid action separately - requires status to be 'processing'
         if ($action === 'mark_paid') {
             // Verify payout is in 'processing' status for mark_paid action
@@ -3676,10 +3706,10 @@ class AdminController extends BaseController
                 $this->redirect('/admin/payouts');
                 return;
             }
-            
+
             try {
                 $result = $this->payoutRequestModel->markAsPaid($payoutId);
-                
+
                 if ($result) {
                     // Send notification to agent
                     $notification = new InAppNotificationService();
@@ -3692,7 +3722,7 @@ class AdminController extends BaseController
                             'action_text' => 'View Payouts'
                         ]
                     );
-                    
+
                     $_SESSION['success'] = 'Payout marked as paid successfully.';
                 } else {
                     $_SESSION['error'] = 'Failed to mark payout as paid. The payout may have already been processed.';
@@ -3701,18 +3731,18 @@ class AdminController extends BaseController
                 error_log('Mark as paid error: ' . $e->getMessage());
                 $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Error marking payout as paid.');
             }
-            
+
             $this->redirect('/admin/payouts');
             return;
         }
-        
+
         // For approve/reject actions, verify payout is in 'requested' status
         if ($payout['status'] !== 'requested') {
             $_SESSION['error'] = 'Payout request has already been processed.';
             $this->redirect('/admin/payouts');
             return;
         }
-        
+
         try {
             if ($action === 'approve') {
                 // Process the payout (mark as processing)
@@ -3722,7 +3752,7 @@ class AdminController extends BaseController
                     $paymentReference,
                     $adminNotes
                 );
-                
+
                 if ($result) {
                     // Send notification to agent
                     $notification = new InAppNotificationService();
@@ -3747,7 +3777,7 @@ class AdminController extends BaseController
                     $_SESSION['user_id'],
                     $adminNotes
                 );
-                
+
                 if ($result) {
                     // Send notification to agent
                     $notification = new InAppNotificationService();
@@ -3760,7 +3790,7 @@ class AdminController extends BaseController
                             'action_text' => 'View Payouts'
                         ]
                     );
-                    
+
                     $_SESSION['success'] = 'Payout request rejected.';
                 } else {
                     $_SESSION['error'] = 'Failed to reject payout request.';
@@ -3772,7 +3802,7 @@ class AdminController extends BaseController
             error_log('Payout processing error: ' . $e->getMessage());
             $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Error processing payout.');
         }
-        
+
         // Redirect back to agent details if agent_id is provided, otherwise to payouts list
         if (!empty($_POST['redirect_to_agent'])) {
             $this->redirect('/admin/agents/view/' . $payout['agent_id']);
@@ -3780,37 +3810,37 @@ class AdminController extends BaseController
             $this->redirect('/admin/payouts');
         }
     }
-    
+
     /**
      * View Agent Details with Payout Requests
      */
     public function viewAgent($id)
     {
         $this->requireAdminAccess();
-        
+
         $agent = $this->agentModel->getAgentById($id);
-        
+
         if (!$agent) {
             $_SESSION['error'] = 'Agent not found.';
             $this->redirect('/admin/agents');
             return;
         }
-        
+
         // Get agent statistics
         $stats = $this->agentModel->getAgentDashboardStats($id);
-        
+
         // Get commissions
         $commissions = $this->agentModel->getAgentCommissions($id);
-        
+
         // Get payout requests for this agent
         $payoutRequests = $this->payoutRequestModel->getAgentPayouts($id);
-        
+
         // Get available balance
         $availableBalance = $this->payoutRequestModel->getAvailableBalance($id);
-        
+
         // Get recent members
         $recentMembers = $this->memberModel->getMembersByAgent($id);
-        
+
         $data = [
             'title' => 'Agent Details - ' . $agent['agent_number'],
             'agent' => $agent,
@@ -3820,7 +3850,7 @@ class AdminController extends BaseController
             'available_balance' => $availableBalance,
             'recent_members' => $recentMembers
         ];
-        
+
         $this->view('admin.agent-details', $data);
     }
 

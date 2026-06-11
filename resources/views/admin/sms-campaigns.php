@@ -7,6 +7,18 @@ if (session_status() === PHP_SESSION_NONE) {
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
+$quickFilters = $quick_filters ?? ['status' => 'all', 'search' => '', 'date_from' => '', 'date_to' => ''];
+$quickPagination = $quick_pagination ?? ['current_page' => 1, 'total_pages' => 1, 'total_items' => count($queue_items ?? []), 'per_page' => 25];
+$quickPageUrl = function (int $page) use ($quickFilters) {
+    return '/admin/sms-campaigns?' . http_build_query([
+        'sms_tab' => 'quick',
+        'quick_page' => $page,
+        'quick_status' => $quickFilters['status'] ?? 'all',
+        'quick_search' => $quickFilters['search'] ?? '',
+        'quick_date_from' => $quickFilters['date_from'] ?? '',
+        'quick_date_to' => $quickFilters['date_to'] ?? '',
+    ]);
+};
 ?>
 <?php include_once __DIR__ . '/../layouts/admin-header.php'; ?>
 
@@ -104,6 +116,114 @@ if (empty($_SESSION['csrf_token'])) {
         box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         margin-bottom: 1.5rem;
         border: 1px solid #f3f4f6;
+    }
+
+    .sms-tabs {
+        display: flex;
+        gap: 8px;
+        border-bottom: 1px solid #E5E7EB;
+        margin-bottom: 18px;
+        flex-wrap: wrap;
+    }
+
+    .sms-tab {
+        border: 0;
+        background: transparent;
+        color: #4B5563;
+        padding: 10px 14px;
+        font-weight: 700;
+        border-bottom: 3px solid transparent;
+        cursor: pointer;
+    }
+
+    .sms-tab.active {
+        color: #7F3D9E;
+        border-bottom-color: #7F3D9E;
+    }
+
+    .sms-tab-panel {
+        display: none;
+    }
+
+    .sms-tab-panel.active {
+        display: block;
+    }
+
+    .filter-strip {
+        display: grid;
+        grid-template-columns: minmax(180px, 1fr) repeat(3, minmax(140px, 180px)) auto;
+        gap: 10px;
+        align-items: end;
+        margin-bottom: 16px;
+    }
+
+    .quick-sms-results {
+        border: 1px solid #E5E7EB;
+        border-radius: 10px;
+        margin-top: 8px;
+        max-height: 220px;
+        overflow: auto;
+        display: none;
+    }
+
+    .quick-sms-results.show {
+        display: block;
+    }
+
+    .quick-sms-result {
+        width: 100%;
+        border: 0;
+        background: #fff;
+        text-align: left;
+        padding: 10px 12px;
+        border-bottom: 1px solid #F3F4F6;
+        cursor: pointer;
+    }
+
+    .quick-sms-result:hover {
+        background: #F9FAFB;
+    }
+
+    .quick-sms-result strong {
+        display: block;
+        color: #111827;
+    }
+
+    .quick-sms-result span {
+        color: #6B7280;
+        font-size: 12px;
+    }
+
+    .pagination {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    .pagination-info {
+        color: #6B7280;
+        font-size: 13px;
+    }
+
+    .pagination-controls {
+        display: flex;
+        gap: 8px;
+    }
+
+    .pagination-btn {
+        border: 1px solid #D1D5DB;
+        background: #fff;
+        color: #374151;
+        border-radius: 8px;
+        padding: 8px 12px;
+        cursor: pointer;
+    }
+
+    .pagination-btn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
     }
 
     .modern-table {
@@ -444,11 +564,119 @@ if (empty($_SESSION['csrf_token'])) {
         transition: width 0.3s ease;
     }
 
+    .campaign-preview-layout {
+        display: grid;
+        grid-template-columns: minmax(240px, 320px) 1fr;
+        gap: 22px;
+        align-items: start;
+    }
+
+    .sms-phone-frame {
+        width: min(100%, 292px);
+        margin: 0 auto;
+        border: 10px solid #101820;
+        border-radius: 34px;
+        background: #fff;
+        box-shadow: 0 18px 45px rgba(17, 24, 39, 0.18);
+        overflow: hidden;
+    }
+
+    .sms-phone-screen {
+        min-height: 460px;
+        display: flex;
+        flex-direction: column;
+        background: #fff;
+    }
+
+    .sms-phone-top {
+        height: 54px;
+        display: grid;
+        grid-template-columns: 32px 1fr 32px;
+        align-items: center;
+        border-bottom: 1px solid #F3F4F6;
+        padding: 0 12px;
+        color: #111827;
+    }
+
+    .sms-phone-sender {
+        text-align: center;
+        font-weight: 800;
+        font-size: 12px;
+        letter-spacing: 0;
+    }
+
+    .sms-phone-body {
+        flex: 1;
+        padding: 30px 24px;
+    }
+
+    .sms-phone-meta {
+        text-align: center;
+        font-size: 10px;
+        color: #6B7280;
+        margin-bottom: 10px;
+        line-height: 1.35;
+    }
+
+    .sms-bubble {
+        background: #F4F4F5;
+        border: 1px solid #D4D4D8;
+        border-radius: 12px;
+        padding: 12px 14px;
+        color: #111827;
+        font-size: 13px;
+        line-height: 1.45;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    .sms-phone-compose {
+        display: grid;
+        grid-template-columns: 1fr 34px;
+        border-top: 1px solid #F3F4F6;
+        background: #FAFAFA;
+        padding: 10px;
+        gap: 8px;
+        color: #9CA3AF;
+        font-size: 12px;
+    }
+
+    .preview-summary {
+        border: 1px solid #E5E7EB;
+        border-radius: 10px;
+        padding: 16px;
+        background: #fff;
+    }
+
+    .preview-summary-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 10px 0;
+        border-bottom: 1px solid #F3F4F6;
+        font-size: 13px;
+    }
+
+    .preview-summary-row:last-child {
+        border-bottom: 0;
+    }
+
+    .preview-summary-row strong {
+        color: #111827;
+    }
+
+    .preview-summary-row span {
+        color: #4B5563;
+        text-align: right;
+    }
+
     @media (max-width: 768px) {
         .campaigns-container { padding: 16px !important; }
         .modern-card { padding: 16px !important; }
         .modern-card > div[style] { flex-wrap: wrap !important; gap: 8px !important; }
         .modern-btn { font-size: 13px; padding: 8px 14px; }
+        .campaign-preview-layout { grid-template-columns: 1fr; }
+        .filter-strip { grid-template-columns: 1fr; }
     }
 </style>
 
@@ -522,10 +750,16 @@ if (empty($_SESSION['csrf_token'])) {
 <div class="modern-card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
         <h2 style="margin: 0; font-family: 'Playfair Display', serif; color: #1f2937; font-size: 1.5rem;">
-            <i class="fas fa-list"></i> SMS Campaigns
+            <i class="fas fa-list"></i> SMS Activity
         </h2>
     </div>
 
+    <div class="sms-tabs">
+        <button type="button" class="sms-tab active" data-sms-tab="campaigns" onclick="switchSmsTab('campaigns')">Campaigns</button>
+        <button type="button" class="sms-tab" data-sms-tab="quick" onclick="switchSmsTab('quick')">Quick SMS</button>
+    </div>
+
+    <div class="sms-tab-panel active" id="sms-tab-campaigns">
     <?php if (empty($campaigns)): ?>
         <div class="empty-state">
             <i class="fas fa-sms"></i>
@@ -586,7 +820,7 @@ if (empty($_SESSION['csrf_token'])) {
                             </span>
                         </td>
                         <td>
-                            <?php 
+                            <?php
                             if ($campaign['scheduled_at']) {
                                 echo date('M j, Y H:i', strtotime($campaign['scheduled_at']));
                             } else {
@@ -613,7 +847,7 @@ if (empty($_SESSION['csrf_token'])) {
                                 <button class="action-btn" data-campaign="<?php echo $campaignEditJson; ?>" onclick="editSmsCampaign(this)" title="Edit">
                                     <i class="fas fa-edit"></i>
                                 </button>
-                                <button class="action-btn success" onclick="sendCampaign(<?php echo $campaign['id']; ?>)" title="Send Now">
+                                <button class="action-btn success" data-campaign="<?php echo $campaignEditJson; ?>" onclick="previewExistingSmsCampaign(this)" title="Send Now">
                                     <i class="fas fa-paper-plane"></i>
                                 </button>
                                 <button class="action-btn danger" onclick="cancelCampaign(<?php echo $campaign['id']; ?>)" title="Cancel">
@@ -630,6 +864,9 @@ if (empty($_SESSION['csrf_token'])) {
                                     <i class="fas fa-play"></i>
                                 </button>
                             <?php endif; ?>
+                            <button class="action-btn danger" onclick="deleteCampaign(<?php echo $campaign['id']; ?>)" title="Delete Campaign">
+                                <i class="fas fa-trash"></i>
+                            </button>
                         </td>
                     </tr>
                     <?php endforeach; ?>
@@ -637,6 +874,91 @@ if (empty($_SESSION['csrf_token'])) {
             </table>
         </div>
     <?php endif; ?>
+    </div>
+
+    <div class="sms-tab-panel" id="sms-tab-quick">
+        <form class="filter-strip" method="GET" action="/admin/sms-campaigns">
+            <input type="hidden" name="sms_tab" value="quick">
+            <div>
+                <label class="form-label">Search</label>
+                <input class="form-control" type="search" name="quick_search" value="<?php echo htmlspecialchars($quickFilters['search'] ?? ''); ?>" placeholder="Recipient, phone, member number, message">
+            </div>
+            <div>
+                <label class="form-label">Status</label>
+                <select class="form-control" name="quick_status">
+                    <?php foreach (['all' => 'All statuses', 'pending' => 'Pending', 'submitted' => 'Submitted', 'delivered' => 'Delivered', 'failed' => 'Failed', 'undelivered' => 'Undelivered', 'expired' => 'Expired', 'rejected' => 'Rejected', 'unknown' => 'Unknown'] as $value => $label): ?>
+                        <option value="<?php echo $value; ?>" <?php echo ($quickFilters['status'] ?? 'all') === $value ? 'selected' : ''; ?>><?php echo $label; ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div>
+                <label class="form-label">From</label>
+                <input class="form-control" type="date" name="quick_date_from" value="<?php echo htmlspecialchars($quickFilters['date_from'] ?? ''); ?>">
+            </div>
+            <div>
+                <label class="form-label">To</label>
+                <input class="form-control" type="date" name="quick_date_to" value="<?php echo htmlspecialchars($quickFilters['date_to'] ?? ''); ?>">
+            </div>
+            <button class="modern-btn secondary" type="submit"><i class="fas fa-filter"></i> Filter</button>
+        </form>
+
+        <?php if (empty($queue_items)): ?>
+            <div class="empty-state">
+                <i class="fas fa-sms"></i>
+                <h3>No Quick SMS Entries</h3>
+                <p>Tracked quick SMS entries will appear here after submission.</p>
+            </div>
+        <?php else: ?>
+            <div class="table-responsive">
+                <table class="modern-table">
+                    <thead>
+                        <tr>
+                            <th>Recipient</th>
+                            <th>Message</th>
+                            <th>Status</th>
+                            <th>Submitted</th>
+                            <th>Delivered</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($queue_items as $item): ?>
+                            <?php
+                                $queueMessage = (string)($item['message'] ?? '');
+                                $queuePreview = strlen($queueMessage) > 90 ? substr($queueMessage, 0, 90) . '...' : $queueMessage;
+                            ?>
+                            <tr>
+                                <td>
+                                    <strong><?php echo htmlspecialchars(trim(($item['first_name'] ?? '') . ' ' . ($item['last_name'] ?? '')) ?: 'Direct recipient'); ?></strong><br>
+                                    <small style="color:#6B7280;"><?php echo htmlspecialchars(($item['member_number'] ?? '') ?: $item['phone_number']); ?></small>
+                                </td>
+                                <td><?php echo htmlspecialchars($queuePreview); ?></td>
+                                <td><span class="status-badge <?php echo htmlspecialchars($item['status'] ?? 'pending'); ?>"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $item['status'] ?? 'pending'))); ?></span></td>
+                                <td><?php echo !empty($item['submitted_at']) ? date('M j, Y H:i', strtotime($item['submitted_at'])) : '<span style="color:#9CA3AF;">-</span>'; ?></td>
+                                <td><?php echo !empty($item['delivered_at']) ? date('M j, Y H:i', strtotime($item['delivered_at'])) : '<span style="color:#9CA3AF;">-</span>'; ?></td>
+                                <td>
+                                    <?php if (($item['status'] ?? '') === 'pending'): ?>
+                                        <button class="action-btn success" onclick="sendQueueItem(<?php echo (int)$item['id']; ?>)" title="Submit SMS"><i class="fas fa-paper-plane"></i></button>
+                                    <?php endif; ?>
+                                    <?php if (($item['status'] ?? '') === 'failed'): ?>
+                                        <button class="action-btn warning" onclick="retryQueueItem(<?php echo (int)$item['id']; ?>)" title="Retry"><i class="fas fa-redo"></i></button>
+                                    <?php endif; ?>
+                                    <button class="action-btn danger" onclick="deleteQueueItem(<?php echo (int)$item['id']; ?>)" title="Delete"><i class="fas fa-trash"></i></button>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <div class="pagination" style="margin-top:16px;">
+                <div class="pagination-info">Viewing <?php echo count($queue_items); ?> of <?php echo (int)($quickPagination['total_items'] ?? 0); ?> quick SMS entries</div>
+                <div class="pagination-controls">
+                    <button class="pagination-btn" <?php echo ((int)($quickPagination['current_page'] ?? 1) <= 1) ? 'disabled' : ''; ?> onclick="window.location.href='<?php echo htmlspecialchars($quickPageUrl(max(1, (int)($quickPagination['current_page'] ?? 1) - 1))); ?>'">Previous</button>
+                    <button class="pagination-btn" <?php echo ((int)($quickPagination['current_page'] ?? 1) >= (int)($quickPagination['total_pages'] ?? 1)) ? 'disabled' : ''; ?> onclick="window.location.href='<?php echo htmlspecialchars($quickPageUrl((int)($quickPagination['current_page'] ?? 1) + 1)); ?>'">Next</button>
+                </div>
+            </div>
+        <?php endif; ?>
+    </div>
 </div>
 
 <!-- Create Campaign Modal -->
@@ -743,6 +1065,55 @@ if (empty($_SESSION['csrf_token'])) {
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+
+<div class="modern-modal" id="smsCampaignPreviewModal">
+    <div class="modal-content-modern" style="max-width: 860px;">
+        <div class="modal-header-modern">
+            <h3><i class="fas fa-mobile-alt"></i> Preview SMS Campaign</h3>
+            <button class="modal-close" onclick="closeModal('smsCampaignPreviewModal')">&times;</button>
+        </div>
+        <div class="modal-body-modern">
+            <div class="campaign-preview-layout">
+                <div class="sms-phone-frame">
+                    <div class="sms-phone-screen">
+                        <div class="sms-phone-top">
+                            <i class="fas fa-chevron-left"></i>
+                            <div class="sms-phone-sender"><?php echo htmlspecialchars(HOSTPINNACLE_SENDER_ID ?? 'SHENA'); ?></div>
+                            <i class="fas fa-ellipsis-v"></i>
+                        </div>
+                        <div class="sms-phone-body">
+                            <div class="sms-phone-meta">
+                                Text Message<br>
+                                <span id="smsPreviewTime">Today, 3:10 PM</span>
+                            </div>
+                            <div class="sms-bubble" id="smsPreviewBubble"></div>
+                        </div>
+                        <div class="sms-phone-compose">
+                            <span>Text message</span>
+                            <i class="fas fa-arrow-up"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="preview-summary">
+                    <div class="preview-summary-row"><strong>Campaign</strong><span id="smsPreviewTitle"></span></div>
+                    <div class="preview-summary-row"><strong>Audience</strong><span id="smsPreviewAudience"></span></div>
+                    <div class="preview-summary-row"><strong>Preview recipient</strong><span id="smsPreviewRecipient"></span></div>
+                    <div class="preview-summary-row"><strong>Schedule</strong><span id="smsPreviewSchedule"></span></div>
+                    <div class="preview-summary-row"><strong>Characters</strong><span id="smsPreviewCharacters"></span></div>
+                    <div style="margin-top:16px;color:#6B7280;font-size:13px;line-height:1.5;">
+                        This preview uses the first matching recipient when available. Confirm only after checking spelling, placeholders, audience, and schedule.
+                    </div>
+                </div>
+            </div>
+            <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:24px;flex-wrap:wrap;">
+                <button type="button" class="modern-btn secondary" onclick="closeModal('smsCampaignPreviewModal')">Back to Edit</button>
+                <button type="button" class="modern-btn primary" id="confirmSmsCampaignSubmit">
+                    <i class="fas fa-paper-plane"></i> Confirm Campaign
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -860,10 +1231,9 @@ if (empty($_SESSION['csrf_token'])) {
                 <div class="form-group" id="quick-individual-field" style="display: none;">
                     <label for="quick-member-search">Search Member</label>
                     <input class="form-control" id="quick-member-search" type="search" placeholder="Search by name, ID, member number or phone">
-                    <label for="quick-recipient-id">Select Member</label>
-                    <select class="form-control" id="quick-recipient-id" name="recipient_id">
-                        <option value="">Type above to search members...</option>
-                    </select>
+                    <input type="hidden" id="quick-recipient-id" name="recipient_id">
+                    <div class="quick-sms-results" id="quick-sms-results"></div>
+                    <small id="quick-selected-member" style="display:block;color:#6B7280;margin-top:8px;">Type to find and select a member.</small>
                 </div>
 
                 <div class="form-group">
@@ -894,6 +1264,25 @@ function openModal(modalId) {
 function closeModal(modalId) {
     document.getElementById(modalId).classList.remove('active');
 }
+
+function switchSmsTab(tab) {
+    document.querySelectorAll('.sms-tab').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.smsTab === tab);
+    });
+    document.querySelectorAll('.sms-tab-panel').forEach(panel => {
+        panel.classList.toggle('active', panel.id === `sms-tab-${tab}`);
+    });
+    const url = new URL(window.location.href);
+    url.searchParams.set('sms_tab', tab);
+    window.history.replaceState({}, '', url);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const activeTab = new URLSearchParams(window.location.search).get('sms_tab');
+    if (activeTab === 'quick') {
+        switchSmsTab('quick');
+    }
+});
 
 // Close modal on outside click
 document.querySelectorAll('.modern-modal').forEach(modal => {
@@ -972,34 +1361,61 @@ function setEditFilterValues(filters = {}) {
 }
 
 function loadQuickSmsMembers(searchTerm = '') {
-    const recipientDropdown = document.getElementById('quick-recipient-id');
-    if (!recipientDropdown) return;
+    const recipientInput = document.getElementById('quick-recipient-id');
+    const resultsPanel = document.getElementById('quick-sms-results');
+    const selectedLabel = document.getElementById('quick-selected-member');
+    if (!recipientInput || !resultsPanel) return;
 
     if (searchTerm.trim().length < 2) {
-        recipientDropdown.innerHTML = '<option value="">Type at least 2 characters to search...</option>';
+        recipientInput.value = '';
+        resultsPanel.classList.remove('show');
+        resultsPanel.innerHTML = '';
+        if (selectedLabel) selectedLabel.textContent = 'Type at least 2 characters to search members.';
         return;
     }
 
-    recipientDropdown.innerHTML = '<option value="">Searching...</option>';
+    resultsPanel.classList.add('show');
+    resultsPanel.innerHTML = '<div class="quick-sms-result"><span>Searching...</span></div>';
     fetch('/admin/api/members?search=' + encodeURIComponent(searchTerm.trim()))
         .then(response => response.json())
         .then(data => {
-            recipientDropdown.innerHTML = '<option value="">Select member...</option>';
             if (!Array.isArray(data) || data.length === 0) {
-                recipientDropdown.innerHTML = '<option value="">No active member found</option>';
+                resultsPanel.innerHTML = '<div class="quick-sms-result"><span>No matching member found</span></div>';
                 return;
             }
 
-            data.forEach(member => {
+            resultsPanel.innerHTML = data.map(member => {
                 const memberName = member.member_name || `${member.first_name || ''} ${member.last_name || ''}`.trim() || 'Member';
                 const idNumber = member.id_number ? ` | ID ${member.id_number}` : '';
                 const phone = member.phone ? ` | ${member.phone}` : '';
-                recipientDropdown.innerHTML += `<option value="${member.id}">${memberName} (${member.member_number}${idNumber}${phone})</option>`;
-            });
+                const subtitle = `${member.member_number || 'No member number'}${idNumber}${phone}`;
+                return `<button type="button" class="quick-sms-result" onclick="selectQuickSmsMember('${member.id}', '${escapeJs(memberName)}', '${escapeJs(subtitle)}')"><strong>${escapeHtml(memberName)}</strong><span>${escapeHtml(subtitle)}</span></button>`;
+            }).join('');
         })
         .catch(() => {
-            recipientDropdown.innerHTML = '<option value="">Failed to load members</option>';
+            resultsPanel.innerHTML = '<div class="quick-sms-result"><span>Failed to load members</span></div>';
         });
+}
+
+function escapeHtml(value) {
+    return String(value || '').replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    }[char]));
+}
+
+function escapeJs(value) {
+    return String(value || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+function selectQuickSmsMember(id, name, subtitle) {
+    document.getElementById('quick-recipient-id').value = id;
+    document.getElementById('quick-member-search').value = name;
+    document.getElementById('quick-selected-member').textContent = `${name} | ${subtitle}`;
+    document.getElementById('quick-sms-results').classList.remove('show');
 }
 
 let quickSmsSearchTimer = null;
@@ -1013,15 +1429,19 @@ document.getElementById('quick-member-search')?.addEventListener('input', functi
 document.getElementById('quick-recipient-type')?.addEventListener('change', function() {
     const groupField = document.getElementById('quick-group-field');
     const individualField = document.getElementById('quick-individual-field');
-    const recipientDropdown = document.getElementById('quick-recipient-id');
+    const recipientInput = document.getElementById('quick-recipient-id');
+    const resultsPanel = document.getElementById('quick-sms-results');
     groupField.style.display = this.value === 'group' ? 'block' : 'none';
     individualField.style.display = this.value === 'individual' ? 'block' : 'none';
 
     if (this.value === 'individual') {
         document.getElementById('quick-member-search').value = '';
-        recipientDropdown.innerHTML = '<option value="">Type above to search members...</option>';
+        recipientInput.value = '';
+        resultsPanel.innerHTML = '';
+        resultsPanel.classList.remove('show');
+        document.getElementById('quick-selected-member').textContent = 'Type to find and select a member.';
     } else {
-        recipientDropdown.innerHTML = '';
+        recipientInput.value = '';
     }
 });
 
@@ -1148,7 +1568,7 @@ document.getElementById('editCampaignForm')?.addEventListener('submit', function
     .catch(() => ShenaApp.showNotification('Network error occurred', 'error'));
 });
 
-function sendCampaign(id) {
+function sendCampaign(id, skipConfirm = false) {
     const proceed = () => {
         fetch('/admin/communications/send-campaign', {
             method: 'POST',
@@ -1160,7 +1580,7 @@ function sendCampaign(id) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                ShenaApp.showNotification(data.message || 'Campaign submitted to HostPinnacle.', 'success');
+                ShenaApp.showNotification(data.message || 'Campaign submitted.', 'success');
                 location.reload();
             } else {
                 ShenaApp.showNotification('Failed to send campaign: ' + (data.message || 'Unknown error'), 'error');
@@ -1171,6 +1591,11 @@ function sendCampaign(id) {
             ShenaApp.showNotification('Network error occurred', 'error');
         });
     };
+
+    if (skipConfirm) {
+        proceed();
+        return;
+    }
 
     if (window.ShenaApp && typeof ShenaApp.confirmAction === 'function') {
         ShenaApp.confirmAction(
@@ -1222,6 +1647,98 @@ function cancelCampaign(id) {
     }
 
     if (confirm('Are you sure you want to cancel this campaign?')) {
+        proceed();
+    }
+}
+
+function deleteCampaign(id) {
+    const proceed = () => {
+        fetch('/admin/communications/delete-campaign', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ campaign_id: id, confirm_delete: true })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                ShenaApp.showNotification(data.message || 'Campaign deleted', 'success');
+                location.reload();
+            } else {
+                ShenaApp.showNotification(data.message || 'Failed to delete campaign', 'error');
+            }
+        })
+        .catch(() => ShenaApp.showNotification('Network error occurred', 'error'));
+    };
+
+    if (window.ShenaApp && typeof ShenaApp.confirmAction === 'function') {
+        ShenaApp.confirmAction(
+            'Delete this campaign and its recipient records?',
+            proceed,
+            null,
+            { type: 'danger', title: 'Delete Campaign', confirmText: 'Delete' }
+        );
+        return;
+    }
+
+    if (confirm('Delete this campaign and its recipient records?')) {
+        proceed();
+    }
+}
+
+function sendQueueItem(id) {
+    fetch('/admin/communications/send-queue-item', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item_id: id })
+    })
+    .then(response => response.json())
+    .then(data => {
+        ShenaApp.showNotification(data.message || (data.success ? 'SMS submitted' : 'Failed to submit SMS'), data.success ? 'success' : 'error');
+        if (data.success) location.reload();
+    })
+    .catch(() => ShenaApp.showNotification('Network error occurred', 'error'));
+}
+
+function retryQueueItem(id) {
+    fetch('/admin/communications/retry-queue-item', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item_id: id })
+    })
+    .then(response => response.json())
+    .then(data => {
+        ShenaApp.showNotification(data.message || (data.success ? 'SMS queued for retry' : 'Failed to retry SMS'), data.success ? 'success' : 'error');
+        if (data.success) location.reload();
+    })
+    .catch(() => ShenaApp.showNotification('Network error occurred', 'error'));
+}
+
+function deleteQueueItem(id) {
+    const proceed = () => {
+        fetch('/admin/communications/delete-queue-item', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ item_id: id })
+        })
+        .then(response => response.json())
+        .then(data => {
+            ShenaApp.showNotification(data.message || (data.success ? 'Quick SMS deleted' : 'Failed to delete quick SMS'), data.success ? 'success' : 'error');
+            if (data.success) location.reload();
+        })
+        .catch(() => ShenaApp.showNotification('Network error occurred', 'error'));
+    };
+
+    if (window.ShenaApp && typeof ShenaApp.confirmAction === 'function') {
+        ShenaApp.confirmAction(
+            'Delete this quick SMS entry?',
+            proceed,
+            null,
+            { type: 'danger', title: 'Delete Quick SMS', confirmText: 'Delete' }
+        );
+        return;
+    }
+
+    if (confirm('Delete this quick SMS entry?')) {
         proceed();
     }
 }
@@ -1304,12 +1821,146 @@ function resumeCampaign(id) {
     }
 }
 
-// Form submissions
-document.getElementById('createCampaignForm')?.addEventListener('submit', function(e) {
-    e.preventDefault();
-    
-    const formData = new FormData(this);
-    
+function recipientPreviewValues(recipient = null) {
+    const amountDue = recipient && recipient.amount_due !== undefined && recipient.amount_due !== null
+        ? Number(recipient.amount_due).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        : '850.00';
+
+    return {
+        '{member_name}': recipient ? `${recipient.first_name || ''} ${recipient.last_name || ''}`.trim() || 'Member' : 'Wycliffe Omondi',
+        '{first_name}': recipient?.first_name || 'Test',
+        '{last_name}': recipient?.last_name || 'Member',
+        '{member_number}': recipient?.member_number || 'SH-550407',
+        '{package}': recipient?.package || 'Family',
+        '{status}': recipient?.status || recipient?.member_status || 'Active',
+        '{amount_due}': `KES ${amountDue}`
+    };
+}
+
+function previewSampleMessage(message, recipient = null) {
+    const sample = recipientPreviewValues(recipient);
+    return Object.keys(sample).reduce((text, key) => text.split(key).join(sample[key]), message || '');
+}
+
+function previewRecipientLabel(recipient = null, channel = 'sms') {
+    if (!recipient) return 'Resolving first recipient...';
+    const name = `${recipient.first_name || ''} ${recipient.last_name || ''}`.trim() || 'Member';
+    const contact = channel === 'email' ? recipient.email : recipient.phone;
+    return [name, recipient.member_number, contact].filter(Boolean).join(' | ');
+}
+
+function campaignPreviewParams(form) {
+    const formData = new FormData(form);
+    const params = new URLSearchParams();
+    ['target_audience', 'filter_status', 'filter_package', 'filter_joined_after', 'filter_joined_before'].forEach((key) => {
+        const value = formData.get(key);
+        if (value) params.set(key, value);
+    });
+    return params;
+}
+
+function loadSmsFirstRecipient(form, message) {
+    fetch(`/admin/bulk-sms/preview-recipients?${campaignPreviewParams(form).toString()}`, {
+        headers: { 'Accept': 'application/json' }
+    })
+    .then(response => response.ok ? response.json() : null)
+    .then(data => {
+        const recipient = data?.sample?.[0] || null;
+        document.getElementById('smsPreviewRecipient').textContent = recipient
+            ? previewRecipientLabel(recipient, 'sms')
+            : 'No matching recipient found';
+        if (recipient) {
+            document.getElementById('smsPreviewBubble').textContent = previewSampleMessage(message, recipient) || 'Message preview';
+        }
+    })
+    .catch(() => {
+        document.getElementById('smsPreviewRecipient').textContent = 'Unable to resolve recipient preview';
+    });
+}
+
+function loadSmsCampaignFirstRecipient(campaignId, message) {
+    if (!campaignId) return;
+    fetch(`/admin/communications/campaign/${campaignId}/preview-recipient`, {
+        headers: { 'Accept': 'application/json' }
+    })
+    .then(response => response.ok ? response.json() : null)
+    .then(data => {
+        const recipient = data?.recipient || null;
+        document.getElementById('smsPreviewRecipient').textContent = recipient
+            ? previewRecipientLabel(recipient, 'sms')
+            : 'No stored recipient found';
+        if (recipient) {
+            document.getElementById('smsPreviewBubble').textContent = previewSampleMessage(message, recipient) || 'Message preview';
+        }
+    })
+    .catch(() => {
+        document.getElementById('smsPreviewRecipient').textContent = 'Unable to resolve recipient preview';
+    });
+}
+
+function friendlySelectText(select) {
+    if (!select || select.selectedIndex < 0) return 'N/A';
+    return select.options[select.selectedIndex].text || select.value || 'N/A';
+}
+
+function describeCampaignSchedule(formData) {
+    const scheduleType = formData.get('schedule_type') || 'now';
+    if (scheduleType === 'draft') return 'Save as draft';
+    if (scheduleType === 'scheduled') {
+        const scheduledAt = formData.get('scheduled_at') || '';
+        return scheduledAt ? new Date(scheduledAt).toLocaleString() : 'Schedule time not selected';
+    }
+    return 'Send immediately';
+}
+
+let pendingSmsCampaignForm = null;
+let pendingSmsCampaignAction = null;
+
+function openSmsCampaignPreview(form) {
+    const formData = new FormData(form);
+    const message = formData.get('message') || '';
+    const previewText = previewSampleMessage(message);
+    const targetSelect = form.querySelector('[name="target_audience"]');
+
+    document.getElementById('smsPreviewBubble').textContent = previewText || 'Message preview';
+    document.getElementById('smsPreviewTitle').textContent = formData.get('title') || 'Untitled campaign';
+    document.getElementById('smsPreviewAudience').textContent = friendlySelectText(targetSelect);
+    document.getElementById('smsPreviewRecipient').textContent = 'Resolving first recipient...';
+    document.getElementById('smsPreviewSchedule').textContent = describeCampaignSchedule(formData);
+    document.getElementById('smsPreviewCharacters').textContent = `${message.length}/160 (${Math.ceil(Math.max(message.length, 1) / 160)} segment)`;
+    document.getElementById('smsPreviewTime').textContent = new Date().toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+
+    pendingSmsCampaignForm = form;
+    pendingSmsCampaignAction = null;
+    openModal('smsCampaignPreviewModal');
+    loadSmsFirstRecipient(form, message);
+}
+
+function openSmsCampaignPreviewFromData(campaign, confirmAction) {
+    const message = campaign.message || '';
+    const previewText = previewSampleMessage(message);
+
+    document.getElementById('smsPreviewBubble').textContent = previewText || 'Message preview';
+    document.getElementById('smsPreviewTitle').textContent = campaign.title || 'Untitled campaign';
+    document.getElementById('smsPreviewAudience').textContent = String(campaign.target_audience || 'all_members').replace(/_/g, ' ');
+    document.getElementById('smsPreviewRecipient').textContent = 'Resolving first recipient...';
+    document.getElementById('smsPreviewSchedule').textContent = campaign.scheduled_at ? new Date(campaign.scheduled_at).toLocaleString() : 'Send immediately';
+    document.getElementById('smsPreviewCharacters').textContent = `${message.length}/160 (${Math.ceil(Math.max(message.length, 1) / 160)} segment)`;
+    document.getElementById('smsPreviewTime').textContent = new Date().toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+
+    pendingSmsCampaignForm = null;
+    pendingSmsCampaignAction = confirmAction;
+    openModal('smsCampaignPreviewModal');
+    loadSmsCampaignFirstRecipient(campaign.id, message);
+}
+
+function previewExistingSmsCampaign(button) {
+    const campaign = JSON.parse(button.getAttribute('data-campaign') || '{}');
+    openSmsCampaignPreviewFromData(campaign, () => sendCampaign(campaign.id, true));
+}
+
+function submitSmsCampaignForm(form) {
+    const formData = new FormData(form);
     fetch('/admin/communications/create-campaign', {
         method: 'POST',
         body: formData
@@ -1328,13 +1979,30 @@ document.getElementById('createCampaignForm')?.addEventListener('submit', functi
         console.error('Error:', error);
         ShenaApp.showNotification('Network error occurred', 'error');
     });
+}
+
+document.getElementById('confirmSmsCampaignSubmit')?.addEventListener('click', function() {
+    closeModal('smsCampaignPreviewModal');
+    if (pendingSmsCampaignForm) {
+        submitSmsCampaignForm(pendingSmsCampaignForm);
+        return;
+    }
+    if (typeof pendingSmsCampaignAction === 'function') {
+        pendingSmsCampaignAction();
+    }
+});
+
+// Form submissions
+document.getElementById('createCampaignForm')?.addEventListener('submit', function(e) {
+    e.preventDefault();
+    openSmsCampaignPreview(this);
 });
 
 document.getElementById('quickSMSForm')?.addEventListener('submit', function(e) {
     e.preventDefault();
-    
+
     const formData = new FormData(this);
-    
+
     fetch('/admin/communications/quick-sms', {
         method: 'POST',
         body: formData
@@ -1342,7 +2010,7 @@ document.getElementById('quickSMSForm')?.addEventListener('submit', function(e) 
     .then(response => parseJsonResponse(response))
     .then(data => {
         if (data.success) {
-            ShenaApp.showNotification(data.message || 'SMS submitted to HostPinnacle.', 'success');
+            ShenaApp.showNotification(data.message || 'SMS submitted.', 'success');
             closeModal('quickSMSModal');
             location.reload();
         } else {

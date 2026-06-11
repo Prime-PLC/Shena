@@ -324,7 +324,33 @@ class BulkEmailController extends BaseController
             $this->jsonError('Failed to cancel campaign', 500);
         }
     }
-    
+
+    public function deleteCampaign()
+    {
+        $this->requireRole(['admin', 'super_admin', 'manager']);
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->jsonError('Method not allowed', 405);
+            return;
+        }
+
+        $input = $this->readRequestData();
+        $campaignId = (int)($input['campaign_id'] ?? 0);
+        $confirmed = !empty($input['confirm_delete']);
+
+        if ($campaignId <= 0 || !$confirmed) {
+            $this->jsonError('Campaign ID and delete confirmation are required', 400);
+            return;
+        }
+
+        if ($this->bulkEmailService->deleteCampaign($campaignId)) {
+            $this->json(['success' => true, 'message' => 'Campaign deleted successfully']);
+            return;
+        }
+
+        $this->jsonError('Campaign not found or cannot be deleted while sending', 500);
+    }
+
     /**
      * View single campaign details
      */
@@ -499,6 +525,42 @@ class BulkEmailController extends BaseController
             'sent' => $result['sent'] ?? 0,
             'failed' => $result['failed'] ?? 0
         ]);
+    }
+
+    public function previewRecipients()
+    {
+        $this->requireRole(['admin', 'super_admin', 'manager']);
+
+        try {
+            $targetAudience = $this->normalizeTargetAudience($_GET['target_audience'] ?? 'all_members');
+            $customFilters = $this->extractCustomFilters($_GET);
+            $recipients = $this->bulkEmailService->getRecipients($targetAudience, $customFilters);
+
+            $this->json([
+                'success' => true,
+                'count' => count($recipients),
+                'sample' => array_slice($recipients, 0, 10),
+            ]);
+        } catch (Throwable $e) {
+            error_log('Email recipient preview error: ' . $e->getMessage());
+            $this->jsonError('Failed to preview email recipients', 400);
+        }
+    }
+
+    public function previewCampaignRecipient($id)
+    {
+        $this->requireRole(['admin', 'super_admin', 'manager']);
+
+        try {
+            $recipients = $this->bulkEmailService->getCampaignRecipients((int)$id);
+            $this->json([
+                'success' => true,
+                'recipient' => $recipients[0] ?? null,
+            ]);
+        } catch (Throwable $e) {
+            error_log('Email campaign preview recipient error: ' . $e->getMessage());
+            $this->jsonError('Failed to load preview recipient', 400);
+        }
     }
 
     private function readRequestData()

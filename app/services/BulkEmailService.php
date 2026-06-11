@@ -412,6 +412,17 @@ class BulkEmailService
         return $result;
     }
 
+    public function deleteCampaign($campaignId)
+    {
+        $campaign = $this->getCampaign($campaignId);
+        if (!$campaign || $campaign['message_type'] !== 'email' || $campaign['status'] === 'sending') {
+            return false;
+        }
+
+        $this->db->prepare("DELETE FROM bulk_message_recipients WHERE bulk_message_id = ?")->execute([$campaignId]);
+        return $this->db->prepare("DELETE FROM bulk_messages WHERE id = ? AND message_type = 'email'")->execute([$campaignId]);
+    }
+
     public function pauseCampaign($campaignId)
     {
         return $this->updateCampaignStatus($campaignId, 'paused');
@@ -433,6 +444,7 @@ class BulkEmailService
         $stmt = $this->db->prepare("
             SELECT bmr.*, u.first_name, u.last_name, u.phone, u.email,
                    m.member_number, m.package, m.status AS member_status,
+                   COALESCE(m.monthly_contribution, 0) AS amount_due,
                    bmr.provider_message_id, bmr.provider_response
             FROM bulk_message_recipients bmr
             INNER JOIN users u ON bmr.user_id = u.id

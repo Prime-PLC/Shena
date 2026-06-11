@@ -613,7 +613,7 @@
                 <div class="toggle-group">
                     <div class="toggle-info">
                         <div class="toggle-label">SMS Notifications</div>
-                        <div class="toggle-description">Enable SMS notifications via HostPinnacle</div>
+                        <div class="toggle-description">Enable SMS notifications through the configured SMS gateway</div>
                     </div>
                     <label class="toggle-switch">
                         <input type="checkbox" id="sms_enabled" name="sms_enabled" 
@@ -740,7 +740,7 @@
                     <div class="form-group">
                         <label class="form-label" for="sms_provider">SMS Provider</label>
                         <select class="form-input" id="sms_provider" name="sms_provider">
-                            <option value="hostpinnacle" <?php echo ($settings['sms_provider'] ?? 'hostpinnacle') === 'hostpinnacle' ? 'selected' : ''; ?>>HostPinnacle</option>
+                            <option value="hostpinnacle" <?php echo ($settings['sms_provider'] ?? 'hostpinnacle') === 'hostpinnacle' ? 'selected' : ''; ?>>Primary SMS Gateway</option>
                         </select>
                     </div>
                     

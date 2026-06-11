@@ -2,7 +2,7 @@
 
 <style>
     .page-header {
-        background: linear-gradient(135deg, #7F3D9E 0%, #7F3D9E 100%);
+        background: #7F3D9E;
         border-radius: 12px;
         padding: 2rem;
         margin-bottom: 2rem;
@@ -287,7 +287,7 @@
     }
 
     .modal-header-modern {
-        background: linear-gradient(135deg, #7F3D9E 0%, #7F3D9E 100%);
+        background: #7F3D9E;
         color: white;
         padding: 1.5rem;
         border-radius: 12px 12px 0 0;
@@ -323,6 +323,103 @@
 
     .modal-body-modern {
         padding: 2rem;
+    }
+
+    .campaign-preview-layout {
+        display: grid;
+        grid-template-columns: 1.2fr 0.8fr;
+        gap: 22px;
+        align-items: start;
+    }
+
+    .email-preview-card {
+        border: 1px solid #E5E7EB;
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: 0 18px 45px rgba(17, 24, 39, 0.10);
+        overflow: hidden;
+    }
+
+    .email-preview-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 16px;
+        border-bottom: 1px solid #F3F4F6;
+        background: #FAFAFA;
+    }
+
+    .email-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: #D1D5DB;
+    }
+
+    .email-preview-header {
+        padding: 18px 20px;
+        border-bottom: 1px solid #F3F4F6;
+    }
+
+    .email-preview-subject {
+        font-size: 18px;
+        font-weight: 800;
+        color: #111827;
+        margin-bottom: 10px;
+    }
+
+    .email-preview-meta {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        color: #6B7280;
+        font-size: 12px;
+        flex-wrap: wrap;
+    }
+
+    .email-preview-body {
+        padding: 22px 20px;
+        min-height: 260px;
+        color: #1F2937;
+        font-size: 14px;
+        line-height: 1.65;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    .preview-summary {
+        border: 1px solid #E5E7EB;
+        border-radius: 10px;
+        padding: 16px;
+        background: #fff;
+    }
+
+    .preview-summary-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 10px 0;
+        border-bottom: 1px solid #F3F4F6;
+        font-size: 13px;
+    }
+
+    .preview-summary-row:last-child {
+        border-bottom: 0;
+    }
+
+    .preview-summary-row strong {
+        color: #111827;
+    }
+
+    .preview-summary-row span {
+        color: #4B5563;
+        text-align: right;
+    }
+
+    @media (max-width: 768px) {
+        .campaign-preview-layout {
+            grid-template-columns: 1fr;
+        }
     }
 
     .form-group {
@@ -518,7 +615,7 @@
                                 <button class="action-btn" data-campaign="<?php echo $campaignEditJson; ?>" onclick="editEmailCampaign(this)" title="Edit">
                                     <i class="fas fa-edit"></i>
                                 </button>
-                                <button class="action-btn success" onclick="sendCampaign(<?php echo $campaign['id']; ?>)" title="Send Now">
+                                <button class="action-btn success" data-campaign="<?php echo $campaignEditJson; ?>" onclick="previewExistingEmailCampaign(this)" title="Send Now">
                                     <i class="fas fa-paper-plane"></i>
                                 </button>
                                 <button class="action-btn danger" onclick="cancelCampaign(<?php echo $campaign['id']; ?>)" title="Cancel">
@@ -530,6 +627,9 @@
                                     <i class="fas fa-redo"></i>
                                 </button>
                             <?php endif; ?>
+                            <button class="action-btn danger" onclick="deleteCampaign(<?php echo $campaign['id']; ?>)" title="Delete Campaign">
+                                <i class="fas fa-trash"></i>
+                            </button>
                         </td>
                     </tr>
                     <?php endforeach; ?>
@@ -638,6 +738,50 @@
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+
+<div class="modern-modal" id="emailCampaignPreviewModal">
+    <div class="modal-content-modern" style="max-width: 940px;">
+        <div class="modal-header-modern">
+            <h3><i class="fas fa-envelope-open-text"></i> Preview Email Campaign</h3>
+            <button class="modal-close" onclick="closeModal('emailCampaignPreviewModal')">&times;</button>
+        </div>
+        <div class="modal-body-modern">
+            <div class="campaign-preview-layout">
+                <div class="email-preview-card">
+                    <div class="email-preview-toolbar">
+                        <span class="email-dot"></span>
+                        <span class="email-dot"></span>
+                        <span class="email-dot"></span>
+                    </div>
+                    <div class="email-preview-header">
+                        <div class="email-preview-subject" id="emailPreviewSubject"></div>
+                        <div class="email-preview-meta">
+                            <span>From: SHENA Companion</span>
+                            <span id="emailPreviewTime">Today</span>
+                        </div>
+                    </div>
+                    <div class="email-preview-body" id="emailPreviewBody"></div>
+                </div>
+                <div class="preview-summary">
+                    <div class="preview-summary-row"><strong>Campaign</strong><span id="emailPreviewTitle"></span></div>
+                    <div class="preview-summary-row"><strong>Audience</strong><span id="emailPreviewAudience"></span></div>
+                    <div class="preview-summary-row"><strong>Preview recipient</strong><span id="emailPreviewRecipient"></span></div>
+                    <div class="preview-summary-row"><strong>Schedule</strong><span id="emailPreviewSchedule"></span></div>
+                    <div class="preview-summary-row"><strong>Body length</strong><span id="emailPreviewLength"></span></div>
+                    <div style="margin-top:16px;color:#6B7280;font-size:13px;line-height:1.5;">
+                        This preview uses the first matching recipient when available. Confirm only after checking subject, body, placeholders, audience, and schedule.
+                    </div>
+                </div>
+            </div>
+            <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:24px;flex-wrap:wrap;">
+                <button type="button" class="modern-btn secondary" onclick="closeModal('emailCampaignPreviewModal')">Back to Edit</button>
+                <button type="button" class="modern-btn primary" id="confirmEmailCampaignSubmit">
+                    <i class="fas fa-paper-plane"></i> Confirm Campaign
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -833,7 +977,7 @@ document.getElementById('editCampaignForm')?.addEventListener('submit', function
     .catch(() => ShenaApp.showNotification('Network error occurred', 'error'));
 });
 
-function sendCampaign(id) {
+function sendCampaign(id, skipConfirm = false) {
     const proceed = () => {
         fetch('/admin/email-campaigns/send', {
             method: 'POST',
@@ -845,7 +989,7 @@ function sendCampaign(id) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                ShenaApp.showNotification('Campaign sent successfully!', 'success');
+                ShenaApp.showNotification(data.message || 'Campaign sent successfully!', 'success');
                 location.reload();
             } else {
                 ShenaApp.showNotification('Failed to send campaign: ' + (data.message || 'Unknown error'), 'error');
@@ -856,6 +1000,11 @@ function sendCampaign(id) {
             ShenaApp.showNotification('Network error occurred', 'error');
         });
     };
+
+    if (skipConfirm) {
+        proceed();
+        return;
+    }
 
     if (window.ShenaApp && typeof ShenaApp.confirmAction === 'function') {
         ShenaApp.confirmAction(
@@ -911,6 +1060,40 @@ function cancelCampaign(id) {
     }
 }
 
+function deleteCampaign(id) {
+    const proceed = () => {
+        fetch('/admin/email-campaigns/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ campaign_id: id, confirm_delete: true })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                ShenaApp.showNotification(data.message || 'Campaign deleted', 'success');
+                location.reload();
+            } else {
+                ShenaApp.showNotification(data.message || 'Failed to delete campaign', 'error');
+            }
+        })
+        .catch(() => ShenaApp.showNotification('Network error occurred', 'error'));
+    };
+
+    if (window.ShenaApp && typeof ShenaApp.confirmAction === 'function') {
+        ShenaApp.confirmAction(
+            'Delete this campaign and its recipient records?',
+            proceed,
+            null,
+            { type: 'danger', title: 'Delete Campaign', confirmText: 'Delete' }
+        );
+        return;
+    }
+
+    if (confirm('Delete this campaign and its recipient records?')) {
+        proceed();
+    }
+}
+
 function retryFailed(id) {
     const proceed = () => {
         fetch('/admin/email-campaigns/retry-failed', {
@@ -950,12 +1133,149 @@ function retryFailed(id) {
     }
 }
 
-// Form submission
-document.getElementById('createCampaignForm')?.addEventListener('submit', function(e) {
-    e.preventDefault();
-    
-    const formData = new FormData(this);
-    
+function recipientPreviewValues(recipient = null) {
+    const amountDue = recipient && recipient.amount_due !== undefined && recipient.amount_due !== null
+        ? Number(recipient.amount_due).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        : '850.00';
+
+    return {
+        '{member_name}': recipient ? `${recipient.first_name || ''} ${recipient.last_name || ''}`.trim() || 'Member' : 'Wycliffe Omondi',
+        '{first_name}': recipient?.first_name || 'Wycliffe',
+        '{last_name}': recipient?.last_name || 'Omondi',
+        '{member_number}': recipient?.member_number || 'SH-550407',
+        '{package}': recipient?.package || 'Family',
+        '{status}': recipient?.status || recipient?.member_status || 'Active',
+        '{amount_due}': `KES ${amountDue}`
+    };
+}
+
+function emailPreviewSample(message, recipient = null) {
+    const sample = recipientPreviewValues(recipient);
+    return Object.keys(sample).reduce((text, key) => text.split(key).join(sample[key]), message || '');
+}
+
+function previewRecipientLabel(recipient = null) {
+    if (!recipient) return 'Resolving first recipient...';
+    const name = `${recipient.first_name || ''} ${recipient.last_name || ''}`.trim() || 'Member';
+    return [name, recipient.member_number, recipient.email].filter(Boolean).join(' | ');
+}
+
+function campaignPreviewParams(form) {
+    const formData = new FormData(form);
+    const params = new URLSearchParams();
+    ['target_audience', 'filter_status', 'filter_package', 'filter_joined_after', 'filter_joined_before'].forEach((key) => {
+        const value = formData.get(key);
+        if (value) params.set(key, value);
+    });
+    return params;
+}
+
+function loadEmailFirstRecipient(form, subject, body) {
+    fetch(`/admin/email-campaigns/preview-recipients?${campaignPreviewParams(form).toString()}`, {
+        headers: { 'Accept': 'application/json' }
+    })
+    .then(response => response.ok ? response.json() : null)
+    .then(data => {
+        const recipient = data?.sample?.[0] || null;
+        document.getElementById('emailPreviewRecipient').textContent = recipient
+            ? previewRecipientLabel(recipient)
+            : 'No matching recipient found';
+        if (recipient) {
+            document.getElementById('emailPreviewSubject').textContent = emailPreviewSample(subject, recipient);
+            document.getElementById('emailPreviewBody').textContent = emailPreviewSample(body, recipient) || 'Email body preview';
+        }
+    })
+    .catch(() => {
+        document.getElementById('emailPreviewRecipient').textContent = 'Unable to resolve recipient preview';
+    });
+}
+
+function loadEmailCampaignFirstRecipient(campaignId, subject, body) {
+    if (!campaignId) return;
+    fetch(`/admin/email-campaigns/campaign/${campaignId}/preview-recipient`, {
+        headers: { 'Accept': 'application/json' }
+    })
+    .then(response => response.ok ? response.json() : null)
+    .then(data => {
+        const recipient = data?.recipient || null;
+        document.getElementById('emailPreviewRecipient').textContent = recipient
+            ? previewRecipientLabel(recipient)
+            : 'No stored recipient found';
+        if (recipient) {
+            document.getElementById('emailPreviewSubject').textContent = emailPreviewSample(subject, recipient);
+            document.getElementById('emailPreviewBody').textContent = emailPreviewSample(body, recipient) || 'Email body preview';
+        }
+    })
+    .catch(() => {
+        document.getElementById('emailPreviewRecipient').textContent = 'Unable to resolve recipient preview';
+    });
+}
+
+function friendlySelectText(select) {
+    if (!select || select.selectedIndex < 0) return 'N/A';
+    return select.options[select.selectedIndex].text || select.value || 'N/A';
+}
+
+function describeCampaignSchedule(formData) {
+    const scheduleType = formData.get('schedule_type') || 'now';
+    if (scheduleType === 'draft') return 'Save as draft';
+    if (scheduleType === 'scheduled') {
+        const scheduledAt = formData.get('scheduled_at') || '';
+        return scheduledAt ? new Date(scheduledAt).toLocaleString() : 'Schedule time not selected';
+    }
+    return 'Send immediately';
+}
+
+let pendingEmailCampaignForm = null;
+let pendingEmailCampaignAction = null;
+
+function openEmailCampaignPreview(form) {
+    const formData = new FormData(form);
+    const body = formData.get('message') || '';
+    const subject = formData.get('subject') || 'Email campaign preview';
+    const targetSelect = form.querySelector('[name="target_audience"]');
+
+    document.getElementById('emailPreviewSubject').textContent = emailPreviewSample(subject);
+    document.getElementById('emailPreviewBody').textContent = emailPreviewSample(body) || 'Email body preview';
+    document.getElementById('emailPreviewTitle').textContent = formData.get('title') || 'Untitled campaign';
+    document.getElementById('emailPreviewAudience').textContent = friendlySelectText(targetSelect);
+    document.getElementById('emailPreviewRecipient').textContent = 'Resolving first recipient...';
+    document.getElementById('emailPreviewSchedule').textContent = describeCampaignSchedule(formData);
+    document.getElementById('emailPreviewLength').textContent = `${body.length} characters`;
+    document.getElementById('emailPreviewTime').textContent = new Date().toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+
+    pendingEmailCampaignForm = form;
+    pendingEmailCampaignAction = null;
+    openModal('emailCampaignPreviewModal');
+    loadEmailFirstRecipient(form, subject, body);
+}
+
+function openEmailCampaignPreviewFromData(campaign, confirmAction) {
+    const body = campaign.message || '';
+    const subject = campaign.subject || campaign.title || 'Email campaign preview';
+
+    document.getElementById('emailPreviewSubject').textContent = emailPreviewSample(subject);
+    document.getElementById('emailPreviewBody').textContent = emailPreviewSample(body) || 'Email body preview';
+    document.getElementById('emailPreviewTitle').textContent = campaign.title || 'Untitled campaign';
+    document.getElementById('emailPreviewAudience').textContent = String(campaign.target_audience || 'all_members').replace(/_/g, ' ');
+    document.getElementById('emailPreviewRecipient').textContent = 'Resolving first recipient...';
+    document.getElementById('emailPreviewSchedule').textContent = campaign.scheduled_at ? new Date(campaign.scheduled_at).toLocaleString() : 'Send immediately';
+    document.getElementById('emailPreviewLength').textContent = `${body.length} characters`;
+    document.getElementById('emailPreviewTime').textContent = new Date().toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+
+    pendingEmailCampaignForm = null;
+    pendingEmailCampaignAction = confirmAction;
+    openModal('emailCampaignPreviewModal');
+    loadEmailCampaignFirstRecipient(campaign.id, subject, body);
+}
+
+function previewExistingEmailCampaign(button) {
+    const campaign = JSON.parse(button.getAttribute('data-campaign') || '{}');
+    openEmailCampaignPreviewFromData(campaign, () => sendCampaign(campaign.id, true));
+}
+
+function submitEmailCampaignForm(form) {
+    const formData = new FormData(form);
     fetch('/admin/email-campaigns/create', {
         method: 'POST',
         body: formData
@@ -974,6 +1294,23 @@ document.getElementById('createCampaignForm')?.addEventListener('submit', functi
         console.error('Error:', error);
         ShenaApp.showNotification('Network error occurred', 'error');
     });
+}
+
+document.getElementById('confirmEmailCampaignSubmit')?.addEventListener('click', function() {
+    closeModal('emailCampaignPreviewModal');
+    if (pendingEmailCampaignForm) {
+        submitEmailCampaignForm(pendingEmailCampaignForm);
+        return;
+    }
+    if (typeof pendingEmailCampaignAction === 'function') {
+        pendingEmailCampaignAction();
+    }
+});
+
+// Form submission
+document.getElementById('createCampaignForm')?.addEventListener('submit', function(e) {
+    e.preventDefault();
+    openEmailCampaignPreview(this);
 });
 </script>
 

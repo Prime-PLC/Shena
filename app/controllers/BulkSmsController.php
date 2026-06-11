@@ -32,8 +32,19 @@ class BulkSmsController extends BaseController
     {
         $this->requireRole(['admin', 'super_admin', 'manager']);
         
+        $quickFilters = [
+            'status' => $_GET['quick_status'] ?? 'all',
+            'search' => trim($_GET['quick_search'] ?? ''),
+            'date_from' => trim($_GET['quick_date_from'] ?? ''),
+            'date_to' => trim($_GET['quick_date_to'] ?? ''),
+        ];
+        $quickPage = max(1, (int)($_GET['quick_page'] ?? 1));
+        $quickPerPage = 25;
+        $quickTotal = $this->bulkSmsService->getQueueItemsCount($quickFilters);
+        $quickOffset = ($quickPage - 1) * $quickPerPage;
+
         $campaigns = $this->bulkSmsService->getAllCampaigns();
-        $queue_items = $this->bulkSmsService->getQueueItems();
+        $queue_items = $this->bulkSmsService->getQueueItems($quickFilters, $quickPerPage, $quickOffset);
         $templates = $this->bulkSmsService->getTemplates();
         
         $stats = [
@@ -49,6 +60,13 @@ class BulkSmsController extends BaseController
             'title' => 'SMS Campaigns - Shena Companion',
             'campaigns' => $campaigns,
             'queue_items' => $queue_items,
+            'quick_filters' => $quickFilters,
+            'quick_pagination' => [
+                'current_page' => $quickPage,
+                'total_pages' => max(1, (int)ceil($quickTotal / $quickPerPage)),
+                'total_items' => $quickTotal,
+                'per_page' => $quickPerPage,
+            ],
             'templates' => $templates,
             'stats' => $stats
         ];
@@ -311,19 +329,12 @@ class BulkSmsController extends BaseController
         
         header('Content-Type: application/json');
         
-        $targetAudience = $_GET['target_audience'] ?? 'all_members';
-        $customFilters = [];
-        
-        if ($targetAudience === 'custom') {
-            if (!empty($_GET['filter_package'])) {
-                $customFilters['package'] = $_GET['filter_package'];
-            }
-            if (!empty($_GET['filter_status'])) {
-                $customFilters['status'] = $_GET['filter_status'];
-            }
-            if (!empty($_GET['filter_county'])) {
-                $customFilters['county'] = $_GET['filter_county'];
-            }
+        $rawTargetAudience = $_GET['target_audience'] ?? 'all_members';
+        $targetAudience = $this->normalizeTargetAudience($rawTargetAudience);
+        $customFilters = $this->extractCustomFilters($_GET);
+
+        if (!empty($_GET['filter_county'])) {
+            $customFilters['county'] = $_GET['filter_county'];
         }
         
         $recipients = $this->bulkSmsService->getRecipients($targetAudience, $customFilters);
@@ -333,6 +344,23 @@ class BulkSmsController extends BaseController
             'sample' => array_slice($recipients, 0, 10) // First 10 for preview
         ]);
         exit;
+    }
+
+    public function previewCampaignRecipient($id)
+    {
+        $this->requireRole(['admin', 'super_admin', 'manager']);
+        header('Content-Type: application/json');
+
+        try {
+            $recipients = $this->bulkSmsService->getCampaignRecipients((int)$id);
+            $this->json([
+                'success' => true,
+                'recipient' => $recipients[0] ?? null,
+            ]);
+        } catch (Throwable $e) {
+            error_log('SMS campaign preview recipient error: ' . $e->getMessage());
+            $this->json(['success' => false, 'message' => 'Failed to load preview recipient'], 400);
+        }
     }
     
     /**
@@ -477,7 +505,7 @@ class BulkSmsController extends BaseController
             // If action is 'send', start sending immediately
             if ($action === 'send' && $sendTime === 'now') {
                 $this->bulkSmsService->sendCampaign($campaignId);
-                $successMsg = 'Campaign created and submitted to HostPinnacle for delivery tracking. (' . count($recipients) . ' recipients)';
+                $successMsg = 'Campaign created and submitted for delivery tracking. (' . count($recipients) . ' recipients)';
             } elseif ($sendTime === 'scheduled') {
                 $successMsg = 'Campaign scheduled successfully for ' . date('M j, Y H:i', strtotime($scheduledAt));
             } else {
@@ -529,7 +557,7 @@ class BulkSmsController extends BaseController
             if ($result['success']) {
                 $this->json([
                     'success' => true,
-                    'message' => 'Campaign submitted to HostPinnacle. Delivery confirmation will update after DLR sync.',
+                    'message' => 'Campaign submitted. Delivery confirmation will update after sync.',
                     'sent_count' => $result['sent_count'],
                     'failed_count' => $result['failed_count'],
                     'pending_count' => $result['pending_count'],
@@ -603,6 +631,32 @@ class BulkSmsController extends BaseController
             
         } catch (Exception $e) {
             error_log('Process queue error: ' . $e->getMessage());
+            $this->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    public function deleteCampaign()
+    {
+        $this->requireRole(['admin', 'super_admin', 'manager']);
+        header('Content-Type: application/json');
+
+        try {
+            $input = json_decode(file_get_contents('php://input'), true) ?: [];
+            $campaignId = (int)($input['campaign_id'] ?? 0);
+            $confirmed = !empty($input['confirm_delete']);
+
+            if ($campaignId <= 0 || !$confirmed) {
+                throw new Exception('Campaign ID and delete confirmation are required');
+            }
+
+            if ($this->bulkSmsService->deleteCampaign($campaignId)) {
+                $this->json(['success' => true, 'message' => 'Campaign deleted successfully']);
+                return;
+            }
+
+            throw new Exception('Campaign not found or cannot be deleted while sending');
+        } catch (Throwable $e) {
+            error_log('Delete campaign error: ' . $e->getMessage());
             $this->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
@@ -699,7 +753,7 @@ class BulkSmsController extends BaseController
                     'inactive' => 'inactive',
                     'pending'  => 'inactive', // pending members are stored as inactive+pending
                 ];
-                $sql = "SELECT u.phone, u.first_name, u.last_name,
+                $sql = "SELECT u.id AS user_id, u.phone, u.first_name, u.last_name,
                                m.member_number, m.package, m.status, m.monthly_contribution
                         FROM members m
                         JOIN users u ON m.user_id = u.id
@@ -707,7 +761,7 @@ class BulkSmsController extends BaseController
                 $status = $statusMap[$recipientGroup] ?? 'active';
                 // For 'pending' group also include status='pending'
                 if ($recipientGroup === 'pending') {
-                    $sql = "SELECT u.phone, u.first_name, u.last_name,
+                    $sql = "SELECT u.id AS user_id, u.phone, u.first_name, u.last_name,
                                    m.member_number, m.package, m.status, m.monthly_contribution
                             FROM members m
                             JOIN users u ON m.user_id = u.id
@@ -721,7 +775,7 @@ class BulkSmsController extends BaseController
                 }
 
             } elseif ($recipientType === 'all') {
-                $sql = "SELECT u.phone, u.first_name, u.last_name,
+                $sql = "SELECT u.id AS user_id, u.phone, u.first_name, u.last_name,
                                m.member_number, m.package, m.status, m.monthly_contribution
                         FROM members m
                         JOIN users u ON m.user_id = u.id
@@ -738,39 +792,37 @@ class BulkSmsController extends BaseController
                 throw new Exception('No recipients found for the selected group.');
             }
 
-            // Normalize phones and send
-            $sent = 0;
-            $failed = 0;
-            $lastError = '';
+            $validRecipients = [];
             foreach ($recipients as $recipient) {
                 $formatted = $smsService->formatPhoneNumber($recipient['phone']);
                 if (!$smsService->validatePhoneNumber($formatted)) {
-                    $failed++;
                     continue;
                 }
                 $personalizedMessage = $this->personalizeQuickSmsMessage($message, $recipient);
                 if (strlen($personalizedMessage) > 160) {
-                    $failed++;
-                    $lastError = 'Personalized SMS is longer than 160 characters for one or more recipients.';
                     continue;
                 }
-
-                $result = $smsService->sendSms($formatted, $personalizedMessage);
-                if ($result['success']) {
-                    $sent++;
-                } else {
-                    $failed++;
-                    $lastError = $result['error'] ?? 'Send failed';
-                }
+                $recipient['phone'] = $formatted;
+                $validRecipients[] = $recipient;
             }
 
-            if ($sent === 0) {
-                throw new Exception($lastError ?: 'Failed to send SMS to any recipient.');
+            if (empty($validRecipients)) {
+                throw new Exception('No valid recipients found for the selected message.');
             }
 
-            $msg = "SMS submitted to HostPinnacle for {$sent} recipient(s). Delivery confirmation is not available for quick SMS.";
-            if ($failed > 0) $msg .= " ({$failed} skipped)";
-            echo json_encode(['success' => true, 'message' => $msg]);
+            $queueIds = $this->bulkSmsService->queueQuickSms($validRecipients, $message, (int)($_SESSION['user_id'] ?? 0));
+            $result = $this->bulkSmsService->processQueueByIds($queueIds);
+            $submitted = (int)($result['submitted_count'] ?? $result['sent_count'] ?? 0);
+            $failed = (int)($result['failed_count'] ?? 0);
+            $msg = "SMS submitted for {$submitted} recipient(s). Delivery status will update automatically.";
+            if ($failed > 0) $msg .= " ({$failed} failed)";
+            echo json_encode([
+                'success' => true,
+                'message' => $msg,
+                'queued' => count($queueIds),
+                'submitted' => $submitted,
+                'failed' => $failed
+            ]);
             exit();
 
         } catch (Throwable $e) {
@@ -787,6 +839,7 @@ class BulkSmsController extends BaseController
         $lastName = trim((string)($member['last_name'] ?? ''));
 
         return [
+            'user_id' => $member['user_id'] ?? $member['id'] ?? null,
             'phone' => $member['phone'] ?? '',
             'first_name' => $firstName,
             'last_name' => $lastName,
@@ -836,7 +889,7 @@ class BulkSmsController extends BaseController
             if ($result['success']) {
                 $this->json([
                     'success' => true,
-                    'message' => 'Campaign submitted to HostPinnacle. Delivery confirmation will update after DLR sync.',
+                    'message' => 'Campaign submitted. Delivery confirmation will update after sync.',
                     'sent_count' => $result['sent_count'],
                     'failed_count' => $result['failed_count'] ?? 0,
                     'pending_count' => $result['pending_count'] ?? 0,
@@ -1233,7 +1286,7 @@ class BulkSmsController extends BaseController
                     $itemId
                 ]);
                 
-                $this->json(['success' => true, 'message' => 'SMS submitted to HostPinnacle. Awaiting delivery confirmation.']);
+                $this->json(['success' => true, 'message' => 'SMS submitted. Awaiting delivery confirmation.']);
             } else {
                 $error = $result['error'] ?? 'Unknown error';
                 $sql = "UPDATE sms_queue SET status = 'failed', error_message = ?, retry_count = retry_count + 1 WHERE id = ?";
@@ -1299,7 +1352,7 @@ class BulkSmsController extends BaseController
                 throw new Exception('Queue item ID is required');
             }
             
-            $sql = "DELETE FROM sms_queue WHERE id = ? AND status IN ('pending', 'failed')";
+            $sql = "DELETE FROM sms_queue WHERE id = ? AND status <> 'processing'";
             $stmt = $this->db->getConnection()->prepare($sql);
             $stmt->execute([$itemId]);
             
