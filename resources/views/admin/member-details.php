@@ -1264,6 +1264,9 @@ function togglePanel(id) {
     panel.hidden = false;
 
     if (isHidden) {
+        if (id === 'dependantAddPanel') {
+            updateDependantDobConstraints('add');
+        }
         panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 }
@@ -1278,6 +1281,7 @@ function openDependantEdit(dependantId) {
     document.getElementById('editDependantIdNumber').value = dependant.id_number || '';
     document.getElementById('editDependantDateOfBirth').value = dependant.date_of_birth || '';
     document.getElementById('editDependantPhone').value = dependant.phone_number || '';
+    updateDependantDobConstraints('edit');
 
     new bootstrap.Modal(document.getElementById('dependantEditModal')).show();
 }
@@ -1449,6 +1453,50 @@ function confirmAddDependant(event) {
     );
     return false;
 }
+
+function formatDateInput(date) {
+    return date.toISOString().slice(0, 10);
+}
+
+function yearsAgo(years) {
+    const date = new Date();
+    date.setFullYear(date.getFullYear() - years);
+    return date;
+}
+
+function updateDependantDobConstraints(mode = 'add') {
+    const relationship = document.getElementById(mode === 'edit' ? 'editDependantRelationship' : 'dependantRelationship');
+    const dob = document.getElementById(mode === 'edit' ? 'editDependantDateOfBirth' : 'dependantDateOfBirth');
+    if (!relationship || !dob) return;
+
+    const today = new Date();
+    const adultMax = yearsAgo(18);
+    const childMin = yearsAgo(18);
+    childMin.setDate(childMin.getDate() + 1);
+    const relation = String(relationship.value || '').trim().toLowerCase();
+
+    dob.removeAttribute('min');
+    dob.removeAttribute('max');
+
+    if (relation === 'child') {
+        dob.min = formatDateInput(childMin);
+        dob.max = formatDateInput(today);
+        dob.title = 'Children must be below 18 years old.';
+        if (dob.value && dob.value < dob.min) {
+            dob.value = '';
+        }
+    } else if (relation) {
+        dob.max = formatDateInput(adultMax);
+        dob.title = 'Adult dependants must be 18 years or older.';
+        if (dob.value && dob.value > dob.max) {
+            dob.value = '';
+        }
+    }
+}
+
+document.getElementById('dependantRelationship')?.addEventListener('change', () => updateDependantDobConstraints('add'));
+document.getElementById('editDependantRelationship')?.addEventListener('change', () => updateDependantDobConstraints('edit'));
+updateDependantDobConstraints('add');
 </script>
 
 <?php include_once __DIR__ . '/../layouts/admin-footer.php'; ?>

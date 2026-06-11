@@ -1431,7 +1431,9 @@ $buildMemberFilterUrl = function (string $targetStatus) use ($search, $package) 
                         <?php foreach ($members as $member): ?>
                         <?php
                             $memberName = trim(($member['first_name'] ?? '') . ' ' . ($member['last_name'] ?? ''));
-                            $lastPaymentDate = !empty($member['last_payment_date']) ? date('d M Y', strtotime($member['last_payment_date'])) : 'N/A';
+                            $hasLastPayment = !empty($member['last_payment_date']);
+                            $lastPaymentAmount = (float)($member['last_payment_amount'] ?? 0);
+                            $lastPaymentDate = $hasLastPayment ? date('d M Y', strtotime($member['last_payment_date'])) : 'N/A';
                             $memberModalData = [
                                 'id' => (int)($member['id'] ?? 0),
                                 'name' => $memberName ?: 'N/A',
@@ -1472,7 +1474,7 @@ $buildMemberFilterUrl = function (string $targetStatus) use ($search, $package) 
                                     ];
                                 }, $member['beneficiaries'] ?? []),
                                 'dependant_relationship_options' => $member['dependant_relationship_options'] ?? [],
-                                'last_payment_amount' => 'KES ' . number_format($member['last_payment_amount'] ?? 0, 2),
+                                'last_payment_amount' => 'KES ' . number_format($lastPaymentAmount, 2),
                                 'last_payment_date' => $lastPaymentDate,
                                 'agent_number' => $member['agent_number'] ?? 'N/A',
                                 'edit_url' => '/admin/members/edit/' . (int)($member['id'] ?? 0),
@@ -1506,14 +1508,16 @@ $buildMemberFilterUrl = function (string $targetStatus) use ($search, $package) 
                                 <?php if ($member['status'] === 'grace_period'): ?>
                                     <div class="contribution-info">
                                         <span class="contribution-overdue">Overdue</span>
-                                        <span class="contribution-overdue"><?php echo date('d M Y', strtotime($member['last_payment_date'] ?? '')); ?></span>
+                                        <span class="contribution-overdue"><?php echo $hasLastPayment ? htmlspecialchars($lastPaymentDate) : 'No completed payment'; ?></span>
                                     </div>
                                 <?php elseif ($member['status'] === 'inactive'): ?>
                                     <span class="contribution-inactive">Inactive</span>
+                                <?php elseif (!$hasLastPayment): ?>
+                                    <span class="contribution-inactive">No completed payment</span>
                                 <?php else: ?>
                                     <div class="contribution-info">
-                                        <span class="contribution-amount">KES <?php echo number_format($member['last_payment_amount'] ?? 0, 2); ?></span>
-                                        <span class="contribution-date"><?php echo date('d M Y', strtotime($member['last_payment_date'] ?? '')); ?></span>
+                                        <span class="contribution-amount">KES <?php echo number_format($lastPaymentAmount, 2); ?></span>
+                                        <span class="contribution-date"><?php echo htmlspecialchars($lastPaymentDate); ?></span>
                                     </div>
                                 <?php endif; ?>
                             </td>
@@ -1901,6 +1905,18 @@ function generateReport() {
 document.addEventListener('DOMContentLoaded', function() {
     const urlParams = new URLSearchParams(window.location.search);
     const status = urlParams.get('status');
+    const memberSearchForm = document.getElementById('memberSearchForm');
+    const memberSearchInput = document.getElementById('search-members');
+    let memberSearchTimer = null;
+
+    memberSearchInput?.addEventListener('input', function() {
+        clearTimeout(memberSearchTimer);
+        memberSearchTimer = setTimeout(() => {
+            if (memberSearchForm) {
+                memberSearchForm.submit();
+            }
+        }, 450);
+    });
     
     let tabIndex = 0;
     if (status === 'pending_approval') {

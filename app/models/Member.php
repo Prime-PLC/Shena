@@ -43,9 +43,19 @@ class Member extends BaseModel
      */
     public function getAllMembers($filters = [])
     {
-        $sql = "SELECT m.*, u.email, u.phone, u.first_name, u.last_name, u.role
+        $sql = "SELECT m.*, u.email, u.phone, u.first_name, u.last_name, u.role,
+                       latest_payment.amount as last_payment_amount,
+                       COALESCE(latest_payment.payment_date, latest_payment.created_at) as last_payment_date
                 FROM {$this->table} m
                 JOIN users u ON m.user_id = u.id
+                LEFT JOIN payments latest_payment ON latest_payment.id = (
+                    SELECT lp.id
+                    FROM payments lp
+                    WHERE lp.member_id = m.id
+                      AND lp.status = 'completed'
+                    ORDER BY COALESCE(lp.payment_date, lp.created_at) DESC, lp.id DESC
+                    LIMIT 1
+                )
                 WHERE 1=1";
         $sql .= $this->activeArchiveCondition('m');
         
@@ -1080,9 +1090,19 @@ class Member extends BaseModel
      */
     public function getAllMembersWithDetails($search = '', $status = 'all', $package = 'all')
     {
-        $sql = "SELECT m.*, u.email, u.phone, u.first_name, u.last_name, u.role
+        $sql = "SELECT m.*, u.email, u.phone, u.first_name, u.last_name, u.role,
+                       latest_payment.amount as last_payment_amount,
+                       COALESCE(latest_payment.payment_date, latest_payment.created_at) as last_payment_date
                 FROM {$this->table} m
                 JOIN users u ON m.user_id = u.id
+                LEFT JOIN payments latest_payment ON latest_payment.id = (
+                    SELECT lp.id
+                    FROM payments lp
+                    WHERE lp.member_id = m.id
+                      AND lp.status = 'completed'
+                    ORDER BY COALESCE(lp.payment_date, lp.created_at) DESC, lp.id DESC
+                    LIMIT 1
+                )
                 WHERE 1=1";
         $sql .= $this->activeArchiveCondition('m');
         
@@ -1112,7 +1132,11 @@ class Member extends BaseModel
         }
         
         if ($package !== 'all' && !empty($package)) {
-            $sql .= " AND (m.package = :package OR m.package_key = :package)";
+            if ($this->hasColumn('package_key')) {
+                $sql .= " AND (m.package = :package OR m.package_key = :package)";
+            } else {
+                $sql .= " AND m.package = :package";
+            }
             $params['package'] = $package;
         }
         

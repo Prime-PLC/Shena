@@ -118,6 +118,10 @@ $assertContains($memberDetailsView, 'openDependantEdit', 'Dependant cards should
 $assertContains($memberDetailsView, 'deleteDependant', 'Dependant cards should expose a delete action.');
 $assertContains($memberDetailsView, 'editCorporateMember', 'Corporate cards should expose an edit action.');
 $assertContains($memberDetailsView, 'deleteCorporateMember', 'Corporate cards should expose a delete action.');
+$assertContains($memberDetailsView, 'updateDependantDobConstraints', 'Admin dependant date picker should react to relationship selection.');
+$assertContains($memberDetailsView, "if (relation === 'child')", 'Child dependant selection should loosen the adult-only DOB constraint.');
+$assertContains($memberDetailsView, 'Children must be below 18 years old.', 'Child dependant DOB guidance should allow ages below 18.');
+$assertContains($memberDetailsView, 'Adult dependants must be 18 years or older.', 'Adult dependant DOB guidance should keep the 18+ constraint.');
 $assertBefore($memberDetailsView, 'Member Overview', 'id="adminMemberProfileForm"', 'Member overview should appear before the prefilled edit form.');
 $assertBefore($memberDetailsView, 'Payment History', 'Collect Payment', 'Payment actions should live with payment history.');
 $assertNotContains($memberDetailsView, 'Archive', 'Full profile view should not expose archive actions.');
