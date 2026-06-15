@@ -10,6 +10,13 @@ $assertContains = static function (string $contents, string $needle, string $mes
     }
 };
 
+$assertNotContains = static function (string $contents, string $needle, string $message) use (&$failed): void {
+    if (strpos($contents, $needle) !== false) {
+        fwrite(STDERR, $message . "\nUnexpected: {$needle}\n");
+        $failed = true;
+    }
+};
+
 $memberModel = file_get_contents($root . '/app/models/Member.php');
 $membersView = file_get_contents($root . '/resources/views/admin/members.php');
 $memberDetailsView = file_get_contents($root . '/resources/views/admin/member-details.php');
@@ -48,6 +55,31 @@ $assertContains(
     $membersView,
     'No completed payment',
     'Member management view should not show 01 Jan 1970 when no completed payment exists.'
+);
+$assertContains(
+    $membersView,
+    'id="memberSearchForm"',
+    'Member management search should remain a real GET form.'
+);
+$assertContains(
+    $membersView,
+    'id="search-members"',
+    'Member management search input should remain wired to the form.'
+);
+$assertContains(
+    $membersView,
+    'Search',
+    'Member management should provide an explicit search action.'
+);
+$assertNotContains(
+    $membersView,
+    'memberSearchTimer',
+    'Member management search should not submit or refresh the page on every typed character.'
+);
+$assertNotContains(
+    $membersView,
+    "memberSearchInput?.addEventListener('input'",
+    'Member management search should wait for explicit submit/Enter instead of typing refresh.'
 );
 
 $assertContains(

@@ -1905,18 +1905,6 @@ function generateReport() {
 document.addEventListener('DOMContentLoaded', function() {
     const urlParams = new URLSearchParams(window.location.search);
     const status = urlParams.get('status');
-    const memberSearchForm = document.getElementById('memberSearchForm');
-    const memberSearchInput = document.getElementById('search-members');
-    let memberSearchTimer = null;
-
-    memberSearchInput?.addEventListener('input', function() {
-        clearTimeout(memberSearchTimer);
-        memberSearchTimer = setTimeout(() => {
-            if (memberSearchForm) {
-                memberSearchForm.submit();
-            }
-        }, 450);
-    });
     
     let tabIndex = 0;
     if (status === 'pending_approval') {

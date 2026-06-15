@@ -997,15 +997,6 @@ $paymentExportUrl = '/admin/reports/export?' . http_build_query(array_filter([
 
 <script>
 const paymentFiltersForm = document.getElementById('paymentFiltersForm');
-const paymentSearchInput = document.getElementById('paymentSearchInput');
-let paymentSearchTimer = null;
-
-paymentSearchInput?.addEventListener('input', function() {
-    clearTimeout(paymentSearchTimer);
-    paymentSearchTimer = setTimeout(() => {
-        paymentFiltersForm?.submit();
-    }, 450);
-});
 
 paymentFiltersForm?.querySelectorAll('select, input[type="date"]').forEach((field) => {
     field.addEventListener('change', () => paymentFiltersForm.submit());

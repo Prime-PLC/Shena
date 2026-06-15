@@ -68,7 +68,9 @@ foreach ([
 }
 $assertContains($paymentsView, 'paymentFiltersForm', 'Payments view should wrap filters in a real form.');
 $assertContains($paymentsView, 'paymentPagination', 'Payments view should render pagination controls.');
-$assertContains($paymentsView, 'paymentSearchInput', 'Payments search should auto-submit on typing.');
+$assertContains($paymentsView, 'paymentSearchInput', 'Payments search field should remain connected to the filter form.');
+$assertNotContains($paymentsView, 'paymentSearchTimer', 'Payments search should not submit or refresh the page on every typed character.');
+$assertNotContains($paymentsView, "paymentSearchInput?.addEventListener('input'", 'Payments search should wait for explicit submit/Enter instead of typing refresh.');
 $assertNotContains($paymentsView, '<button class="filter-btn">' . "\n" . '                    <i class="fas fa-calendar"></i>', 'Payments date range button should not remain stale.');
 
 $assertContains($database, 'PDO::PARAM_INT', 'Database wrapper should bind integer params as integers for LIMIT/OFFSET pagination.');
