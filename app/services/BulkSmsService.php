@@ -200,9 +200,8 @@ class BulkSmsService
         $batchSize = max(1, min((int) $batchSize, 500));
         $this->updateCampaignStatus($bulkMessageId, 'sending', true);
 
-        $sql = "SELECT bmr.*, u.first_name, u.last_name, u.email, u.phone,
+$sql = "SELECT bmr.*, u.first_name, u.last_name, u.email, u.phone,
                        m.member_number, m.package, m.status AS member_status,
-                       COALESCE(m.monthly_contribution, 0) AS amount_due
                        COALESCE(m.monthly_contribution, 0) AS amount_due
                 FROM bulk_message_recipients bmr
                 INNER JOIN users u ON bmr.user_id = u.id
