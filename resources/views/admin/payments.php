@@ -31,6 +31,20 @@ $paymentExportUrl = '/admin/reports/export?' . http_build_query(array_filter([
 ], static function ($value) {
     return $value !== '' && $value !== null;
 }));
+$paymentBreakdownSummary = $payment_breakdown_summary ?? ['groups' => []];
+$selectedPaymentGroup = $selected_payment_group ?? 'all';
+$paymentGroupRows = $payment_group_rows ?? [];
+$paymentGroupLabels = [
+    'paid_current' => 'Paid',
+    'unpaid_current' => 'Not Paid',
+    'partially_paid' => 'Partially Paid',
+    'in_arrears' => 'In Arrears',
+    'defaulted' => 'Defaulted',
+];
+$selectedPaymentGroupLabel = $paymentGroupLabels[$selectedPaymentGroup] ?? 'All Payments';
+$selectedGroupData = $paymentBreakdownSummary['groups'][$selectedPaymentGroup] ?? ['count' => 0, 'balance_due' => 0];
+$selectedGroupCampaignAction = $selectedPaymentGroup === 'paid_current' ? 'Send Thank You' : 'Send Reminder';
+$breakdownFilterFields = ['search', 'package', 'payment_method', 'amount_min', 'amount_max', 'missed_months'];
 ?>
 
 <?php include_once __DIR__ . '/../layouts/admin-header.php'; ?>
@@ -170,6 +184,74 @@ $paymentExportUrl = '/admin/reports/export?' . http_build_query(array_filter([
     .stat-subtext {
         font-size: 12px;
         color: #6B7280;
+    }
+
+    .breakdown-actions {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 14px;
+        margin-bottom: 24px;
+    }
+
+    .breakdown-card {
+        background: #FFFFFF;
+        border: 1px solid #E5E7EB;
+        border-radius: 12px;
+        padding: 16px;
+        text-decoration: none;
+        color: #111827;
+        display: block;
+    }
+
+    .breakdown-card.active,
+    .breakdown-card:hover {
+        border-color: #7F3D9E;
+        box-shadow: 0 6px 18px rgba(127, 61, 158, 0.12);
+    }
+
+    .breakdown-card strong {
+        display: block;
+        font-size: 24px;
+        margin-top: 8px;
+    }
+
+    .row-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .breakdown-toolbar {
+        background: #F9FAFB;
+        border: 1px solid #E5E7EB;
+        border-radius: 12px;
+        padding: 16px;
+        margin: 0 0 18px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+    }
+
+    .breakdown-toolbar h3 {
+        margin: 0 0 4px;
+        font-size: 16px;
+        font-weight: 800;
+        color: #111827;
+    }
+
+    .breakdown-toolbar p {
+        margin: 0;
+        color: #6B7280;
+        font-size: 13px;
+    }
+
+    .breakdown-toolbar-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: center;
     }
 
     /* Tabs */
@@ -647,6 +729,121 @@ $paymentExportUrl = '/admin/reports/export?' . http_build_query(array_filter([
         <div class="stat-value"><?php echo $successRate; ?>%</div>
         <div class="stat-subtext">Transaction success rate</div>
     </div>
+</div>
+
+<!-- Payment Breakdown -->
+<div class="tabs-container" style="padding: 20px; margin-bottom: 24px;">
+    <div class="table-header">
+        <div>
+            <h2 style="font-size:20px; font-weight:800; margin:0;">Payment Breakdown</h2>
+            <p style="margin:4px 0 0; color:#6B7280; font-size:13px;">Categories update from the monthly payment deadline on the 7th and after confirmed or reconciled payments.</p>
+        </div>
+        <a class="filter-btn primary" href="/admin/payments/breakdown">
+            <i class="fas fa-table"></i>
+            View Breakdown
+        </a>
+    </div>
+    <div class="breakdown-actions">
+        <?php foreach ($paymentGroupLabels as $groupKey => $groupLabel): ?>
+            <?php $groupData = $paymentBreakdownSummary['groups'][$groupKey] ?? ['count' => 0, 'balance_due' => 0]; ?>
+            <a class="breakdown-card <?php echo $selectedPaymentGroup === $groupKey ? 'active' : ''; ?>" href="/admin/payments/breakdown?group=<?php echo urlencode($groupKey); ?>">
+                <span><?php echo htmlspecialchars($groupLabel); ?></span>
+                <strong><?php echo number_format((int)($groupData['count'] ?? 0)); ?></strong>
+                <small style="color:#6B7280;">Outstanding KSh <?php echo number_format((float)($groupData['balance_due'] ?? 0), 2); ?></small>
+            </a>
+        <?php endforeach; ?>
+        <a class="breakdown-card" href="/admin/payments/unmatched">
+            <span>Unmatched Payments</span>
+            <strong><?php echo number_format((int)$pendingReconciliation); ?></strong>
+            <small style="color:#6B7280;">Needs reconciliation</small>
+        </a>
+    </div>
+
+    <?php if ($selectedPaymentGroup !== 'all'): ?>
+        <div class="breakdown-toolbar">
+            <div>
+                <h3><?php echo htmlspecialchars($selectedPaymentGroupLabel); ?> Breakdown</h3>
+                <p><?php echo number_format((int)($selectedGroupData['count'] ?? 0)); ?> members · Outstanding KSh <?php echo number_format((float)($selectedGroupData['balance_due'] ?? 0), 2); ?></p>
+            </div>
+            <div class="breakdown-toolbar-actions">
+                <form method="POST" action="/admin/payments/create-sms-campaign" style="display:inline-flex;">
+                    <input type="hidden" name="payment_group" value="<?php echo htmlspecialchars($selectedPaymentGroup); ?>">
+                    <?php foreach ($breakdownFilterFields as $field): ?>
+                        <input type="hidden" name="<?php echo htmlspecialchars($field); ?>" value="<?php echo $paymentFilterValue($field); ?>">
+                    <?php endforeach; ?>
+                    <button type="submit" class="filter-btn primary"><?php echo htmlspecialchars($selectedGroupCampaignAction); ?></button>
+                </form>
+                <form method="POST" action="/admin/payments/create-sms-campaign" style="display:inline-flex;">
+                    <input type="hidden" name="payment_group" value="<?php echo htmlspecialchars($selectedPaymentGroup); ?>">
+                    <?php foreach ($breakdownFilterFields as $field): ?>
+                        <input type="hidden" name="<?php echo htmlspecialchars($field); ?>" value="<?php echo $paymentFilterValue($field); ?>">
+                    <?php endforeach; ?>
+                    <button type="submit" class="filter-btn">Create SMS Campaign</button>
+                </form>
+                <a class="filter-btn" href="<?php echo htmlspecialchars($paymentExportUrl); ?>">Export</a>
+            </div>
+        </div>
+
+        <form class="payment-filter-form" method="GET" action="/admin/payments/breakdown" style="margin-bottom:16px;">
+            <input type="hidden" name="group" value="<?php echo htmlspecialchars($selectedPaymentGroup); ?>">
+            <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input type="search" name="search" value="<?php echo $paymentFilterValue('search'); ?>" placeholder="Search member, phone, ID...">
+            </div>
+            <select name="package" aria-label="Package">
+                <option value="all">All packages</option>
+                <?php foreach (['individual' => 'Individual', 'family' => 'Family', 'extended_family_1' => 'Extended Family 1', 'extended_family_2' => 'Extended Family 2'] as $value => $label): ?>
+                    <option value="<?php echo $value; ?>" <?php echo (($paymentFilters['package'] ?? 'all') === $value) ? 'selected' : ''; ?>><?php echo $label; ?></option>
+                <?php endforeach; ?>
+            </select>
+            <input type="number" name="amount_min" value="<?php echo $paymentFilterValue('amount_min'); ?>" placeholder="Min balance">
+            <input type="number" name="amount_max" value="<?php echo $paymentFilterValue('amount_max'); ?>" placeholder="Max balance">
+            <input type="number" name="missed_months" value="<?php echo $paymentFilterValue('missed_months'); ?>" placeholder="Missed months">
+            <button type="submit" class="filter-btn primary"><i class="fas fa-filter"></i> Apply</button>
+            <a class="filter-btn" href="/admin/payments/breakdown?group=<?php echo urlencode($selectedPaymentGroup); ?>">Reset</a>
+        </form>
+
+        <?php if (!empty($paymentGroupRows)): ?>
+            <table class="custom-table">
+                <thead>
+                    <tr>
+                        <th>Member</th>
+                        <th>Monthly Contribution</th>
+                        <th>Paid Amount</th>
+                        <th>Balance</th>
+                        <th>Missed Months</th>
+                        <th>Last Payment</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($paymentGroupRows as $memberRow): ?>
+                        <tr>
+                            <td>
+                                <strong><?php echo htmlspecialchars(trim(($memberRow['first_name'] ?? '') . ' ' . ($memberRow['last_name'] ?? ''))); ?></strong>
+                                <div style="color:#6B7280; font-size:12px;"><?php echo htmlspecialchars($memberRow['member_number'] ?? ''); ?> · <?php echo htmlspecialchars($memberRow['phone'] ?? ''); ?></div>
+                            </td>
+                            <td>KSh <?php echo number_format((float)($memberRow['monthly_contribution'] ?? 0), 2); ?></td>
+                            <td>KSh <?php echo number_format((float)($memberRow['paid_amount'] ?? 0), 2); ?></td>
+                            <td><strong>KSh <?php echo number_format((float)($memberRow['balance_due'] ?? 0), 2); ?></strong></td>
+                            <td><?php echo number_format((int)($memberRow['missed_months'] ?? 0)); ?></td>
+                            <td><?php echo !empty($memberRow['last_payment_date']) ? date('M j, Y', strtotime($memberRow['last_payment_date'])) : 'No completed payment'; ?></td>
+                            <td>
+                                <div class="row-actions">
+                                    <a class="filter-btn" href="/admin/members/view/<?php echo (int)$memberRow['id']; ?>">View Member</a>
+                                    <a class="filter-btn" href="/admin/payments?member_id=<?php echo (int)$memberRow['id']; ?>">View Payments</a>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php else: ?>
+            <div style="padding:32px; text-align:center; color:#6B7280; border:1px dashed #D1D5DB; border-radius:12px;">
+                No members match this payment group and filter.
+            </div>
+        <?php endif; ?>
+    <?php endif; ?>
 </div>
 
 <!-- Payment Tabs -->

@@ -925,6 +925,12 @@ if ($notificationCount === null) {
                                 </a>
                             </li>
                             <li class="nav-item">
+                                <a class="nav-link <?php echo (strpos($_SERVER['REQUEST_URI'], '/admin/payments/breakdown') !== false) ? 'active' : ''; ?>" href="/admin/payments/breakdown">
+                                    <i class="fas fa-table-cells"></i>
+                                    <span>Payment Breakdown</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
                                 <a class="nav-link <?php echo (strpos($_SERVER['REQUEST_URI'], 'payments/reconciliation') !== false || strpos($_SERVER['REQUEST_URI'], 'payments-reconciliation') !== false) ? 'active' : ''; ?>" href="/admin/payments-reconciliation">
                                     <i class="fas fa-sync-alt"></i>
                                     <span>Reconciliation</span>
@@ -1216,6 +1222,10 @@ if ($notificationCount === null) {
             
             // Payments
             { title: 'All Payments', subtitle: 'Payments', url: '/admin/payments' },
+            { title: 'Payment Breakdown', subtitle: 'Payments', url: '/admin/payments/breakdown' },
+            { title: 'Paid', subtitle: 'Payments', url: '/admin/payments/breakdown?group=paid_current' },
+            { title: 'Not Paid', subtitle: 'Payments', url: '/admin/payments/breakdown?group=unpaid_current' },
+            { title: 'In Arrears', subtitle: 'Payments', url: '/admin/payments/breakdown?group=in_arrears' },
             { title: 'Payment History', subtitle: 'Payments', url: '/admin/payments' },
             { title: 'Reconciliation', subtitle: 'Payments', url: '/admin/payments-reconciliation' },
             { title: 'Payment Reconciliation', subtitle: 'Payments', url: '/admin/payments-reconciliation' },

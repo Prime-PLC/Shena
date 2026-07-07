@@ -311,6 +311,36 @@
         height: 300px;
     }
 
+    .performance-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+        gap: 14px;
+        margin-bottom: 18px;
+    }
+
+    .performance-card {
+        border: 1px solid #E5E7EB;
+        border-radius: 10px;
+        padding: 16px;
+        background: #FFFFFF;
+    }
+
+    .performance-card span {
+        display: block;
+        color: #6B7280;
+        font-size: 12px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .4px;
+    }
+
+    .performance-card strong {
+        display: block;
+        color: #111827;
+        font-size: 24px;
+        margin-top: 6px;
+    }
+
     @media print {
         .page-header {
             background: #8B5CF6 !important;
@@ -363,6 +393,65 @@
             <i class="fas fa-redo"></i> This Month
         </button>
     </form>
+</div>
+
+<?php
+$paymentPerformance = $data['payment_performance'] ?? [];
+$paymentSummary = $paymentPerformance['summary'] ?? [];
+$paymentGroups = $paymentSummary['groups'] ?? [];
+$paidCount = (int)($paymentGroups['paid_current']['count'] ?? 0);
+$notPaidCount = (int)($paymentGroups['unpaid_current']['count'] ?? 0);
+$partlyPaidCount = (int)($paymentGroups['partially_paid']['count'] ?? 0);
+$outstandingCount = (int)($paymentGroups['in_arrears']['count'] ?? 0);
+$defaultedCount = (int)($paymentGroups['defaulted']['count'] ?? 0);
+?>
+
+<div class="modern-card">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+        <div>
+            <h2 style="margin-bottom:4px;">Payment Performance</h2>
+            <p style="margin:0 0 16px; color:#6B7280; font-size:13px;">Paid vs Not Paid, outstanding balances, and recent payment activity from the same live breakdown used in Payment Management.</p>
+        </div>
+        <a class="modern-btn outline" href="/admin/payments/breakdown">Open Payment Breakdown</a>
+    </div>
+    <div class="performance-grid">
+        <div class="performance-card"><span>Paid vs Not Paid</span><strong><?php echo number_format($paidCount); ?> / <?php echo number_format($notPaidCount); ?></strong></div>
+        <div class="performance-card"><span>Partially Paid</span><strong><?php echo number_format($partlyPaidCount); ?></strong></div>
+        <div class="performance-card"><span>In Arrears</span><strong><?php echo number_format($outstandingCount); ?></strong></div>
+        <div class="performance-card"><span>Defaulted</span><strong><?php echo number_format($defaultedCount); ?></strong></div>
+        <div class="performance-card"><span>Expected Collections</span><strong>KES <?php echo number_format((float)($paymentSummary['expected_amount'] ?? 0), 0); ?></strong></div>
+        <div class="performance-card"><span>Collected Amount</span><strong>KES <?php echo number_format((float)($paymentSummary['paid_amount'] ?? 0), 0); ?></strong></div>
+        <div class="performance-card"><span>Balance</span><strong>KES <?php echo number_format((float)($paymentSummary['balance_due'] ?? 0), 0); ?></strong></div>
+        <div class="performance-card"><span>Collection Rate</span><strong><?php echo number_format((float)($paymentSummary['collection_rate'] ?? 0), 1); ?>%</strong></div>
+    </div>
+    <div class="row">
+        <div class="col-md-6">
+            <h3 style="font-size:16px; font-weight:800;">Recent Payments</h3>
+            <table class="modern-table">
+                <tbody>
+                    <?php foreach (array_slice($paymentPerformance['recent_payments'] ?? [], 0, 5) as $payment): ?>
+                        <tr>
+                            <td><?php echo htmlspecialchars(trim(($payment['first_name'] ?? '') . ' ' . ($payment['last_name'] ?? '')) ?: ($payment['member_number'] ?? 'Member')); ?></td>
+                            <td class="text-right">KES <?php echo number_format((float)($payment['amount'] ?? 0), 2); ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+        <div class="col-md-6">
+            <h3 style="font-size:16px; font-weight:800;">Recent Reconciliations</h3>
+            <table class="modern-table">
+                <tbody>
+                    <?php foreach (array_slice($paymentPerformance['recent_reconciliations'] ?? [], 0, 5) as $payment): ?>
+                        <tr>
+                            <td><?php echo htmlspecialchars($payment['mpesa_receipt_number'] ?? $payment['transaction_id'] ?? 'Payment'); ?></td>
+                            <td class="text-right"><?php echo !empty($payment['reconciled_at']) ? date('M j, Y', strtotime($payment['reconciled_at'])) : 'Matched'; ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>
 
 <!-- KPI Cards -->

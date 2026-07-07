@@ -44,6 +44,14 @@ class BulkSmsController extends BaseController
         $quickOffset = ($quickPage - 1) * $quickPerPage;
 
         $campaigns = $this->bulkSmsService->getAllCampaigns();
+        $editCampaignToOpen = null;
+        $requestedEditCampaignId = (int)($_GET['edit_campaign'] ?? 0);
+        if ($requestedEditCampaignId > 0) {
+            $editCampaignToOpen = $this->bulkSmsService->getCampaignById($requestedEditCampaignId);
+            if ($editCampaignToOpen && ($editCampaignToOpen['message_type'] ?? '') !== 'sms') {
+                $editCampaignToOpen = null;
+            }
+        }
         $queue_items = $this->bulkSmsService->getQueueItems($quickFilters, $quickPerPage, $quickOffset);
         $templates = $this->bulkSmsService->getTemplates();
         
@@ -68,7 +76,8 @@ class BulkSmsController extends BaseController
                 'per_page' => $quickPerPage,
             ],
             'templates' => $templates,
-            'stats' => $stats
+            'stats' => $stats,
+            'edit_campaign_to_open' => $editCampaignToOpen
         ];
         
         $this->view('admin.sms-campaigns', $data);
@@ -529,11 +538,48 @@ class BulkSmsController extends BaseController
         $map = [
             'active_only' => 'active',
             'defaulters' => 'defaulted',
+            'payment_paid' => 'payment_paid_current',
+            'payment_unpaid' => 'payment_unpaid_current',
+            'payment_partial' => 'payment_partially_paid',
+            'payment_arrears' => 'payment_in_arrears',
+            'payment_defaulted' => 'payment_defaulted',
             'inactive' => 'custom',
             'pending' => 'custom',
         ];
 
         return $map[$targetAudience] ?? $targetAudience;
+    }
+
+    public function createCampaignFromPaymentGroup()
+    {
+        $this->requireRole(['admin', 'super_admin', 'manager']);
+
+        try {
+            if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+                throw new Exception('Invalid request method');
+            }
+
+            $filters = [
+                'payment_group' => $this->sanitizeInput($_POST['payment_group'] ?? $_POST['group'] ?? 'unpaid_current'),
+                'search' => $this->sanitizeInput($_POST['search'] ?? ''),
+                'package' => $this->sanitizeInput($_POST['package'] ?? 'all'),
+                'amount_min' => $this->sanitizeInput($_POST['amount_min'] ?? ''),
+                'amount_max' => $this->sanitizeInput($_POST['amount_max'] ?? ''),
+                'missed_months' => $this->sanitizeInput($_POST['missed_months'] ?? ''),
+            ];
+
+            $campaignId = $this->bulkSmsService->createDraftFromPaymentGroup($filters, (int)($_SESSION['user_id'] ?? 0));
+            if (!$campaignId) {
+                throw new Exception('Failed to create draft SMS campaign');
+            }
+
+            $_SESSION['success'] = 'Draft SMS campaign created. Review the message, recipients, and schedule before sending.';
+            $this->redirect('/admin/communications/campaign/' . $campaignId);
+        } catch (Throwable $e) {
+            error_log('Create payment group SMS campaign error: ' . $e->getMessage());
+            $_SESSION['error'] = $e->getMessage();
+            $this->redirect('/admin/payments/breakdown');
+        }
     }
     
     /**
@@ -920,13 +966,52 @@ class BulkSmsController extends BaseController
             return;
         }
         
-        $recipients = $this->bulkSmsService->getCampaignRecipients($id);
+        $recipientStatus = trim((string)($_GET['recipient_status'] ?? 'all'));
+        $recipientSearch = trim((string)($_GET['recipient_search'] ?? ''));
+        $recipientPage = max(1, (int)($_GET['recipient_page'] ?? 1));
+        $recipientPerPage = 25;
+        $allRecipients = $this->bulkSmsService->getCampaignRecipients($id);
+        $filteredRecipients = array_values(array_filter($allRecipients, function ($recipient) use ($recipientStatus, $recipientSearch) {
+            if ($recipientStatus !== '' && $recipientStatus !== 'all' && ($recipient['status'] ?? 'pending') !== $recipientStatus) {
+                return false;
+            }
+            if ($recipientSearch !== '') {
+                $haystack = strtolower(implode(' ', [
+                    $recipient['first_name'] ?? '',
+                    $recipient['last_name'] ?? '',
+                    $recipient['member_number'] ?? '',
+                    $recipient['recipient_value'] ?? '',
+                    $recipient['phone'] ?? '',
+                    $recipient['email'] ?? '',
+                ]));
+                if (strpos($haystack, strtolower($recipientSearch)) === false) {
+                    return false;
+                }
+            }
+            return true;
+        }));
+        $recipientTotal = count($filteredRecipients);
+        $recipientTotalPages = max(1, (int)ceil($recipientTotal / $recipientPerPage));
+        if ($recipientPage > $recipientTotalPages) {
+            $recipientPage = $recipientTotalPages;
+        }
+        $recipients = array_slice($filteredRecipients, ($recipientPage - 1) * $recipientPerPage, $recipientPerPage);
         $stats = $this->bulkSmsService->getCampaignStats($id);
 
         $this->view('admin.campaign-details', [
             'title' => 'SMS Campaign Report - ' . $campaign['title'],
             'campaign' => $campaign,
             'recipients' => $recipients,
+            'recipient_filters' => [
+                'status' => $recipientStatus,
+                'search' => $recipientSearch,
+            ],
+            'recipient_pagination' => [
+                'current_page' => $recipientPage,
+                'total_pages' => $recipientTotalPages,
+                'total_items' => $recipientTotal,
+                'per_page' => $recipientPerPage,
+            ],
             'stats' => $stats,
             'channel' => 'sms',
             'back_url' => '/admin/sms-campaigns'
@@ -1034,6 +1119,43 @@ class BulkSmsController extends BaseController
             ]);
         } catch (Throwable $e) {
             error_log('Resend pending/failed SMS campaign error: ' . $e->getMessage());
+            $this->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    public function reuseCampaign($id)
+    {
+        $this->requireRole(['admin', 'super_admin', 'manager']);
+        header('Content-Type: application/json');
+
+        try {
+            $newCampaignId = $this->bulkSmsService->reuseCampaignAsDraft((int)$id, (int)($_SESSION['user_id'] ?? 0));
+            if (!$newCampaignId) {
+                throw new Exception('Failed to reuse this campaign');
+            }
+
+            $this->json([
+                'success' => true,
+                'message' => 'Campaign copied as a new draft with refreshed recipients.',
+                'campaign_id' => $newCampaignId,
+                'redirect_url' => '/admin/communications/campaign/' . $newCampaignId,
+            ]);
+        } catch (Throwable $e) {
+            error_log('Reuse SMS campaign error: ' . $e->getMessage());
+            $this->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    public function resendCampaignRecipient($id, $recipientId)
+    {
+        $this->requireRole(['admin', 'super_admin', 'manager']);
+        header('Content-Type: application/json');
+
+        try {
+            $result = $this->bulkSmsService->resendSingleRecipient((int)$id, (int)$recipientId);
+            $this->json($result, !empty($result['success']) ? 200 : 400);
+        } catch (Throwable $e) {
+            error_log('Resend single campaign SMS error: ' . $e->getMessage());
             $this->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }

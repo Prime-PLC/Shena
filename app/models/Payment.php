@@ -118,6 +118,7 @@ class Payment extends BaseModel
                 $payment['member_id'],
                 $payment['payment_date'] ?? $payment['created_at'] ?? date('Y-m-d H:i:s')
             );
+            $this->refreshMemberPaymentStatus((int)$payment['member_id']);
         }
 
         if (isset($payment['payment_type']) && $payment['payment_type'] === 'registration') {
@@ -130,6 +131,17 @@ class Payment extends BaseModel
         }
 
         return true;
+    }
+
+    private function refreshMemberPaymentStatus(int $memberId): void
+    {
+        try {
+            require_once __DIR__ . '/../services/PaymentStatusService.php';
+            $paymentStatusService = new PaymentStatusService();
+            $paymentStatusService->refreshMemberPaymentStatus($memberId);
+        } catch (Throwable $e) {
+            error_log('Payment status refresh failed for member ' . $memberId . ': ' . $e->getMessage());
+        }
     }
 
     /**

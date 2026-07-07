@@ -140,6 +140,8 @@ class Router
         $this->addRoute('POST', '/admin-api/members/bulk-approve', 'AdminController@bulkApproveMembers');
         $this->addRoute('POST', '/admin-api/members/bulk-reactivate', 'AdminController@bulkReactivateMembers');
         $this->addRoute('GET', '/admin/payments', 'AdminController@payments');
+        $this->addRoute('GET', '/admin/payments/breakdown', 'AdminController@paymentBreakdown');
+        $this->addRoute('POST', '/admin/payments/create-sms-campaign', 'BulkSmsController@createCampaignFromPaymentGroup');
         $this->addRoute('GET', '/admin/payments/view/{id}', 'AdminController@viewPayment');
         $this->addRoute('POST', '/admin/payments/verify', 'PaymentController@verifyAdminPayment');
         $this->addRoute('GET', '/admin/payments/search-members', 'PaymentController@searchMembers');
@@ -188,6 +190,8 @@ class Router
         $this->addRoute('GET', '/admin/communications/campaign/{id}', 'BulkSmsController@viewCampaign');
         $this->addRoute('GET', '/admin/communications/campaign/{id}/preview-recipient', 'BulkSmsController@previewCampaignRecipient');
         $this->addRoute('GET', '/admin/communications/campaign/{id}/delivery-report', 'BulkSmsController@downloadDeliveryReport');
+        $this->addRoute('POST', '/admin/communications/campaign/{id}/reuse', 'BulkSmsController@reuseCampaign');
+        $this->addRoute('POST', '/admin/communications/campaign/{id}/recipient/{recipientId}/resend', 'BulkSmsController@resendCampaignRecipient');
         $this->addRoute('POST', '/admin/communications/campaign/{id}/resend-pending-failed', 'BulkSmsController@resendPendingFailed');
         $this->addRoute('GET', '/admin/communications/templates', 'BulkSmsController@templates');
         

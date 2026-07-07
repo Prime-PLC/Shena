@@ -9,6 +9,7 @@
 require_once __DIR__ . '/../models/NotificationPreference.php';
 require_once __DIR__ . '/SmsService.php';
 require_once __DIR__ . '/NotificationService.php';
+require_once __DIR__ . '/PaymentStatusService.php';
 
 class BulkSmsService
 {
@@ -17,6 +18,7 @@ class BulkSmsService
     private $notificationService;
     private $notificationPreference;
     private $emailFallbackEnabled;
+    private $paymentStatusService;
 
     public function __construct()
     {
@@ -25,6 +27,7 @@ class BulkSmsService
         $this->notificationService = new NotificationService();
         $this->notificationPreference = new NotificationPreference();
         $this->emailFallbackEnabled = $this->getEmailFallbackSetting();
+        $this->paymentStatusService = new PaymentStatusService();
     }
 
     private function getEmailFallbackSetting()
@@ -68,6 +71,14 @@ class BulkSmsService
 
     public function getRecipients($targetAudience, $customFilters = [])
     {
+        $targetAudience = $this->normalizeAudience($targetAudience);
+        if ($this->isPaymentGroupAudience($targetAudience)) {
+            return $this->getPaymentGroupRecipients($targetAudience, $customFilters);
+        }
+        if ($this->isAgentAudience($targetAudience)) {
+            return $this->getAgentRecipients($targetAudience, $customFilters);
+        }
+
         [$sql, $params] = $this->buildRecipientQuery($targetAudience, $customFilters);
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
@@ -98,17 +109,17 @@ class BulkSmsService
         if ($targetAudience === 'active') {
             $sql .= " AND m.status = ?";
             $params[] = 'active';
+        } elseif ($targetAudience === 'inactive') {
+            $sql .= " AND m.status = ?";
+            $params[] = 'inactive';
+        } elseif ($targetAudience === 'pending') {
+            $sql .= " AND m.status = ?";
+            $params[] = 'pending';
         } elseif ($targetAudience === 'grace_period') {
             $sql .= " AND m.status = ?";
             $params[] = 'grace_period';
         } elseif ($targetAudience === 'defaulted') {
-            $sql .= " AND m.status IN ('inactive', 'grace_period', 'defaulted')
-                      AND NOT EXISTS (
-                          SELECT 1 FROM payments p
-                          WHERE p.member_id = m.id
-                            AND p.status = 'completed'
-                            AND p.created_at >= DATE_SUB(CURDATE(), INTERVAL 60 DAY)
-                      )";
+            $sql .= " AND m.status IN ('defaulted')";
         } elseif ($targetAudience === 'custom') {
             $status = $customFilters['member_status'] ?? $customFilters['status'] ?? null;
             if (!empty($status)) {
@@ -147,11 +158,93 @@ class BulkSmsService
         $map = [
             'active_only' => 'active',
             'defaulters' => 'defaulted',
-            'inactive' => 'custom',
-            'pending' => 'custom',
+            'payment_paid' => 'payment_paid_current',
+            'payment_unpaid' => 'payment_unpaid_current',
+            'payment_partial' => 'payment_partially_paid',
+            'payment_arrears' => 'payment_in_arrears',
+            'payment_defaulted' => 'payment_defaulted',
         ];
 
         return $map[$targetAudience] ?? ($targetAudience ?: 'all_members');
+    }
+
+    private function isPaymentGroupAudience(string $targetAudience): bool
+    {
+        return strpos($targetAudience, 'payment_') === 0;
+    }
+
+    private function isAgentAudience(string $targetAudience): bool
+    {
+        return in_array($targetAudience, ['agent_all', 'agent_active', 'agent_inactive', 'agent_with_members'], true);
+    }
+
+    private function getPaymentGroupRecipients(string $targetAudience, array $customFilters = []): array
+    {
+        $payment_group = substr($targetAudience, strlen('payment_'));
+        $payment_group = $payment_group === 'all' ? 'all' : $payment_group;
+        $rows = $this->paymentStatusService->getMembersByPaymentGroup($payment_group, $customFilters, 100000, 0);
+
+        return array_map(static function (array $row): array {
+            return [
+                'user_id' => $row['user_id'] ?? null,
+                'phone' => $row['phone'] ?? '',
+                'email' => $row['email'] ?? '',
+                'first_name' => $row['first_name'] ?? '',
+                'last_name' => $row['last_name'] ?? '',
+                'member_number' => $row['member_number'] ?? '',
+                'package' => $row['package'] ?? '',
+                'status' => $row['status'] ?? '',
+                'member_status' => $row['status'] ?? '',
+                'payment_group' => $row['payment_group'] ?? '',
+                'monthly_contribution' => $row['monthly_contribution'] ?? 0,
+                'paid_amount' => $row['paid_amount'] ?? 0,
+                'balance_due' => $row['balance_due'] ?? 0,
+                'amount_due' => $row['balance_due'] ?? 0,
+                'arrears_amount' => $row['arrears_amount'] ?? 0,
+                'missed_months' => $row['missed_months'] ?? 0,
+                'last_payment_date' => $row['last_payment_date'] ?? '',
+            ];
+        }, $rows);
+    }
+
+    private function getAgentRecipients(string $targetAudience, array $customFilters = []): array
+    {
+        $sql = "SELECT u.id AS user_id, u.phone, u.email, u.first_name, u.last_name,
+                       a.agent_number, a.status, a.total_members
+                FROM agents a
+                JOIN users u ON a.user_id = u.id
+                WHERE u.phone IS NOT NULL AND u.phone != ''";
+        $params = [];
+
+        if ($targetAudience === 'agent_active') {
+            $sql .= " AND a.status = ?";
+            $params[] = 'active';
+        } elseif ($targetAudience === 'agent_inactive') {
+            $sql .= " AND a.status <> ?";
+            $params[] = 'active';
+        } elseif ($targetAudience === 'agent_with_members') {
+            $sql .= " AND COALESCE(a.total_members, 0) > 0";
+        }
+
+        $sql .= " ORDER BY u.first_name ASC, u.last_name ASC, a.agent_number ASC";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+
+        return array_map(static function (array $row): array {
+            return [
+                'user_id' => $row['user_id'] ?? null,
+                'phone' => $row['phone'] ?? '',
+                'email' => $row['email'] ?? '',
+                'first_name' => $row['first_name'] ?? '',
+                'last_name' => $row['last_name'] ?? '',
+                'member_number' => $row['agent_number'] ?? '',
+                'package' => 'Agent',
+                'status' => $row['status'] ?? '',
+                'agent_number' => $row['agent_number'] ?? '',
+                'total_members' => $row['total_members'] ?? 0,
+                'amount_due' => 0,
+            ];
+        }, $stmt->fetchAll(PDO::FETCH_ASSOC));
     }
 
     public function queueRecipients($bulkMessageId, $recipients)
@@ -197,6 +290,11 @@ class BulkSmsService
             return ['success' => false, 'error' => 'Campaign not found or already completed'];
         }
 
+        if ($this->shouldRefreshRecipientsBeforeSend($campaign)) {
+            $this->refreshRecipientsForCampaign((int)$bulkMessageId, $campaign);
+            $campaign = $this->getCampaignById($bulkMessageId);
+        }
+
         $batchSize = max(1, min((int) $batchSize, 500));
         $this->updateCampaignStatus($bulkMessageId, 'sending', true);
 
@@ -205,7 +303,7 @@ $sql = "SELECT bmr.*, u.first_name, u.last_name, u.email, u.phone,
                        COALESCE(m.monthly_contribution, 0) AS amount_due
                 FROM bulk_message_recipients bmr
                 INNER JOIN users u ON bmr.user_id = u.id
-                INNER JOIN members m ON u.id = m.user_id
+                LEFT JOIN members m ON u.id = m.user_id
                 WHERE bmr.bulk_message_id = ? AND bmr.status = 'pending'
                 LIMIT ?";
         $stmt = $this->db->prepare($sql);
@@ -325,6 +423,42 @@ $sql = "SELECT bmr.*, u.first_name, u.last_name, u.email, u.phone,
             'pending_count' => (int) $counts['pending_count'],
             'processed_count' => $processedCount
         ];
+    }
+
+    private function shouldRefreshRecipientsBeforeSend(array $campaign): bool
+    {
+        if (!in_array($campaign['status'] ?? '', ['draft', 'scheduled', 'paused'], true)) {
+            return false;
+        }
+
+        $filters = $this->decodeCampaignFilters($campaign);
+        $recipientMode = $filters['recipient_mode'] ?? 'refresh recipients';
+        return $recipientMode !== 'saved list';
+    }
+
+    private function refreshRecipientsForCampaign(int $campaignId, array $campaign): void
+    {
+        $filters = $this->decodeCampaignFilters($campaign);
+        $targetAudience = $campaign['target_audience'] ?? 'all_members';
+        $recipients = $this->getRecipients($targetAudience, $filters);
+
+        $this->db->prepare("DELETE FROM bulk_message_recipients WHERE bulk_message_id = ?")->execute([$campaignId]);
+        if (!empty($recipients)) {
+            $this->queueRecipients($campaignId, $recipients);
+        } else {
+            $this->syncCampaignRecipientTotals($campaignId, 0);
+            $this->recalculateCampaignCounts($campaignId);
+        }
+    }
+
+    private function decodeCampaignFilters(array $campaign): array
+    {
+        if (empty($campaign['custom_filters'])) {
+            return [];
+        }
+
+        $decoded = json_decode((string)$campaign['custom_filters'], true);
+        return is_array($decoded) ? $decoded : [];
     }
 
     public function sendCampaignUntilComplete($bulkMessageId, $batchSize = 50, $maxBatches = 10)
@@ -857,6 +991,138 @@ $sql = "SELECT bmr.*, u.first_name, u.last_name, u.email, u.phone,
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    public function createDraftFromPaymentGroup(array $filters, int $createdBy)
+    {
+        $paymentGroup = $filters['payment_group'] ?? $filters['group'] ?? 'unpaid_current';
+        $targetAudience = 'payment_' . $paymentGroup;
+        $title = $filters['title'] ?? $this->paymentCampaignTitle($paymentGroup);
+        $message = $filters['message'] ?? $this->paymentCampaignMessage($paymentGroup);
+        $customFilters = $filters;
+        $customFilters['payment_group'] = $paymentGroup;
+        $customFilters['recipient_mode'] = 'refresh recipients';
+
+        $campaignId = $this->createCampaign([
+            'title' => $title,
+            'message' => $message,
+            'target_audience' => $targetAudience,
+            'custom_filters' => $customFilters,
+            'scheduled_at' => null,
+        ], $createdBy);
+
+        if (!$campaignId) {
+            return false;
+        }
+
+        $recipients = $this->getRecipients($targetAudience, $customFilters);
+        if (!empty($recipients)) {
+            $this->queueRecipients($campaignId, $recipients);
+        }
+
+        return $campaignId;
+    }
+
+    public function reuseCampaignAsDraft(int $campaignId, int $createdBy)
+    {
+        $campaign = $this->getCampaignById($campaignId);
+        if (!$campaign) {
+            return false;
+        }
+
+        $filters = $this->decodeCampaignFilters($campaign);
+
+        $newCampaignId = $this->createCampaign([
+            'title' => 'Copy of ' . ($campaign['title'] ?? 'SMS Campaign'),
+            'message' => $campaign['message'] ?? '',
+            'target_audience' => $campaign['target_audience'] ?? 'all_members',
+            'custom_filters' => $filters + ['recipient_mode' => 'refresh recipients'],
+            'scheduled_at' => null,
+        ], $createdBy);
+
+        if (!$newCampaignId) {
+            return false;
+        }
+
+        $recipients = $this->getRecipients($campaign['target_audience'] ?? 'all_members', $filters);
+        if (!empty($recipients)) {
+            $this->queueRecipients($newCampaignId, $recipients);
+        }
+
+        return $newCampaignId;
+    }
+
+    public function resendSingleRecipient(int $campaignId, int $recipientId)
+    {
+        $campaign = $this->getCampaignById($campaignId);
+        if (!$campaign) {
+            return ['success' => false, 'message' => 'Campaign not found'];
+        }
+
+        $sql = "SELECT bmr.*, u.first_name, u.last_name, u.email, u.phone,
+                       m.member_number, m.package, m.status AS member_status,
+                       COALESCE(m.monthly_contribution, 0) AS amount_due
+                FROM bulk_message_recipients bmr
+                JOIN users u ON bmr.user_id = u.id
+                LEFT JOIN members m ON u.id = m.user_id
+                WHERE bmr.bulk_message_id = ? AND bmr.id = ?
+                LIMIT 1";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([$campaignId, $recipientId]);
+        $recipient = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$recipient) {
+            return ['success' => false, 'message' => 'Recipient not found'];
+        }
+        if (!in_array($recipient['status'], ['failed', 'undelivered', 'expired', 'rejected', 'unknown'], true)) {
+            return ['success' => false, 'message' => 'Only failed or undelivered SMS can be resent individually'];
+        }
+
+        $phone = $this->smsService->formatPhoneNumber($recipient['recipient_value'] ?? $recipient['phone'] ?? '');
+        $message = $this->replacePlaceholders($campaign['message'] ?? '', $recipient);
+        if (!$this->smsService->validatePhoneNumber($phone)) {
+            $this->updateRecipientStatus($recipientId, 'failed', 'invalid_phone', 'failed');
+            return ['success' => false, 'message' => 'Recipient phone number is invalid'];
+        }
+
+        $this->updateRecipientStatus($recipientId, 'pending', null, null, null, null, null, null);
+        $result = $this->smsService->sendSms($phone, $message);
+        if (!empty($result['success'])) {
+            $this->updateRecipientStatus(
+                $recipientId,
+                'submitted',
+                null,
+                'sms',
+                $result['provider_message_id'] ?? $result['data']['transactionId'] ?? null,
+                $result['provider_status'] ?? null,
+                $result['provider_cause'] ?? null,
+                $result
+            );
+            $this->recalculateCampaignCounts($campaignId);
+            return ['success' => true, 'message' => 'SMS resent to this recipient. Delivery confirmation will update after sync.'];
+        }
+
+        $this->updateRecipientStatus($recipientId, 'failed', $result['error'] ?? 'Failed to resend SMS', 'failed', null, null, null, $result);
+        $this->recalculateCampaignCounts($campaignId);
+        return ['success' => false, 'message' => $result['error'] ?? 'Failed to resend SMS'];
+    }
+
+    private function paymentCampaignTitle(string $paymentGroup): string
+    {
+        return $this->paymentStatusService->labelForGroup($paymentGroup) . ' Reminder';
+    }
+
+    private function paymentCampaignMessage(string $paymentGroup): string
+    {
+        $templates = [
+            'paid_current' => 'Dear {first_name}, thank you for keeping your SHENA contribution up to date. We appreciate your loyalty.',
+            'partially_paid' => 'Dear {first_name}, thank you for your payment. Your remaining payment balance is KES {amount_due}. Please clear it when possible.',
+            'in_arrears' => 'Dear {first_name}, your SHENA outstanding balance is KES {arrears_amount} for {missed_months} missed month(s). Please clear it to keep your benefits active.',
+            'defaulted' => 'Dear {first_name}, your SHENA account has an outstanding balance of KES {arrears_amount}. Please contact us or clear the balance to restore your account.',
+            'unpaid_current' => 'Dear {first_name}, our records show your monthly SHENA contribution of KES {monthly_contribution} has not been received. Please pay by Paybill 4163987.',
+        ];
+
+        return $templates[$paymentGroup] ?? 'Dear {first_name}, this is a SHENA payment update. Your current payment balance is KES {amount_due}.';
+    }
+
     public function cancelCampaign($campaignId)
     {
         $sql = "UPDATE bulk_messages SET status = 'cancelled' WHERE id = ?
@@ -875,6 +1141,7 @@ $sql = "SELECT bmr.*, u.first_name, u.last_name, u.email, u.phone,
     public function getCampaignRecipients($campaignId, $status = null)
     {
         $sql = "SELECT bmr.*, u.first_name, u.last_name, u.phone, u.email,
+                       m.id AS member_id,
                        m.member_number, m.package, m.status AS member_status,
                        bmr.delivery_method, bmr.email_fallback_sent, bmr.email_sent_at,
                        bmr.provider_message_id, bmr.provider_status, bmr.provider_cause,
@@ -882,7 +1149,7 @@ $sql = "SELECT bmr.*, u.first_name, u.last_name, u.email, u.phone,
                        bmr.dlr_checked_at, bmr.dlr_attempts
                 FROM bulk_message_recipients bmr
                 JOIN users u ON bmr.user_id = u.id
-                JOIN members m ON u.id = m.user_id
+                LEFT JOIN members m ON u.id = m.user_id
                 WHERE bmr.bulk_message_id = ?";
 
         $params = [$campaignId];
@@ -1254,6 +1521,18 @@ $sql = "SELECT bmr.*, u.first_name, u.last_name, u.email, u.phone,
             'package' => $recipient['package'] ?? '',
             'status' => $recipient['member_status'] ?? $recipient['status'] ?? '',
             'amount_due' => number_format((float) ($recipient['amount_due'] ?? 0), 2),
+            'monthly_contribution' => number_format((float) ($recipient['monthly_contribution'] ?? $recipient['amount_due'] ?? 0), 2),
+            'contribution' => number_format((float) ($recipient['monthly_contribution'] ?? $recipient['amount_due'] ?? 0), 2),
+            'paid_amount' => number_format((float) ($recipient['paid_amount'] ?? 0), 2),
+            'balance_due' => number_format((float) ($recipient['balance_due'] ?? $recipient['amount_due'] ?? 0), 2),
+            'balance' => number_format((float) ($recipient['balance_due'] ?? $recipient['amount_due'] ?? 0), 2),
+            'arrears_amount' => number_format((float) ($recipient['arrears_amount'] ?? $recipient['amount_due'] ?? 0), 2),
+            'outstanding_balance' => number_format((float) ($recipient['arrears_amount'] ?? $recipient['amount_due'] ?? 0), 2),
+            'missed_months' => (string)($recipient['missed_months'] ?? 0),
+            'last_payment_date' => $recipient['last_payment_date'] ?? '',
+            'agent_number' => $recipient['agent_number'] ?? '',
+            'agent_no' => $recipient['agent_number'] ?? '',
+            'total_members' => (string)($recipient['total_members'] ?? ''),
         ];
 
         foreach ($data as $key => $value) {

@@ -41,7 +41,9 @@ $checks = [
         'file' => 'resources/views/admin/sms-campaigns.php',
         'mustContain' => [
             '<option value="active">Active Members Only</option>',
-            '<option value="defaulted">Payment Defaulters</option>',
+            '<option value="payment_unpaid_current">Not Paid</option>',
+            '<option value="payment_defaulted">Defaulted</option>',
+            '<option value="agent_all">All Agents</option>',
         ],
         'mustNotContain' => [
             'value="active_only"',

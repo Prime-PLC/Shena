@@ -72,7 +72,7 @@
                                     Grace Period Members (<?= number_format($stats['grace_period_count'] ?? 0) ?>)
                                 </option>
                                 <option value="defaulted" <?= old('target_audience') === 'defaulted' ? 'selected' : '' ?>>
-                                    Defaulted Members (<?= number_format($stats['defaulted_count'] ?? 0) ?>)
+                                    Defaulted (<?= number_format($stats['defaulted_count'] ?? 0) ?>)
                                 </option>
                                 <option value="custom" <?= old('target_audience') === 'custom' ? 'selected' : '' ?>>
                                     Custom Filter...

@@ -7,6 +7,7 @@ class PaymentController extends BaseController
     private $paymentService;
     private $memberModel;
     private $reconciliationService;
+    private $paymentStatusService;
     
     public function __construct()
     {
@@ -14,6 +15,8 @@ class PaymentController extends BaseController
         $this->paymentService = new PaymentService();
         $this->memberModel = new Member();
         $this->reconciliationService = new PaymentReconciliationService();
+        require_once __DIR__ . '/../services/PaymentStatusService.php';
+        $this->paymentStatusService = new PaymentStatusService();
     }
     
     public function initiatePayment()
@@ -424,8 +427,9 @@ class PaymentController extends BaseController
         }
         
         $success = $this->reconciliationService->manualReconciliation($paymentId, $memberId, $userId, $notes);
-        
+
         if ($success) {
+            $this->refreshMemberPaymentStatus((int)$memberId);
             $this->json([
                 'success' => true,
                 'message' => 'Payment successfully reconciled with member account'
@@ -530,6 +534,7 @@ class PaymentController extends BaseController
                     'auto_matched' => 1,
                     'reconciled_at' => date('Y-m-d H:i:s')
                 ]);
+                $this->refreshMemberPaymentStatus((int)($payment['member_id'] ?? $memberId));
 
                 $this->json([
                     'success' => true,
@@ -557,6 +562,7 @@ class PaymentController extends BaseController
             ]);
 
             $paymentModel->confirmPayment($paymentId, $mpesaReceipt ?: null);
+            $this->refreshMemberPaymentStatus((int)$memberId);
 
             $this->json([
                 'success' => true,
@@ -590,6 +596,9 @@ class PaymentController extends BaseController
             );
 
             if ($result['success']) {
+                if (!empty($memberId)) {
+                    $this->refreshMemberPaymentStatus((int)$memberId);
+                }
                 if (!$wantsJson) {
                     $_SESSION['success'] = $result['message'];
                     unset($_SESSION['pending_validation_error'], $_SESSION['pending_validation_member_id'], $_SESSION['pending_validation_code']);
@@ -623,6 +632,19 @@ class PaymentController extends BaseController
         return strcasecmp($requestedWith, 'XMLHttpRequest') === 0
             || stripos($accept, 'application/json') !== false
             || stripos($contentType, 'application/json') !== false;
+    }
+
+    private function refreshMemberPaymentStatus(int $memberId): void
+    {
+        if ($memberId <= 0) {
+            return;
+        }
+
+        try {
+            $this->paymentStatusService->refreshMemberPaymentStatus($memberId);
+        } catch (Throwable $e) {
+            error_log('Payment status refresh failed for member ' . $memberId . ': ' . $e->getMessage());
+        }
     }
 
     /**

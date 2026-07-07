@@ -64,7 +64,7 @@ $checks = [
         'mustContain' => [
             '.entity-modal .form-input',
             '.entity-modal .form-select',
-            '.member-quick-panel .modal-content',
+            '.entity-modal .modal-content',
             'grid-template-columns: repeat(auto-fit, minmax(240px, 1fr))',
         ],
     ],

@@ -122,6 +122,45 @@
     .status-pill.unknown { background: #FEE2E2; color: #991B1B; }
     .status-pill.pending { background: #FEF3C7; color: #92400E; }
     .status-pill.skipped { background: #E5E7EB; color: #374151; }
+
+    .workspace-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 14px;
+    }
+
+    .recipient-filter-form {
+        display: grid;
+        grid-template-columns: minmax(220px, 1fr) minmax(160px, 220px) auto auto;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 16px;
+    }
+
+    .recipient-filter-form input,
+    .recipient-filter-form select {
+        border: 1px solid #D1D5DB;
+        border-radius: 8px;
+        padding: 10px 12px;
+        font-size: 14px;
+    }
+
+    .campaignRecipientPagination {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-top: 14px;
+        color: #6B7280;
+        font-size: 13px;
+    }
+
+    @media (max-width: 760px) {
+        .recipient-filter-form {
+            grid-template-columns: 1fr;
+        }
+    }
 </style>
 
 <?php
@@ -137,6 +176,20 @@ $undelivered = (int)($stats['undelivered'] ?? $campaign['undelivered_count'] ?? 
 $failed = (int)($stats['failed'] ?? $campaign['failed_count'] ?? 0);
 $pending = (int)($stats['pending'] ?? max(0, $total - $sent - $failed));
 $skipped = (int)($stats['skipped'] ?? 0);
+$recipientFilters = $recipient_filters ?? ['status' => 'all', 'search' => ''];
+$recipientPagination = $recipient_pagination ?? ['current_page' => 1, 'total_pages' => 1, 'total_items' => count($recipients), 'per_page' => 25];
+$recipientPageUrl = function (int $page) use ($campaign, $recipientFilters) {
+    return '/admin/communications/campaign/' . (int)($campaign['id'] ?? 0) . '?' . http_build_query([
+        'recipient_page' => max(1, $page),
+        'recipient_status' => $recipientFilters['status'] ?? 'all',
+        'recipient_search' => $recipientFilters['search'] ?? '',
+    ]);
+};
+$customFilters = [];
+if (!empty($campaign['custom_filters'])) {
+    $decodedFilters = json_decode((string)$campaign['custom_filters'], true);
+    $customFilters = is_array($decodedFilters) ? $decodedFilters : [];
+}
 ?>
 
 <div class="campaign-report-header">
@@ -146,6 +199,12 @@ $skipped = (int)($stats['skipped'] ?? 0);
     </div>
     <div style="display:flex; gap:10px; flex-wrap:wrap;">
         <?php if (($channel ?? '') === 'sms'): ?>
+            <button type="button" class="report-btn" onclick="reuseCampaign(<?php echo (int)($campaign['id'] ?? 0); ?>)">
+                <i class="fas fa-copy"></i> Reuse Campaign
+            </button>
+            <button type="button" class="report-btn" onclick="processScheduledCampaigns()">
+                <i class="fas fa-clock"></i> Process Due Campaigns
+            </button>
             <a href="/admin/communications/campaign/<?php echo (int)($campaign['id'] ?? 0); ?>/delivery-report" class="report-btn">
                 <i class="fas fa-file-download"></i> Download Delivery Report
             </a>
@@ -161,6 +220,38 @@ $skipped = (int)($stats['skipped'] ?? 0);
         <a href="<?php echo htmlspecialchars($backUrl); ?>" class="report-btn">
             <i class="fas fa-arrow-left"></i> Back to Campaigns
         </a>
+    </div>
+</div>
+
+<div class="report-table-card" style="margin-bottom:24px;">
+    <h2 style="font-size: 18px; font-weight: 800; margin: 0 0 12px;">Campaign Details</h2>
+    <div class="report-grid" style="margin-bottom:0;">
+        <div class="report-card">
+            <div class="report-label">Audience</div>
+            <div style="font-weight:800;"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $campaign['target_audience'] ?? 'All Members'))); ?></div>
+        </div>
+        <div class="report-card">
+            <div class="report-label">Schedule</div>
+            <div style="font-weight:800;"><?php echo !empty($campaign['scheduled_at']) ? date('M j, Y H:i', strtotime($campaign['scheduled_at'])) : 'Not scheduled'; ?></div>
+        </div>
+        <div class="report-card">
+            <div class="report-label">Filters</div>
+            <div style="font-weight:800;"><?php echo empty($customFilters) ? 'No extra filters' : htmlspecialchars(implode(', ', array_map('strval', array_filter($customFilters)))); ?></div>
+        </div>
+    </div>
+    <div style="margin-top:16px;">
+        <div class="report-label">Message Preview</div>
+        <div style="background:#F9FAFB; border:1px solid #E5E7EB; border-radius:10px; padding:14px; white-space:pre-wrap;"><?php echo htmlspecialchars($campaign['message'] ?? ''); ?></div>
+    </div>
+    <div class="workspace-actions">
+        <?php if (in_array(($campaign['status'] ?? ''), ['draft', 'scheduled', 'paused'], true)): ?>
+            <a class="report-btn" href="/admin/sms-campaigns?edit_campaign=<?php echo (int)($campaign['id'] ?? 0); ?>"><i class="fas fa-edit"></i> Edit Campaign</a>
+            <button type="button" class="report-btn" onclick="sendCampaignNow(<?php echo (int)($campaign['id'] ?? 0); ?>)"><i class="fas fa-paper-plane"></i> Send Now</button>
+        <?php endif; ?>
+        <?php if (in_array(($campaign['status'] ?? ''), ['draft', 'scheduled', 'paused'], true)): ?>
+            <button type="button" class="report-btn" onclick="cancelCampaign(<?php echo (int)($campaign['id'] ?? 0); ?>)"><i class="fas fa-ban"></i> Cancel</button>
+        <?php endif; ?>
+        <button type="button" class="report-btn" onclick="deleteCampaign(<?php echo (int)($campaign['id'] ?? 0); ?>)"><i class="fas fa-trash"></i> Delete</button>
     </div>
 </div>
 
@@ -189,6 +280,16 @@ $skipped = (int)($stats['skipped'] ?? 0);
 
 <div class="report-table-card">
     <h2 style="font-size: 18px; font-weight: 800; margin: 0 0 16px;">Recipient Delivery Log</h2>
+    <form class="recipient-filter-form" method="GET" action="/admin/communications/campaign/<?php echo (int)($campaign['id'] ?? 0); ?>">
+        <input id="recipientSearchInput" type="search" name="recipient_search" value="<?php echo htmlspecialchars($recipientFilters['search'] ?? ''); ?>" placeholder="Search recipient, phone, member or agent number">
+        <select id="recipientStatusFilter" name="recipient_status">
+            <?php foreach (['all' => 'All recipients', 'pending' => 'Pending', 'submitted' => 'Submitted', 'delivered' => 'Delivered', 'failed' => 'Failed', 'undelivered' => 'Not Delivered', 'skipped' => 'Skipped / Invalid'] as $value => $label): ?>
+                <option value="<?php echo $value; ?>" <?php echo (($recipientFilters['status'] ?? 'all') === $value) ? 'selected' : ''; ?>><?php echo $label; ?></option>
+            <?php endforeach; ?>
+        </select>
+        <button type="submit" class="report-btn">Apply</button>
+        <a class="report-btn" href="/admin/communications/campaign/<?php echo (int)($campaign['id'] ?? 0); ?>">Reset</a>
+    </form>
     <div class="report-table-wrap">
         <table class="report-table">
             <thead>
@@ -206,12 +307,13 @@ $skipped = (int)($stats['skipped'] ?? 0);
                     <th>Delivered At</th>
                     <th>DLR Checked</th>
                     <th>Error</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
                 <?php if (empty($recipients)): ?>
                     <tr>
-                        <td colspan="13" style="text-align:center; color:#6B7280; padding:32px;">No recipient records found.</td>
+                        <td colspan="14" style="text-align:center; color:#6B7280; padding:32px;">No recipient records found.</td>
                     </tr>
                 <?php else: ?>
                     <?php foreach ($recipients as $recipient): ?>
@@ -235,11 +337,39 @@ $skipped = (int)($stats['skipped'] ?? 0);
                             <td><?php echo !empty($recipient['delivered_at']) ? date('M j, Y H:i', strtotime($recipient['delivered_at'])) : 'N/A'; ?></td>
                             <td><?php echo !empty($recipient['dlr_checked_at']) ? date('M j, Y H:i', strtotime($recipient['dlr_checked_at'])) : 'N/A'; ?></td>
                             <td><?php echo htmlspecialchars($recipient['error_message'] ?? ''); ?></td>
+                            <td>
+                                <?php if (!empty($recipient['member_id'])): ?>
+                                    <a class="report-btn" href="/admin/members/view/<?php echo (int)$recipient['member_id']; ?>">View recipient</a>
+                                <?php else: ?>
+                                    <span class="report-btn" style="opacity:.65;">Agent recipient</span>
+                                <?php endif; ?>
+                                <?php if (in_array(($recipient['status'] ?? ''), ['failed', 'undelivered', 'expired', 'rejected', 'unknown'], true)): ?>
+                                    <button type="button" class="report-btn" onclick="resendCampaignRecipient(<?php echo (int)($campaign['id'] ?? 0); ?>, <?php echo (int)($recipient['id'] ?? 0); ?>)">Resend SMS</button>
+                                <?php endif; ?>
+                            </td>
                         </tr>
                     <?php endforeach; ?>
                 <?php endif; ?>
             </tbody>
         </table>
+    </div>
+    <div class="campaignRecipientPagination" id="campaignRecipientPagination">
+        <span>Viewing <?php echo count($recipients); ?> of <?php echo (int)($recipientPagination['total_items'] ?? 0); ?> recipients</span>
+        <div style="display:flex; gap:8px; align-items:center;">
+            <?php $currentRecipientPage = (int)($recipientPagination['current_page'] ?? 1); ?>
+            <?php $totalRecipientPages = (int)($recipientPagination['total_pages'] ?? 1); ?>
+            <?php if ($currentRecipientPage > 1): ?>
+                <a class="report-btn" href="<?php echo htmlspecialchars($recipientPageUrl($currentRecipientPage - 1)); ?>">Previous</a>
+            <?php else: ?>
+                <span class="report-btn" style="opacity:.55;">Previous</span>
+            <?php endif; ?>
+            <span>Page <?php echo (int)($recipientPagination['current_page'] ?? 1); ?> of <?php echo (int)($recipientPagination['total_pages'] ?? 1); ?></span>
+            <?php if ($currentRecipientPage < $totalRecipientPages): ?>
+                <a class="report-btn" href="<?php echo htmlspecialchars($recipientPageUrl($currentRecipientPage + 1)); ?>">Next</a>
+            <?php else: ?>
+                <span class="report-btn" style="opacity:.55;">Next</span>
+            <?php endif; ?>
+        </div>
     </div>
 </div>
 
@@ -293,6 +423,90 @@ function syncDeliveryStatuses() {
         } else {
             ShenaApp.showNotification(data.message || 'Failed to sync delivery statuses', 'error');
         }
+    })
+    .catch(() => ShenaApp.showNotification('Network error occurred', 'error'));
+}
+
+function reuseCampaign(id) {
+    fetch('/admin/communications/campaign/' + id + '/reuse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.redirect_url) {
+            window.location.href = data.redirect_url;
+            return;
+        }
+        ShenaApp.showNotification(data.message || 'Failed to reuse campaign', data.success ? 'success' : 'error');
+    })
+    .catch(() => ShenaApp.showNotification('Network error occurred', 'error'));
+}
+
+function resendCampaignRecipient(campaignId, recipientId) {
+    fetch('/admin/communications/campaign/' + campaignId + '/recipient/' + recipientId + '/resend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+    })
+    .then(response => response.json())
+    .then(data => {
+        ShenaApp.showNotification(data.message || (data.success ? 'SMS resent' : 'Failed to resend SMS'), data.success ? 'success' : 'error');
+        if (data.success) setTimeout(() => window.location.reload(), 900);
+    })
+    .catch(() => ShenaApp.showNotification('Network error occurred', 'error'));
+}
+
+function sendCampaignNow(id) {
+    fetch('/admin/communications/send-campaign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campaign_id: id })
+    })
+    .then(response => response.json())
+    .then(data => {
+        ShenaApp.showNotification(data.message || (data.success ? 'Campaign submitted' : 'Failed to send campaign'), data.success ? 'success' : 'error');
+        if (data.success) setTimeout(() => window.location.reload(), 900);
+    })
+    .catch(() => ShenaApp.showNotification('Network error occurred', 'error'));
+}
+
+function processScheduledCampaigns() {
+    fetch('/admin/communications/process-scheduled-campaigns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+    })
+    .then(response => response.json())
+    .then(data => ShenaApp.showNotification(data.message || 'Due campaigns processed', data.success ? 'success' : 'error'))
+    .catch(() => ShenaApp.showNotification('Network error occurred', 'error'));
+}
+
+function cancelCampaign(id) {
+    fetch('/admin/communications/cancel-campaign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campaign_id: id })
+    })
+    .then(response => response.json())
+    .then(data => {
+        ShenaApp.showNotification(data.message || (data.success ? 'Campaign cancelled' : 'Failed to cancel campaign'), data.success ? 'success' : 'error');
+        if (data.success) setTimeout(() => window.location.reload(), 900);
+    })
+    .catch(() => ShenaApp.showNotification('Network error occurred', 'error'));
+}
+
+function deleteCampaign(id) {
+    fetch('/admin/communications/delete-campaign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campaign_id: id, confirm_delete: true })
+    })
+    .then(response => response.json())
+    .then(data => {
+        ShenaApp.showNotification(data.message || (data.success ? 'Campaign deleted' : 'Failed to delete campaign'), data.success ? 'success' : 'error');
+        if (data.success) window.location.href = '/admin/sms-campaigns';
     })
     .catch(() => ShenaApp.showNotification('Network error occurred', 'error'));
 }

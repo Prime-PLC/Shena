@@ -32,8 +32,9 @@ $assertContains($smsService, 'CURLOPT_SSL_VERIFYPEER, true', 'SmsService should 
 $assertContains($bulkSmsService, "'submitted'", 'Bulk SMS service should use submitted status.');
 $assertContains($bulkSmsService, 'syncDeliveryStatuses', 'Bulk SMS service should sync provider delivery reports.');
 $assertContains($bulkSmsService, "status = 'submitted'", 'DLR sync should process submitted records.');
-$assertContains($bulkSmsService, "m.status IN ('inactive', 'grace_period', 'defaulted')", 'Defaulter targeting should match payment reconciliation status scope.');
-$assertContains($bulkSmsService, "DATE_SUB(CURDATE(), INTERVAL 60 DAY)", 'Defaulter targeting should exclude recently paid members.');
+$assertContains($bulkSmsService, 'PaymentStatusService', 'Defaulter targeting should use shared payment deadline grouping.');
+$assertContains($bulkSmsService, 'payment_defaulted', 'Payment defaulter campaigns should target the calculated defaulted payment group.');
+$assertNotContains($bulkSmsService, "DATE_SUB(CURDATE(), INTERVAL 60 DAY)", 'Defaulter targeting should not use rough 60-day no-payment grouping.');
 $assertNotContains($bulkSmsService, "status = 'sent', sent_at", 'Campaign send path should not mark provider submissions as sent.');
 
 $assertContains($controller, 'syncDeliveryStatuses', 'Controller should expose manual DLR sync.');

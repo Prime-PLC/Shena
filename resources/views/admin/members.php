@@ -366,6 +366,12 @@ $buildMemberFilterUrl = function (string $targetStatus) use ($search, $package) 
         max-width: 860px;
     }
 
+    .entity-modal .modal-content {
+        border: 0;
+        border-radius: 14px;
+        overflow: hidden;
+    }
+
     .entity-modal .modal-header {
         background: #7F3D9E;
         color: white;
@@ -1711,6 +1717,8 @@ function setText(id, value) {
     const el = document.getElementById(id);
     if (el) el.textContent = value || 'N/A';
 }
+
+const memberSearchForm = document.getElementById('memberSearchForm');
 
 function openMemberModal(button) {
     const member = JSON.parse(button.getAttribute('data-member') || '{}');

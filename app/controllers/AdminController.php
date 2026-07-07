@@ -4,6 +4,7 @@
  */
 require_once __DIR__ . '/../services/ReportService.php';
 require_once __DIR__ . '/../services/PaymentReconciliationService.php';
+require_once __DIR__ . '/../services/PaymentStatusService.php';
 require_once __DIR__ . '/../services/InAppNotificationService.php';
 require_once __DIR__ . '/../services/SmsService.php';
 require_once __DIR__ . '/../helpers/ReportDocumentTemplate.php';
@@ -18,6 +19,7 @@ class AdminController extends BaseController
     private $payoutRequestModel;
     private $corporateMemberModel;
     private $beneficiaryModel;
+    private $paymentStatusService;
 
     public function __construct()
     {
@@ -30,6 +32,7 @@ class AdminController extends BaseController
         $this->payoutRequestModel = null;
         $this->corporateMemberModel = null;
         $this->beneficiaryModel = null;
+        $this->paymentStatusService = null;
     }
 
     private function initAdminModels()
@@ -54,6 +57,9 @@ class AdminController extends BaseController
         }
         if ($this->beneficiaryModel === null) {
             $this->beneficiaryModel = new Beneficiary();
+        }
+        if ($this->paymentStatusService === null) {
+            $this->paymentStatusService = new PaymentStatusService();
         }
     }
 
@@ -1639,6 +1645,7 @@ class AdminController extends BaseController
         $unmatchedPayments = $reconciliationService->getUnmatchedPayments();
         $auditLogs = $reconciliationService->getRecentReconciliationLogs(5);
         $paymentSummary = $this->getAdminPaymentSummary($reconStats ?? []);
+        $paymentBreakdownSummary = $this->paymentStatusService->getPaymentBreakdownSummary($filters);
         $totalFilteredPayments = $this->paymentModel->getAllPaymentsWithDetailsCount($filters);
         $totalPaymentPages = max(1, (int)ceil($totalFilteredPayments / $perPage));
         if ($page > $totalPaymentPages) {
@@ -1659,6 +1666,9 @@ class AdminController extends BaseController
                 'total_items' => $totalFilteredPayments,
             ],
             'paymentSummary' => $paymentSummary,
+            'payment_breakdown_summary' => $paymentBreakdownSummary,
+            'payment_group_rows' => [],
+            'selected_payment_group' => 'all',
             'totalPayments' => $paymentSummary['totalPayments'],
             'monthlyPayments' => $paymentSummary['monthlyPayments'],
             'pendingReconciliation' => $paymentSummary['pendingReconciliation'],
@@ -1668,6 +1678,63 @@ class AdminController extends BaseController
         ];
 
         $this->view('admin.payments', $data);
+    }
+
+    public function paymentBreakdown()
+    {
+        $this->requireAdminAccess();
+
+        $group = $this->queryString('group', 'all');
+        $filters = [
+            'search' => $this->queryString('search'),
+            'package' => $this->queryString('package', 'all'),
+            'payment_method' => $this->queryString('payment_method', 'all'),
+            'amount_min' => $this->queryString('amount_min'),
+            'amount_max' => $this->queryString('amount_max'),
+            'missed_months' => $this->queryString('missed_months'),
+        ];
+        $page = max(1, (int)($_GET['page'] ?? 1));
+        $perPage = max(10, min(100, (int)($_GET['per_page'] ?? 50)));
+        $offset = ($page - 1) * $perPage;
+        $selectedGroupTotals = $this->paymentStatusService->getPaymentGroupTotals($group, $filters);
+        $totalRows = (int)($selectedGroupTotals['count'] ?? 0);
+        $totalPages = max(1, (int)ceil($totalRows / $perPage));
+        if ($page > $totalPages) {
+            $page = $totalPages;
+            $offset = ($page - 1) * $perPage;
+        }
+
+        $reconciliationService = new PaymentReconciliationService();
+        $reconStats = $reconciliationService->getReconciliationStats();
+        $paymentSummary = $this->getAdminPaymentSummary($reconStats ?? []);
+
+        $breakdownSummary = $this->paymentStatusService->getPaymentBreakdownSummary($filters);
+        if ($group !== '' && $group !== 'all' && isset($breakdownSummary['groups'][$group])) {
+            $breakdownSummary['groups'][$group]['count'] = $totalRows;
+            $breakdownSummary['groups'][$group]['balance_due'] = (float)($selectedGroupTotals['balance_due'] ?? 0);
+        }
+
+        $this->view('admin.payments', [
+            'title' => 'Payment Breakdown - Admin',
+            'payments' => [],
+            'payment_filters' => ['status' => 'all'] + $filters,
+            'payment_pagination' => [
+                'current_page' => $page,
+                'total_pages' => $totalPages,
+                'per_page' => $perPage,
+                'total_items' => $totalRows,
+            ],
+            'paymentSummary' => $paymentSummary,
+            'payment_breakdown_summary' => $breakdownSummary,
+            'payment_group_rows' => $this->paymentStatusService->getMembersByPaymentGroup($group, $filters, $perPage, $offset),
+            'selected_payment_group' => $group,
+            'totalPayments' => $paymentSummary['totalPayments'],
+            'monthlyPayments' => $paymentSummary['monthlyPayments'],
+            'pendingReconciliation' => $paymentSummary['pendingReconciliation'],
+            'recon_stats' => $reconStats ?? [],
+            'unmatched_payments' => $reconciliationService->getUnmatchedPayments(),
+            'audit_logs' => $reconciliationService->getRecentReconciliationLogs(5),
+        ]);
     }
 
     private function queryString(string $key, string $default = ''): string
@@ -3551,6 +3618,7 @@ class AdminController extends BaseController
     public function viewFinancialDashboard()
     {
         $this->requireAdminAccess();
+        $this->initAdminModels();
 
         $db = Database::getInstance()->getConnection();
 
@@ -3558,21 +3626,31 @@ class AdminController extends BaseController
         $fromDate = $_GET['from_date'] ?? date('Y-m-01');
         $toDate = $_GET['to_date'] ?? date('Y-m-d');
 
-        // Get KPIs
+        // Get KPIs from the authoritative payment and commission records.
         $stmt = $db->prepare("
             SELECT
-                SUM(CASE WHEN transaction_type = 'payment' THEN amount ELSE 0 END) as total_payments,
-                SUM(CASE WHEN transaction_type = 'commission' THEN amount ELSE 0 END) as total_commissions,
-                SUM(CASE WHEN transaction_type = 'upgrade' THEN amount ELSE 0 END) as total_upgrades,
-                SUM(CASE WHEN transaction_type = 'refund' THEN amount ELSE 0 END) as total_refunds,
-                COUNT(DISTINCT CASE WHEN transaction_type = 'payment' THEN member_id END) as paying_members,
-                COUNT(DISTINCT CASE WHEN transaction_type = 'commission' THEN agent_id END) as earning_agents
-            FROM financial_transactions
-            WHERE DATE(transaction_date) BETWEEN ? AND ?
-            AND status = 'completed'
+                COALESCE(SUM(CASE WHEN payment_type IN ('monthly', 'registration', 'reactivation') THEN amount ELSE 0 END), 0) as total_payments,
+                COALESCE(SUM(CASE WHEN payment_type NOT IN ('monthly', 'registration', 'reactivation') OR payment_type IS NULL THEN amount ELSE 0 END), 0) as total_upgrades,
+                COUNT(DISTINCT member_id) as paying_members
+            FROM payments
+            WHERE DATE(COALESCE(payment_date, created_at)) BETWEEN ? AND ?
+              AND status = 'completed'
         ");
         $stmt->execute([$fromDate, $toDate]);
         $kpis = $stmt->fetch(PDO::FETCH_ASSOC);
+        $stmt = $db->prepare("
+            SELECT
+                COALESCE(SUM(commission_amount), 0) as total_commissions,
+                COUNT(DISTINCT agent_id) as earning_agents
+            FROM agent_commissions
+            WHERE status = 'paid'
+              AND DATE(COALESCE(paid_at, created_at)) BETWEEN ? AND ?
+        ");
+        $stmt->execute([$fromDate, $toDate]);
+        $commissionKpis = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+        $kpis['total_commissions'] = (float)($commissionKpis['total_commissions'] ?? 0);
+        $kpis['earning_agents'] = (int)($commissionKpis['earning_agents'] ?? 0);
+        $kpis['total_refunds'] = 0;
 
         $kpis['net_revenue'] = ($kpis['total_payments'] + $kpis['total_upgrades']) -
                                ($kpis['total_commissions'] + $kpis['total_refunds']);
@@ -3580,16 +3658,55 @@ class AdminController extends BaseController
         $kpis['total_revenue'] = $kpis['total_payments'] + $kpis['total_upgrades'];
 
         // Get monthly summary
-        $stmt = $db->query("
-            SELECT * FROM vw_financial_summary
-            ORDER BY month DESC
+        $stmt = $db->prepare("
+            SELECT
+                p.month,
+                p.total_payments,
+                COALESCE(c.total_commissions, 0) as total_commissions,
+                p.total_upgrades,
+                0 as total_refunds,
+                p.paying_members,
+                COALESCE(c.earning_agents, 0) as earning_agents
+            FROM (
+                SELECT
+                    DATE_FORMAT(COALESCE(payment_date, created_at), '%Y-%m') as month,
+                    COALESCE(SUM(CASE WHEN payment_type IN ('monthly', 'registration', 'reactivation') THEN amount ELSE 0 END), 0) as total_payments,
+                    COALESCE(SUM(CASE WHEN payment_type NOT IN ('monthly', 'registration', 'reactivation') OR payment_type IS NULL THEN amount ELSE 0 END), 0) as total_upgrades,
+                    COUNT(DISTINCT member_id) as paying_members
+                FROM payments
+                WHERE status = 'completed'
+                GROUP BY DATE_FORMAT(COALESCE(payment_date, created_at), '%Y-%m')
+            ) p
+            LEFT JOIN (
+                SELECT
+                    DATE_FORMAT(COALESCE(paid_at, created_at), '%Y-%m') as month,
+                    COALESCE(SUM(commission_amount), 0) as total_commissions,
+                    COUNT(DISTINCT agent_id) as earning_agents
+                FROM agent_commissions
+                WHERE status = 'paid'
+                GROUP BY DATE_FORMAT(COALESCE(paid_at, created_at), '%Y-%m')
+            ) c ON c.month = p.month
+            ORDER BY p.month DESC
             LIMIT 12
         ");
+        $stmt->execute();
         $monthlySummary = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         // Get top agents
         $stmt = $db->query("
-            SELECT * FROM vw_agent_leaderboard
+            SELECT
+                a.id,
+                a.agent_number,
+                TRIM(CONCAT(COALESCE(a.first_name, u.first_name, ''), ' ', COALESCE(a.last_name, u.last_name, ''))) as agent_name,
+                COUNT(DISTINCT m.id) as total_members,
+                COALESCE(SUM(CASE WHEN ac.status = 'paid' THEN ac.commission_amount ELSE 0 END), 0) as total_commissions
+            FROM agents a
+            LEFT JOIN users u ON a.user_id = u.id
+            LEFT JOIN members m ON a.id = m.agent_id
+            LEFT JOIN agent_commissions ac ON a.id = ac.agent_id
+            WHERE a.status = 'active'
+            GROUP BY a.id, a.agent_number, a.first_name, a.last_name, u.first_name, u.last_name
+            ORDER BY total_members DESC, total_commissions DESC
             LIMIT 10
         ");
         $topAgents = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -3597,24 +3714,35 @@ class AdminController extends BaseController
         // Get recent transactions
         $stmt = $db->prepare("
             SELECT
-                ft.*,
+                p.id,
+                COALESCE(p.payment_date, p.created_at) as transaction_date,
+                COALESCE(p.payment_type, 'payment') as transaction_type,
+                p.amount,
                 m.member_number,
-                m.package
-            FROM financial_transactions ft
-            LEFT JOIN members m ON ft.member_id = m.id
-            WHERE DATE(ft.transaction_date) BETWEEN ? AND ?
-            ORDER BY ft.transaction_date DESC
+                m.package,
+                TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))) as member_name
+            FROM payments p
+            LEFT JOIN members m ON p.member_id = m.id
+            LEFT JOIN users u ON m.user_id = u.id
+            WHERE DATE(COALESCE(p.payment_date, p.created_at)) BETWEEN ? AND ?
+              AND p.status = 'completed'
+            ORDER BY COALESCE(p.payment_date, p.created_at) DESC
             LIMIT 20
         ");
         $stmt->execute([$fromDate, $toDate]);
         $recentTransactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $paymentPerformance = $this->paymentStatusService->getFinancialDashboardData([
+            'date_from' => $fromDate,
+            'date_to' => $toDate,
+        ]);
 
         $data = [
             'title' => 'Financial Dashboard - ' . APP_NAME,
             'kpis' => $kpis,
             'monthly_summary' => $monthlySummary,
             'top_agents' => $topAgents,
-            'recent_transactions' => $recentTransactions
+            'recent_transactions' => $recentTransactions,
+            'payment_performance' => $paymentPerformance
         ];
 
         $this->view('admin.financial-dashboard', $data);

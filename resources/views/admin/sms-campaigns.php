@@ -19,6 +19,16 @@ $quickPageUrl = function (int $page) use ($quickFilters) {
         'quick_date_to' => $quickFilters['date_to'] ?? '',
     ]);
 };
+$editCampaignToOpen = $edit_campaign_to_open ?? null;
+$editCampaignToOpenFilters = !empty($editCampaignToOpen['custom_filters']) ? json_decode((string)$editCampaignToOpen['custom_filters'], true) : [];
+$editCampaignToOpenJson = $editCampaignToOpen ? json_encode([
+    'id' => (int)$editCampaignToOpen['id'],
+    'title' => $editCampaignToOpen['title'] ?? '',
+    'message' => $editCampaignToOpen['message'] ?? '',
+    'target_audience' => $editCampaignToOpen['target_audience'] ?? 'all_members',
+    'custom_filters' => is_array($editCampaignToOpenFilters) ? $editCampaignToOpenFilters : [],
+    'scheduled_at' => !empty($editCampaignToOpen['scheduled_at']) ? date('Y-m-d\TH:i', strtotime($editCampaignToOpen['scheduled_at'])) : '',
+], JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_HEX_TAG) : 'null';
 ?>
 <?php include_once __DIR__ . '/../layouts/admin-header.php'; ?>
 
@@ -832,17 +842,6 @@ $quickPageUrl = function (int $page) use ($quickFilters) {
                             <button class="action-btn" onclick="viewCampaign(<?php echo $campaign['id']; ?>)" title="View Details">
                                 <i class="fas fa-eye"></i>
                             </button>
-                            <button class="action-btn" onclick="downloadDeliveryReport(<?php echo $campaign['id']; ?>)" title="Download Delivery Report">
-                                <i class="fas fa-file-download"></i>
-                            </button>
-                            <?php
-                                $pendingRecipientCount = (int)($campaign['pending_count'] ?? max(0, (int)($campaign['total_recipients'] ?? 0) - (int)($campaign['sent_count'] ?? 0) - (int)($campaign['failed_count'] ?? 0)));
-                            ?>
-                            <?php if ((int)($campaign['failed_count'] ?? 0) > 0 || $pendingRecipientCount > 0): ?>
-                                <button class="action-btn warning" onclick="resendPendingFailed(<?php echo $campaign['id']; ?>)" title="Resend Pending/Failed">
-                                    <i class="fas fa-redo"></i>
-                                </button>
-                            <?php endif; ?>
                             <?php if ($campaign['status'] === 'draft' || $campaign['status'] === 'scheduled'): ?>
                                 <button class="action-btn" data-campaign="<?php echo $campaignEditJson; ?>" onclick="editSmsCampaign(this)" title="Edit">
                                     <i class="fas fa-edit"></i>
@@ -854,19 +853,6 @@ $quickPageUrl = function (int $page) use ($quickFilters) {
                                     <i class="fas fa-ban"></i>
                                 </button>
                             <?php endif; ?>
-                            <?php if ($campaign['status'] === 'sending'): ?>
-                                <button class="action-btn warning" onclick="pauseCampaign(<?php echo $campaign['id']; ?>)" title="Pause">
-                                    <i class="fas fa-pause"></i>
-                                </button>
-                            <?php endif; ?>
-                            <?php if ($campaign['status'] === 'paused'): ?>
-                                <button class="action-btn success" onclick="resumeCampaign(<?php echo $campaign['id']; ?>)" title="Resume">
-                                    <i class="fas fa-play"></i>
-                                </button>
-                            <?php endif; ?>
-                            <button class="action-btn danger" onclick="deleteCampaign(<?php echo $campaign['id']; ?>)" title="Delete Campaign">
-                                <i class="fas fa-trash"></i>
-                            </button>
                         </td>
                     </tr>
                     <?php endforeach; ?>
@@ -984,7 +970,15 @@ $quickPageUrl = function (int $page) use ($quickFilters) {
                         <option value="active">Active Members Only</option>
                         <option value="inactive">Inactive Members</option>
                         <option value="grace_period">Grace Period Members</option>
-                        <option value="defaulted">Payment Defaulters</option>
+                        <option value="payment_paid_current">Paid</option>
+                        <option value="payment_unpaid_current">Not Paid</option>
+                        <option value="payment_partially_paid">Partially Paid</option>
+                        <option value="payment_in_arrears">In Arrears</option>
+                        <option value="payment_defaulted">Defaulted</option>
+                        <option value="agent_all">All Agents</option>
+                        <option value="agent_active">Active Agents</option>
+                        <option value="agent_inactive">Inactive Agents</option>
+                        <option value="agent_with_members">Agents With Members</option>
                         <option value="custom">Custom Selection</option>
                     </select>
                 </div>
@@ -1029,10 +1023,13 @@ $quickPageUrl = function (int $page) use ($quickFilters) {
                 <div class="form-group">
                     <label for="sms-message">SMS Message</label>
                     <textarea class="form-control" id="sms-message" name="message" required placeholder="Enter your SMS message here..." maxlength="160"></textarea>
-                    <small style="color: #6b7280; display: block; margin-top: 0.5rem;">
-                        <span id="char-counter">0</span>/160 characters |
-                        Placeholders: {member_name}, {first_name}, {last_name}, {member_number}, {package}, {status}, {amount_due}
-                    </small>
+                    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:0.5rem;">
+                        <small style="color:#6b7280;"><span id="char-counter">0</span>/160 characters</small>
+                        <select class="form-control form-control-sm" id="sms-tag-picker" style="max-width:220px;">
+                            <option value="">Insert tag...</option>
+                        </select>
+                        <small id="sms-tag-help" style="color:#6b7280;">Tags change by audience.</small>
+                    </div>
                 </div>
 
                 <div class="form-group">
@@ -1138,7 +1135,15 @@ $quickPageUrl = function (int $page) use ($quickFilters) {
                         <option value="active">Active Members Only</option>
                         <option value="inactive">Inactive Members</option>
                         <option value="grace_period">Grace Period Members</option>
-                        <option value="defaulted">Payment Defaulters</option>
+                        <option value="payment_paid_current">Paid</option>
+                        <option value="payment_unpaid_current">Not Paid</option>
+                        <option value="payment_partially_paid">Partially Paid</option>
+                        <option value="payment_in_arrears">In Arrears</option>
+                        <option value="payment_defaulted">Defaulted</option>
+                        <option value="agent_all">All Agents</option>
+                        <option value="agent_active">Active Agents</option>
+                        <option value="agent_inactive">Inactive Agents</option>
+                        <option value="agent_with_members">Agents With Members</option>
                         <option value="custom">Custom Selection</option>
                     </select>
                 </div>
@@ -1180,6 +1185,12 @@ $quickPageUrl = function (int $page) use ($quickFilters) {
                 <div class="form-group">
                     <label for="edit-campaign-message">Message</label>
                     <textarea class="form-control" id="edit-campaign-message" name="message" rows="5" required></textarea>
+                    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:0.5rem;">
+                        <select class="form-control form-control-sm" id="edit-sms-tag-picker" style="max-width:220px;">
+                            <option value="">Insert tag...</option>
+                        </select>
+                        <small id="edit-sms-tag-help" style="color:#6b7280;">Tags change by audience.</small>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label for="edit-campaign-scheduled-at">Scheduled Date & Time</label>
@@ -1311,6 +1322,80 @@ document.getElementById('quick-message')?.addEventListener('input', function() {
     document.getElementById('quick-char-counter').textContent = this.value.length;
 });
 
+const smsTagGroups = {
+    member: [
+        ['{first_name}', 'First Name'],
+        ['{member_number}', 'Member No.'],
+        ['{package}', 'Package']
+    ],
+    payment: [
+        ['{first_name}', 'First Name'],
+        ['{member_number}', 'Member No.'],
+        ['{monthly_contribution}', 'Contribution'],
+        ['{amount_due}', 'Balance'],
+        ['{missed_months}', 'Missed Months']
+    ],
+    agent: [
+        ['{first_name}', 'First Name'],
+        ['{agent_number}', 'Agent No.'],
+        ['{total_members}', 'Members']
+    ]
+};
+
+function smsAudienceTagGroup(audience) {
+    if ((audience || '').startsWith('payment_')) return 'payment';
+    if ((audience || '').startsWith('agent_')) return 'agent';
+    return 'member';
+}
+
+function populateSmsTagPicker(pickerId, helpId, audience) {
+    const picker = document.getElementById(pickerId);
+    const help = document.getElementById(helpId);
+    if (!picker) return;
+
+    const group = smsAudienceTagGroup(audience);
+    const labels = { member: 'Member tags', payment: 'Payment tags', agent: 'Agent tags' };
+    picker.innerHTML = '<option value="">Insert tag...</option>';
+    smsTagGroups[group].forEach(([value, label]) => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = `${label} ${value}`;
+        picker.appendChild(option);
+    });
+    if (help) help.textContent = labels[group] + ' shown for this audience.';
+}
+
+function updateSmsTagPicker() {
+    populateSmsTagPicker('sms-tag-picker', 'sms-tag-help', document.getElementById('target-audience')?.value || '');
+}
+
+function updateEditSmsTagPicker() {
+    populateSmsTagPicker('edit-sms-tag-picker', 'edit-sms-tag-help', document.getElementById('edit-target-audience')?.value || '');
+}
+
+function insertSmsTag(tag, textareaId = 'sms-message', counterId = 'char-counter') {
+    const textarea = document.getElementById(textareaId);
+    if (!textarea || !tag) return;
+
+    const start = textarea.selectionStart || 0;
+    const end = textarea.selectionEnd || 0;
+    textarea.value = textarea.value.slice(0, start) + tag + textarea.value.slice(end);
+    textarea.focus();
+    textarea.setSelectionRange(start + tag.length, start + tag.length);
+    const counter = document.getElementById(counterId);
+    if (counter) counter.textContent = textarea.value.length;
+}
+
+document.getElementById('sms-tag-picker')?.addEventListener('change', function() {
+    insertSmsTag(this.value);
+    this.value = '';
+});
+
+document.getElementById('edit-sms-tag-picker')?.addEventListener('change', function() {
+    insertSmsTag(this.value, 'edit-campaign-message');
+    this.value = '';
+});
+
 async function parseJsonResponse(response) {
     const text = await response.text();
     let data = {};
@@ -1343,14 +1428,20 @@ document.getElementById('target-audience')?.addEventListener('change', function 
     if (panel) {
         panel.style.display = this.value === 'custom' ? '' : 'none';
     }
+    updateSmsTagPicker();
 });
+
+updateSmsTagPicker();
 
 document.getElementById('edit-target-audience')?.addEventListener('change', function () {
     const panel = document.getElementById('edit-custom-filters-panel');
     if (panel) {
         panel.style.display = this.value === 'custom' ? '' : 'none';
     }
+    updateEditSmsTagPicker();
 });
+
+updateEditSmsTagPicker();
 
 function setEditFilterValues(filters = {}) {
     const status = filters.member_status || filters.status || '';
@@ -1528,6 +1619,10 @@ function resendPendingFailed(id) {
 
 function editSmsCampaign(button) {
     const campaign = JSON.parse(button.getAttribute('data-campaign') || '{}');
+    openSmsCampaignEditor(campaign);
+}
+
+function openSmsCampaignEditor(campaign) {
     document.getElementById('edit-campaign-id').value = campaign.id || '';
     document.getElementById('edit-campaign-title').value = campaign.title || '';
     document.getElementById('edit-campaign-message').value = campaign.message || '';
@@ -1537,6 +1632,34 @@ function editSmsCampaign(button) {
     document.getElementById('edit-campaign-scheduled-at').value = campaign.scheduled_at || '';
     openModal('editCampaignModal');
 }
+
+function openRequestedCampaignEditor() {
+    const requestedCampaign = <?php echo $editCampaignToOpenJson ?: 'null'; ?>;
+    if (requestedCampaign && requestedCampaign.id) {
+        openSmsCampaignEditor(requestedCampaign);
+        return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const requestedId = params.get('edit_campaign');
+    if (!requestedId) return;
+
+    const requestedNumber = Number(requestedId);
+    const campaignButtons = document.querySelectorAll('[data-campaign]');
+    for (const button of campaignButtons) {
+        try {
+            const campaign = JSON.parse(button.getAttribute('data-campaign') || '{}');
+            if (Number(campaign.id) === requestedNumber) {
+                editSmsCampaign(button);
+                break;
+            }
+        } catch (error) {
+            // Ignore malformed campaign metadata on unrelated buttons.
+        }
+    }
+}
+
+openRequestedCampaignEditor();
 
 document.getElementById('editCampaignForm')?.addEventListener('submit', function(e) {
     e.preventDefault();
@@ -1822,18 +1945,34 @@ function resumeCampaign(id) {
 }
 
 function recipientPreviewValues(recipient = null) {
-    const amountDue = recipient && recipient.amount_due !== undefined && recipient.amount_due !== null
-        ? Number(recipient.amount_due).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-        : '850.00';
+    const money = (value, fallback = 0) => {
+        const numeric = Number(value ?? fallback);
+        return numeric.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    };
+    const amountDue = money(recipient?.amount_due, 850);
+    const monthlyContribution = money(recipient?.monthly_contribution ?? recipient?.amount_due, 1000);
+    const paidAmount = money(recipient?.paid_amount, 0);
+    const balanceDue = money(recipient?.balance_due ?? recipient?.amount_due, 850);
+    const arrearsAmount = money(recipient?.arrears_amount ?? recipient?.amount_due, 850);
 
     return {
         '{member_name}': recipient ? `${recipient.first_name || ''} ${recipient.last_name || ''}`.trim() || 'Member' : 'Wycliffe Omondi',
         '{first_name}': recipient?.first_name || 'Test',
         '{last_name}': recipient?.last_name || 'Member',
         '{member_number}': recipient?.member_number || 'SH-550407',
+        '{phone}': recipient?.phone || recipient?.recipient_value || '254700000000',
+        '{email}': recipient?.email || 'member@example.com',
         '{package}': recipient?.package || 'Family',
         '{status}': recipient?.status || recipient?.member_status || 'Active',
-        '{amount_due}': `KES ${amountDue}`
+        '{amount_due}': `KES ${amountDue}`,
+        '{monthly_contribution}': `KES ${monthlyContribution}`,
+        '{paid_amount}': `KES ${paidAmount}`,
+        '{balance_due}': `KES ${balanceDue}`,
+        '{arrears_amount}': `KES ${arrearsAmount}`,
+        '{missed_months}': String(recipient?.missed_months ?? 0),
+        '{last_payment_date}': recipient?.last_payment_date || 'N/A',
+        '{agent_number}': recipient?.agent_number || recipient?.member_number || 'AG20260001',
+        '{total_members}': String(recipient?.total_members ?? 0)
     };
 }
 
