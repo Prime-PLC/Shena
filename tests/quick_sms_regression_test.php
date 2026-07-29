@@ -28,10 +28,14 @@ $assertContains($controller, "'{member_name}'", 'quick SMS placeholder support s
 $assertContains($controller, "'{amount_due}'", 'quick SMS placeholder support should include amount due');
 $assertContains($controller, 'queueQuickSms', 'quick SMS should create tracked queue entries before delivery.');
 $assertContains($controller, 'processQueueByIds', 'quick SMS should submit only the newly queued entries.');
+$assertContains($controller, 'SELECT DISTINCT u.id AS user_id', 'quick SMS group/all member queries should not return duplicate member rows.');
 $assertNotContains($controller, 'Delivery confirmation is not available for quick SMS', 'quick SMS should be delivery-trackable.');
 $assertNotContains($controller, 'HostPinnacle', 'quick SMS controller responses should not expose provider branding.');
 $assertContains($service, 'queueQuickSms', 'bulk SMS service should expose quick SMS queue persistence.');
 $assertContains($service, 'processQueueByIds', 'bulk SMS service should process selected quick SMS queue rows.');
+$assertContains($service, '$seenPhones = []', 'quick SMS queueing should track normalized phone numbers.');
+$assertContains($service, 'isset($seenPhones[$phone])', 'quick SMS queueing should skip duplicate phone numbers before insert.');
+$assertContains($service, 'validatePhoneNumber($phone)', 'quick SMS queueing should refuse invalid phone numbers before insert.');
 $assertContains($service, 'getQueueItems($filters', 'bulk SMS service should support filtered queue listing.');
 $assertContains($service, 'getQueueItemsCount', 'bulk SMS service should support queue pagination counts.');
 $assertContains($router, '/admin/communications/delete-campaign', 'admin communications should expose campaign deletion.');

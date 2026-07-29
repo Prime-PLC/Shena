@@ -853,6 +853,11 @@ $editCampaignToOpenJson = $editCampaignToOpen ? json_encode([
                                     <i class="fas fa-ban"></i>
                                 </button>
                             <?php endif; ?>
+                            <?php if ($campaign['status'] === 'sending'): ?>
+                                <button class="action-btn warning" onclick="pauseCampaign(<?php echo $campaign['id']; ?>)" title="Pause Sending">
+                                    <i class="fas fa-pause"></i>
+                                </button>
+                            <?php endif; ?>
                         </td>
                     </tr>
                     <?php endforeach; ?>

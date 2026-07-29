@@ -597,6 +597,11 @@ class BulkSmsController extends BaseController
             if (!$campaignId) {
                 throw new Exception('Campaign ID is required');
             }
+
+            $campaign = $this->bulkSmsService->getCampaignById($campaignId);
+            if ($campaign && ($campaign['status'] ?? '') === 'paused') {
+                $this->bulkSmsService->resumePausedCampaignForManualSend((int)$campaignId);
+            }
             
             $result = $this->bulkSmsService->sendCampaignUntilComplete($campaignId, 50, 10);
             
@@ -799,7 +804,7 @@ class BulkSmsController extends BaseController
                     'inactive' => 'inactive',
                     'pending'  => 'inactive', // pending members are stored as inactive+pending
                 ];
-                $sql = "SELECT u.id AS user_id, u.phone, u.first_name, u.last_name,
+                $sql = "SELECT DISTINCT u.id AS user_id, u.phone, u.first_name, u.last_name,
                                m.member_number, m.package, m.status, m.monthly_contribution
                         FROM members m
                         JOIN users u ON m.user_id = u.id
@@ -807,7 +812,7 @@ class BulkSmsController extends BaseController
                 $status = $statusMap[$recipientGroup] ?? 'active';
                 // For 'pending' group also include status='pending'
                 if ($recipientGroup === 'pending') {
-                    $sql = "SELECT u.id AS user_id, u.phone, u.first_name, u.last_name,
+                    $sql = "SELECT DISTINCT u.id AS user_id, u.phone, u.first_name, u.last_name,
                                    m.member_number, m.package, m.status, m.monthly_contribution
                             FROM members m
                             JOIN users u ON m.user_id = u.id
@@ -821,7 +826,7 @@ class BulkSmsController extends BaseController
                 }
 
             } elseif ($recipientType === 'all') {
-                $sql = "SELECT u.id AS user_id, u.phone, u.first_name, u.last_name,
+                $sql = "SELECT DISTINCT u.id AS user_id, u.phone, u.first_name, u.last_name,
                                m.member_number, m.package, m.status, m.monthly_contribution
                         FROM members m
                         JOIN users u ON m.user_id = u.id
@@ -1191,7 +1196,7 @@ class BulkSmsController extends BaseController
             $campaignId = (int)($input['campaign_id'] ?? 0);
             $title = trim((string)($input['title'] ?? ''));
             $message = trim((string)($input['message'] ?? ''));
-            $targetAudience = $this->normalizeTargetAudience($input['target_audience'] ?? 'all_members');
+            $targetAudience = $this->normalizeTargetAudience($input['target_audience'] ?? '');
             $scheduledAt = !empty($input['scheduled_at']) ? $input['scheduled_at'] : null;
 
             if ($campaignId <= 0 || $title === '' || $message === '') {

@@ -46,6 +46,13 @@ class BulkSmsService
     public function createCampaign($data, $createdBy)
     {
         $status = !empty($data['scheduled_at']) ? 'scheduled' : 'draft';
+        $data['target_audience'] = $this->normalizeCampaignTargetAudience($data['target_audience'] ?? null);
+        $customFilters = isset($data['custom_filters']) ? $this->encodeCampaignFilters($data['custom_filters']) : null;
+        $duplicateId = $this->findRecentDuplicateCampaign($data, (int)$createdBy, $status, $customFilters);
+        if ($duplicateId !== null) {
+            return $duplicateId;
+        }
+
         $sql = "INSERT INTO bulk_messages (
                     title, message, message_type, target_audience,
                     custom_filters, scheduled_at, created_by, status
@@ -55,7 +62,7 @@ class BulkSmsService
             $data['title'],
             $data['message'],
             $data['target_audience'],
-            isset($data['custom_filters']) ? json_encode($data['custom_filters']) : null,
+            $customFilters,
             $data['scheduled_at'] ?? null,
             $createdBy,
             $status
@@ -67,6 +74,55 @@ class BulkSmsService
         }
 
         return false;
+    }
+
+    private function normalizeCampaignTargetAudience($targetAudience): string
+    {
+        $targetAudience = trim((string)$targetAudience);
+        if ($targetAudience === '') {
+            throw new InvalidArgumentException('Campaign target audience is required');
+        }
+
+        return $this->normalizeAudience($targetAudience);
+    }
+
+    private function encodeCampaignFilters($filters): ?string
+    {
+        if (empty($filters) || !is_array($filters)) {
+            return null;
+        }
+
+        ksort($filters);
+        return json_encode($filters);
+    }
+
+    private function findRecentDuplicateCampaign(array $data, int $createdBy, string $status, ?string $customFilters): ?int
+    {
+        $sql = "SELECT id
+                FROM bulk_messages
+                WHERE title = ?
+                  AND message = ?
+                  AND message_type = 'sms'
+                  AND target_audience = ?
+                  AND (custom_filters <=> ?)
+                  AND (scheduled_at <=> ?)
+                  AND created_by = ?
+                  AND status IN ('draft', 'scheduled', 'sending')
+                  AND created_at >= DATE_SUB(NOW(), INTERVAL 2 MINUTE)
+                ORDER BY id DESC
+                LIMIT 1";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([
+            $data['title'],
+            $data['message'],
+            $data['target_audience'],
+            $customFilters,
+            $data['scheduled_at'] ?? null,
+            $createdBy
+        ]);
+        $duplicateId = $stmt->fetchColumn();
+
+        return $duplicateId ? (int)$duplicateId : null;
     }
 
     public function getRecipients($targetAudience, $customFilters = [])
@@ -155,6 +211,7 @@ class BulkSmsService
 
     private function normalizeAudience($targetAudience)
     {
+        $targetAudience = trim((string)$targetAudience);
         $map = [
             'active_only' => 'active',
             'defaulters' => 'defaulted',
@@ -165,7 +222,7 @@ class BulkSmsService
             'payment_defaulted' => 'payment_defaulted',
         ];
 
-        return $map[$targetAudience] ?? ($targetAudience ?: 'all_members');
+        return $map[$targetAudience] ?? $targetAudience;
     }
 
     private function isPaymentGroupAudience(string $targetAudience): bool
@@ -249,6 +306,12 @@ class BulkSmsService
 
     public function queueRecipients($bulkMessageId, $recipients)
     {
+        if ($this->campaignHasQueuedRecipients((int)$bulkMessageId)) {
+            $this->syncCampaignRecipientTotals($bulkMessageId);
+            $this->recalculateCampaignCounts($bulkMessageId);
+            return true;
+        }
+
         $sql = "INSERT INTO bulk_message_recipients (
                     bulk_message_id, user_id, recipient_type, recipient_value, status, error_message
                 ) VALUES (?, ?, 'sms', ?, ?, ?)";
@@ -282,45 +345,100 @@ class BulkSmsService
         return true;
     }
 
+    private function campaignHasQueuedRecipients(int $bulkMessageId): bool
+    {
+        $stmt = $this->db->prepare("SELECT COUNT(*) FROM bulk_message_recipients WHERE bulk_message_id = ?");
+        $stmt->execute([$bulkMessageId]);
+
+        return (int)$stmt->fetchColumn() > 0;
+    }
+
     public function sendCampaign($bulkMessageId, $batchSize = 50)
     {
         $campaign = $this->getCampaignById($bulkMessageId);
 
-        if (!$campaign || $campaign['status'] === 'completed') {
+        if (!$campaign || in_array($campaign['status'], ['completed', 'cancelled'], true)) {
             return ['success' => false, 'error' => 'Campaign not found or already completed'];
         }
 
-        if ($this->shouldRefreshRecipientsBeforeSend($campaign)) {
+        if (trim((string)($campaign['target_audience'] ?? '')) === '') {
+            return ['success' => false, 'error' => 'Campaign target audience is missing; refusing to send'];
+        }
+
+        $shouldRefreshRecipients = $this->shouldRefreshRecipientsBeforeSend($campaign);
+        if (($campaign['status'] ?? '') === 'paused') {
+            return ['success' => false, 'error' => 'Campaign is paused'];
+        }
+
+        if (in_array($campaign['status'] ?? '', ['draft', 'scheduled'], true)
+            && !$this->claimCampaignForSending((int)$bulkMessageId)) {
+            return [
+                'success' => true,
+                'sent_count' => 0,
+                'submitted_count' => 0,
+                'delivered_count' => (int)($campaign['delivered_count'] ?? 0),
+                'undelivered_count' => (int)($campaign['undelivered_count'] ?? 0),
+                'failed_count' => (int)($campaign['failed_count'] ?? 0),
+                'email_fallback_count' => 0,
+                'pending_count' => (int)($campaign['total_recipients'] ?? 0),
+                'processed_count' => 0,
+            ];
+        }
+
+        if ($shouldRefreshRecipients) {
             $this->refreshRecipientsForCampaign((int)$bulkMessageId, $campaign);
             $campaign = $this->getCampaignById($bulkMessageId);
         }
 
         $batchSize = max(1, min((int) $batchSize, 500));
-        $this->updateCampaignStatus($bulkMessageId, 'sending', true);
+        $this->updateCampaignStatus($bulkMessageId, 'sending');
+        $claimToken = $this->claimPendingRecipientsForCampaign((int)$bulkMessageId, $batchSize);
 
-$sql = "SELECT bmr.*, u.first_name, u.last_name, u.email, u.phone,
+        if ($claimToken === null) {
+            $counts = $this->recalculateCampaignCounts($bulkMessageId);
+            if ((int) $counts['pending_count'] === 0) {
+                $finalStatus = $this->campaignStatusFromCounts($counts);
+                $this->updateCampaignStatus($bulkMessageId, $finalStatus, false, in_array($finalStatus, ['completed', 'failed'], true));
+            }
+
+            return [
+                'success' => true,
+                'sent_count' => (int) $counts['submitted_count'],
+                'submitted_count' => (int) $counts['submitted_count'],
+                'delivered_count' => (int) $counts['delivered_count'],
+                'undelivered_count' => (int) $counts['undelivered_count'],
+                'failed_count' => (int) $counts['failed_count'],
+                'email_fallback_count' => 0,
+                'pending_count' => (int) $counts['pending_count'],
+                'processed_count' => 0
+            ];
+        }
+
+        $sql = "SELECT bmr.*, u.first_name, u.last_name, u.email, u.phone,
                        m.member_number, m.package, m.status AS member_status,
                        COALESCE(m.monthly_contribution, 0) AS amount_due
                 FROM bulk_message_recipients bmr
                 INNER JOIN users u ON bmr.user_id = u.id
                 LEFT JOIN members m ON u.id = m.user_id
-                WHERE bmr.bulk_message_id = ? AND bmr.status = 'pending'
-                LIMIT ?";
+                WHERE bmr.bulk_message_id = ? AND bmr.status = 'processing' AND bmr.processing_token = ?
+                ORDER BY bmr.id ASC";
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([$bulkMessageId, $batchSize]);
+        $stmt->execute([$bulkMessageId, $claimToken]);
         $recipients = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $emailFallbackCount = 0;
         $processedCount = 0;
+        $deferredCount = 0;
 
         foreach ($recipients as $recipient) {
-            $processedCount++;
-
             try {
                 if ($this->notificationPreference->isInQuietHours($recipient['user_id'])) {
+                    $this->updateRecipientStatus($recipient['id'], 'pending');
+                    $deferredCount++;
                     continue;
                 }
 
+                $processedCount++;
                 $message = $this->replacePlaceholders($campaign['message'], $recipient);
 
                 if (!$this->smsService->validatePhoneNumber($recipient['recipient_value'])) {
@@ -421,7 +539,8 @@ $sql = "SELECT bmr.*, u.first_name, u.last_name, u.email, u.phone,
             'failed_count' => (int) $counts['failed_count'],
             'email_fallback_count' => $emailFallbackCount,
             'pending_count' => (int) $counts['pending_count'],
-            'processed_count' => $processedCount
+            'processed_count' => $processedCount,
+            'deferred_count' => $deferredCount
         ];
     }
 
@@ -436,10 +555,65 @@ $sql = "SELECT bmr.*, u.first_name, u.last_name, u.email, u.phone,
         return $recipientMode !== 'saved list';
     }
 
+    private function claimCampaignForSending(int $bulkMessageId): bool
+    {
+        $sql = "UPDATE bulk_messages
+                SET status = 'sending', started_at = COALESCE(started_at, NOW())
+                WHERE id = ? AND status IN ('draft', 'scheduled')";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([$bulkMessageId]);
+
+        return $stmt->rowCount() > 0;
+    }
+
+    public function resumePausedCampaignForManualSend(int $bulkMessageId): bool
+    {
+        $stmt = $this->db->prepare("UPDATE bulk_messages SET status = 'sending' WHERE id = ? AND status = 'paused'");
+        $stmt->execute([$bulkMessageId]);
+
+        return $stmt->rowCount() > 0;
+    }
+
+    private function claimPendingRecipientsForCampaign(int $bulkMessageId, int $batchSize): ?string
+    {
+        $this->releaseStaleProcessingRecipients($bulkMessageId);
+
+        $claimToken = bin2hex(random_bytes(16));
+        $sql = "UPDATE bulk_message_recipients
+                SET status = 'processing',
+                    processing_token = ?,
+                    processing_started_at = NOW()
+                WHERE bulk_message_id = ?
+                  AND status = 'pending'
+                ORDER BY id ASC
+                LIMIT " . max(1, min($batchSize, 500));
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([$claimToken, $bulkMessageId]);
+
+        return $stmt->rowCount() > 0 ? $claimToken : null;
+    }
+
+    private function releaseStaleProcessingRecipients(int $bulkMessageId): void
+    {
+        $sql = "UPDATE bulk_message_recipients
+                SET status = 'pending',
+                    processing_token = NULL,
+                    processing_started_at = NULL,
+                    error_message = NULL
+                WHERE bulk_message_id = ?
+                  AND status = 'processing'
+                  AND processing_started_at <= DATE_SUB(NOW(), INTERVAL 15 MINUTE)";
+        $this->db->prepare($sql)->execute([$bulkMessageId]);
+    }
+
     private function refreshRecipientsForCampaign(int $campaignId, array $campaign): void
     {
         $filters = $this->decodeCampaignFilters($campaign);
-        $targetAudience = $campaign['target_audience'] ?? 'all_members';
+        $targetAudience = trim((string)($campaign['target_audience'] ?? ''));
+        if ($targetAudience === '') {
+            throw new RuntimeException('Campaign target audience is missing; refusing to refresh recipients');
+        }
+
         $recipients = $this->getRecipients($targetAudience, $filters);
 
         $this->db->prepare("DELETE FROM bulk_message_recipients WHERE bulk_message_id = ?")->execute([$campaignId]);
@@ -494,7 +668,9 @@ $sql = "SELECT bmr.*, u.first_name, u.last_name, u.email, u.phone,
             $summary['pending_count'] = (int) $result['pending_count'];
             $summary['processed_count'] += (int) ($result['processed_count'] ?? 0);
 
-            if ((int) $result['pending_count'] === 0 || (int) ($result['processed_count'] ?? 0) === 0) {
+            if ((int) $result['pending_count'] === 0
+                || (int) ($result['processed_count'] ?? 0) === 0
+                || (int) ($result['deferred_count'] ?? 0) > 0) {
                 break;
             }
         }
@@ -586,7 +762,7 @@ $sql = "SELECT bmr.*, u.first_name, u.last_name, u.email, u.phone,
                            SUM(CASE WHEN status IN ('sent', 'delivered') THEN 1 ELSE 0 END) AS delivered_count,
                            SUM(CASE WHEN status IN ('failed', 'rejected') THEN 1 ELSE 0 END) AS failed_count,
                            SUM(CASE WHEN status IN ('undelivered', 'expired', 'unknown') THEN 1 ELSE 0 END) AS undelivered_count,
-                           SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending_count
+                           SUM(CASE WHEN status IN ('pending', 'processing') THEN 1 ELSE 0 END) AS pending_count
                     FROM bulk_message_recipients
                     GROUP BY bulk_message_id
                 ) stats ON bm.id = stats.bulk_message_id
@@ -681,7 +857,9 @@ $sql = "SELECT bmr.*, u.first_name, u.last_name, u.email, u.phone,
                     provider_cause = ?,
                     provider_response = ?,
                     email_fallback_sent = ?,
-                    email_sent_at = CASE WHEN ? = 'email' THEN NOW() ELSE email_sent_at END
+                    email_sent_at = CASE WHEN ? = 'email' THEN NOW() ELSE email_sent_at END,
+                    processing_token = NULL,
+                    processing_started_at = NULL
                 WHERE id = ?";
 
         $encodedResponse = $providerResponse === null ? null : json_encode($providerResponse);
@@ -725,7 +903,7 @@ $sql = "SELECT bmr.*, u.first_name, u.last_name, u.email, u.phone,
                     SUM(CASE WHEN bmr.status IN ('sent', 'delivered') THEN 1 ELSE 0 END) AS sent_count,
                     SUM(CASE WHEN bmr.status IN ('failed', 'rejected') THEN 1 ELSE 0 END) AS failed_count,
                     SUM(CASE WHEN bmr.status IN ('undelivered', 'expired', 'unknown') THEN 1 ELSE 0 END) AS undelivered_count,
-                    SUM(CASE WHEN bmr.status = 'pending' THEN 1 ELSE 0 END) AS pending_count,
+                    SUM(CASE WHEN bmr.status IN ('pending', 'processing') THEN 1 ELSE 0 END) AS pending_count,
                     SUM(CASE WHEN bmr.status = 'skipped' THEN 1 ELSE 0 END) AS skipped_count
                 FROM bulk_message_recipients bmr
                 WHERE bmr.bulk_message_id = ?";
@@ -969,8 +1147,14 @@ $sql = "SELECT bmr.*, u.first_name, u.last_name, u.email, u.phone,
         ");
 
         $ids = [];
+        $seenPhones = [];
         foreach ($recipients as $recipient) {
             $phone = $this->smsService->formatPhoneNumber($recipient['phone'] ?? '');
+            if (!$this->smsService->validatePhoneNumber($phone) || isset($seenPhones[$phone])) {
+                continue;
+            }
+            $seenPhones[$phone] = true;
+
             $personalized = $this->replacePlaceholders($message, $recipient);
             $stmt->execute([
                 $phone,

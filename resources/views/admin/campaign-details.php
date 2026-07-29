@@ -248,6 +248,9 @@ if (!empty($campaign['custom_filters'])) {
             <a class="report-btn" href="/admin/sms-campaigns?edit_campaign=<?php echo (int)($campaign['id'] ?? 0); ?>"><i class="fas fa-edit"></i> Edit Campaign</a>
             <button type="button" class="report-btn" onclick="sendCampaignNow(<?php echo (int)($campaign['id'] ?? 0); ?>)"><i class="fas fa-paper-plane"></i> Send Now</button>
         <?php endif; ?>
+        <?php if (($campaign['status'] ?? '') === 'sending'): ?>
+            <button type="button" class="report-btn" onclick="pauseCampaign(<?php echo (int)($campaign['id'] ?? 0); ?>)"><i class="fas fa-pause"></i> Pause Sending</button>
+        <?php endif; ?>
         <?php if (in_array(($campaign['status'] ?? ''), ['draft', 'scheduled', 'paused'], true)): ?>
             <button type="button" class="report-btn" onclick="cancelCampaign(<?php echo (int)($campaign['id'] ?? 0); ?>)"><i class="fas fa-ban"></i> Cancel</button>
         <?php endif; ?>
@@ -467,6 +470,20 @@ function sendCampaignNow(id) {
     .then(response => response.json())
     .then(data => {
         ShenaApp.showNotification(data.message || (data.success ? 'Campaign submitted' : 'Failed to send campaign'), data.success ? 'success' : 'error');
+        if (data.success) setTimeout(() => window.location.reload(), 900);
+    })
+    .catch(() => ShenaApp.showNotification('Network error occurred', 'error'));
+}
+
+function pauseCampaign(id) {
+    fetch('/admin/communications/pause-campaign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campaign_id: id })
+    })
+    .then(response => response.json())
+    .then(data => {
+        ShenaApp.showNotification(data.message || (data.success ? 'Campaign paused' : 'Failed to pause campaign'), data.success ? 'success' : 'error');
         if (data.success) setTimeout(() => window.location.reload(), 900);
     })
     .catch(() => ShenaApp.showNotification('Network error occurred', 'error'));
