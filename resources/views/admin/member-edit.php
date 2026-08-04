@@ -298,6 +298,15 @@ $selectedPackageKey = $member['package_key'] ?? ($member['package'] ?? '');
 
                 <div class="form-row">
                     <div class="form-group">
+                        <label class="form-label">File Number</label>
+                        <input type="text" name="file_number" class="form-control"
+                               value="<?= htmlspecialchars($member['file_number'] ?? '') ?>"
+                               placeholder="Physical office file reference">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
                         <label class="form-label">Date of Birth</label>
                         <input type="date" name="date_of_birth" class="form-control" 
                                value="<?= htmlspecialchars($member['date_of_birth'] ?? '') ?>">

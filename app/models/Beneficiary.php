@@ -18,7 +18,7 @@ class Beneficiary extends BaseModel
             'full_name' => $data['full_name'],
             'relationship' => $data['relationship'],
             'date_of_birth' => $data['date_of_birth'] ?? null,
-            'id_number' => $data['id_number'],
+            'id_number' => ($data['id_number'] ?? '') !== '' ? $data['id_number'] : null,
             'phone_number' => $data['phone_number'] ?? null,
             'percentage' => $data['percentage'] ?? 100,
             'is_active' => 1

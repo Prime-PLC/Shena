@@ -1276,7 +1276,7 @@ $buildMemberFilterUrl = function (string $targetStatus) use ($search, $package) 
         <form class="filter-bar" id="memberSearchForm" method="GET" action="/admin/members">
             <div class="search-box">
                 <i class="fas fa-search"></i>
-                <input type="text" id="search-members" name="search" value="<?php echo htmlspecialchars($search ?? ''); ?>" placeholder="Search by name, ID, phone...">
+                <input type="text" id="search-members" name="search" value="<?php echo htmlspecialchars($search ?? ''); ?>" placeholder="Search by name, ID, file number, phone...">
             </div>
             <select class="filter-select" id="filter-status" name="status">
                 <option value="all" <?php echo (($status ?? 'all') === 'all') ? 'selected' : ''; ?>>All Statuses</option>

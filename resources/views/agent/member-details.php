@@ -966,8 +966,8 @@ if (!empty($payment_history)) {
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">ID Number <span class="text-danger">*</span></label>
-                        <input type="text" name="id_number" class="form-control" required>
+                        <label class="form-label">ID Number (Optional)</label>
+                        <input type="text" name="id_number" class="form-control">
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Date of Birth <span class="text-danger">*</span></label>

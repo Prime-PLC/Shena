@@ -631,6 +631,10 @@ $formatRelation = static function ($value) {
                         <div class="info-value"><?= htmlspecialchars($member['id_number'] ?? 'N/A') ?></div>
                     </div>
                     <div class="info-item">
+                        <div class="info-label">File Number</div>
+                        <div class="info-value"><?= htmlspecialchars(!empty($member['file_number']) ? $member['file_number'] : 'N/A') ?></div>
+                    </div>
+                    <div class="info-item">
                         <div class="info-label">Phone</div>
                         <div class="info-value"><?= htmlspecialchars($member['phone'] ?? 'N/A') ?></div>
                     </div>
@@ -794,6 +798,10 @@ $formatRelation = static function ($value) {
                     <div class="form-group">
                         <label class="form-label" for="memberIdNumber">National ID</label>
                         <input class="form-input" id="memberIdNumber" name="id_number" value="<?= htmlspecialchars($member['id_number'] ?? '') ?>" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="memberFileNumber">File Number</label>
+                        <input class="form-input" id="memberFileNumber" name="file_number" value="<?= htmlspecialchars($member['file_number'] ?? '') ?>" placeholder="Physical office file reference">
                     </div>
                     <div class="form-group">
                         <label class="form-label" for="memberPhone">Phone</label>
@@ -1098,7 +1106,7 @@ $formatRelation = static function ($value) {
                     </div>
                     <div class="form-group">
                         <label class="form-label" for="editDependantIdNumber">ID / Birth Certificate</label>
-                        <input class="form-input" id="editDependantIdNumber" name="id_number" required>
+                        <input class="form-input" id="editDependantIdNumber" name="id_number">
                     </div>
                     <div class="form-group">
                         <label class="form-label" for="editDependantDateOfBirth">Date of Birth</label>

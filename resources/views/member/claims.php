@@ -1202,21 +1202,21 @@ main {
                     });
                     </script>
                     
-                    <h6><i class="fas fa-paperclip"></i> Required Documents</h6>
+                    <h6><i class="fas fa-paperclip"></i> Supporting Documents <span class="badge bg-secondary">Can be added later</span></h6>
                     <p class="text-muted small mb-3">
                         <i class="fas fa-exclamation-circle text-warning"></i> The following 3 documents are mandatory for claim processing
                     </p>
                     <div class="mb-3">
                         <label class="form-label">1. Copy of ID / Birth Certificate <span class="text-danger">*</span></label>
-                        <input type="file" name="id_copy" class="form-control" accept=".pdf,.jpg,.jpeg,.png" required>
+                        <input type="file" name="id_copy" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
                     </div>
                     <div class="mb-3">
                         <label class="form-label">2. Chief's Letter <span class="text-danger">*</span></label>
-                        <input type="file" name="chief_letter" class="form-control" accept=".pdf,.jpg,.jpeg,.png" required>
+                        <input type="file" name="chief_letter" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
                     </div>
                     <div class="mb-3">
                         <label class="form-label">3. Mortuary Invoice <span class="text-danger">*</span></label>
-                        <input type="file" name="mortuary_invoice" class="form-control" accept=".pdf,.jpg,.jpeg,.png" required>
+                        <input type="file" name="mortuary_invoice" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Death Certificate <span class="badge bg-secondary">Optional</span></label>

@@ -1259,6 +1259,9 @@ class AdminController extends BaseController
             'next_of_kin_relationship' => $_POST['nok_relationship'] ?? '',
             'next_of_kin_phone' => !empty($_POST['nok_phone']) ? formatKenyanPhone($_POST['nok_phone']) : null
         ];
+        if (array_key_exists('file_number', $member)) {
+            $memberRecordData['file_number'] = $this->sanitizeInput($_POST['file_number'] ?? '');
+        }
 
         try {
             $this->db->getConnection()->beginTransaction();
@@ -2359,29 +2362,22 @@ class AdminController extends BaseController
     {
         $claimDocumentModel = new ClaimDocument();
         $documentFields = [
-            'id_copy' => ['required' => true, 'label' => 'ID/Birth Certificate Copy'],
-            'chief_letter' => ['required' => true, 'label' => 'Chief Letter'],
-            'mortuary_invoice' => ['required' => true, 'label' => 'Mortuary Invoice'],
-            'death_certificate' => ['required' => false, 'label' => 'Death Certificate'],
+            'id_copy' => 'ID/Birth Certificate Copy',
+            'chief_letter' => 'Chief Letter',
+            'mortuary_invoice' => 'Mortuary Invoice',
+            'death_certificate' => 'Death Certificate',
         ];
 
         require_once __DIR__ . '/../helpers/functions.php';
 
-        foreach ($documentFields as $inputName => $config) {
+        foreach ($documentFields as $inputName => $label) {
             if (!isset($_FILES[$inputName]) || $_FILES[$inputName]['error'] === UPLOAD_ERR_NO_FILE) {
-                if ($config['required']) {
-                    $this->claimModel->delete($claimId);
-                    throw new Exception("Required document missing: {$config['label']}.");
-                }
                 continue;
             }
 
             $uploadResult = uploadFile($_FILES[$inputName], 'claims/' . $claimId);
             if ($uploadResult === false) {
-                if ($config['required']) {
-                    $this->claimModel->delete($claimId);
-                    throw new Exception("Failed to upload required document: {$config['label']}.");
-                }
+                error_log("Claim {$claimId} filed without {$label}: upload failed and can be completed later.");
                 continue;
             }
 

@@ -951,19 +951,19 @@ $actionNeededCount = count(array_filter($all_claims, fn($c) =>
                             </div>
                         </div>
                         <div class="col-12">
-                            <h6><i class="fas fa-paperclip"></i> Required Documents</h6>
+                            <h6><i class="fas fa-paperclip"></i> Supporting Documents <span class="badge bg-secondary">Can be added later</span></h6>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Copy of ID / Birth Certificate</label>
-                            <input type="file" name="id_copy" class="form-control" accept=".pdf,.jpg,.jpeg,.png" required>
+                            <input type="file" name="id_copy" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Chief's Letter</label>
-                            <input type="file" name="chief_letter" class="form-control" accept=".pdf,.jpg,.jpeg,.png" required>
+                            <input type="file" name="chief_letter" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Mortuary Invoice</label>
-                            <input type="file" name="mortuary_invoice" class="form-control" accept=".pdf,.jpg,.jpeg,.png" required>
+                            <input type="file" name="mortuary_invoice" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Death Certificate <span class="badge bg-secondary">Optional</span></label>

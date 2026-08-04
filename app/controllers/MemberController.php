@@ -1326,30 +1326,20 @@ class MemberController extends BaseController
             $claimId = $this->claimModel->submitClaim($claimData);
             error_log('Claim submitted successfully with ID: ' . $claimId);
 
-            // Handle required claim documents per policy Section 8
-            // Required: ID copy, Chief letter, Mortuary invoice
+            // Supporting documents may be supplied during filing or added later by staff.
             error_log('Processing file uploads for claim ID: ' . $claimId);
             $claimDocumentModel = new ClaimDocument();
 
             $documentFields = [
-                'id_copy' => ['required' => true, 'label' => 'ID/Birth Certificate Copy'],
-                'chief_letter' => ['required' => true, 'label' => 'Chief Letter'],
-                'mortuary_invoice' => ['required' => true, 'label' => 'Mortuary Invoice'],
-                'death_certificate' => ['required' => false, 'label' => 'Death Certificate']
+                'id_copy' => 'ID/Birth Certificate Copy',
+                'chief_letter' => 'Chief Letter',
+                'mortuary_invoice' => 'Mortuary Invoice',
+                'death_certificate' => 'Death Certificate'
             ];
 
             error_log('Checking uploaded files: ' . json_encode(array_keys($_FILES)));
-            foreach ($documentFields as $inputName => $config) {
+            foreach ($documentFields as $inputName => $label) {
                 if (!isset($_FILES[$inputName]) || $_FILES[$inputName]['error'] === UPLOAD_ERR_NO_FILE) {
-                    if ($config['required']) {
-                        // Delete the claim if required document missing
-                        error_log('REQUIRED FILE MISSING: ' . $config['label'] . ' (field: ' . $inputName . ')');
-                        error_log('Rolling back claim ID: ' . $claimId);
-                        $this->claimModel->delete($claimId);
-                        $_SESSION['error'] = "Required document missing: {$config['label']}. Please upload all required documents.";
-                        $this->redirect('/claims');
-                        return;
-                    }
                     error_log('Optional file not uploaded: ' . $inputName);
                     continue;
                 }
@@ -1362,13 +1352,8 @@ class MemberController extends BaseController
                 $uploadResult = uploadFile($_FILES[$inputName], 'claims/' . $claimId);
                 if ($uploadResult === false) {
                     error_log('FILE UPLOAD FAILED: ' . $inputName . ' - uploadFile() returned false');
-                    if ($config['required']) {
-                        error_log('Rolling back claim ID: ' . $claimId);
-                        $this->claimModel->delete($claimId);
-                        $_SESSION['error'] = "Failed to upload required document: {$config['label']}. Please try again.";
-                        $this->redirect('/claims');
-                        return;
-                    }
+                    $_SESSION['error'] = "Claim filed, but {$label} could not be uploaded. Staff can add it later.";
+                    error_log('Claim document upload deferred for claim ID: ' . $claimId);
                     continue;
                 }
                 

@@ -70,12 +70,16 @@ class Member extends BaseModel
             $searchTerm = '%' . $filters['search'] . '%';
             $sql .= " AND (m.member_number LIKE :search_member_number
                       OR m.id_number LIKE :search_id_number
+                      " . ($this->hasColumn('file_number') ? "OR m.file_number LIKE :search_file_number\n                      " : "") . "
                       OR u.first_name LIKE :search_first_name
                       OR u.last_name LIKE :search_last_name
                       OR u.email LIKE :search_email
                       OR u.phone LIKE :search_phone)";
             $params['search_member_number'] = $searchTerm;
             $params['search_id_number'] = $searchTerm;
+            if ($this->hasColumn('file_number')) {
+                $params['search_file_number'] = $searchTerm;
+            }
             $params['search_first_name'] = $searchTerm;
             $params['search_last_name'] = $searchTerm;
             $params['search_email'] = $searchTerm;
@@ -535,11 +539,10 @@ class Member extends BaseModel
         ];
 
         $fullName = trim((string)($dependentData['full_name'] ?? ''));
-        $idNumber = trim((string)($dependentData['id_number'] ?? ''));
         $dateOfBirth = trim((string)($dependentData['date_of_birth'] ?? ''));
 
-        if ($fullName === '' || $relationship === '' || $idNumber === '' || $dateOfBirth === '') {
-            $result['message'] = 'Please fill in dependant name, relationship, ID/birth certificate, and date of birth.';
+        if ($fullName === '' || $relationship === '' || $dateOfBirth === '') {
+            $result['message'] = 'Please fill in dependant name, relationship, and date of birth.';
             return $result;
         }
 
@@ -1115,13 +1118,17 @@ class Member extends BaseModel
                       OR u.last_name LIKE :search_last_name
                       OR u.email LIKE :search_email
                       OR u.phone LIKE :search_phone
-                      OR m.id_number LIKE :search_id_number)";
+                      OR m.id_number LIKE :search_id_number
+                      " . ($this->hasColumn('file_number') ? "OR m.file_number LIKE :search_file_number\n                      " : "") . ")";
             $params['search_member_number'] = $searchTerm;
             $params['search_first_name'] = $searchTerm;
             $params['search_last_name'] = $searchTerm;
             $params['search_email'] = $searchTerm;
             $params['search_phone'] = $searchTerm;
             $params['search_id_number'] = $searchTerm;
+            if ($this->hasColumn('file_number')) {
+                $params['search_file_number'] = $searchTerm;
+            }
         }
         
         if ($status === 'pending_approval') {
@@ -1161,6 +1168,7 @@ class Member extends BaseModel
             $searchTerm = '%' . $search . '%';
             $sql .= " AND (m.member_number LIKE :search_member_number
                       OR m.id_number LIKE :search_id_number
+                      " . ($this->hasColumn('file_number') ? "OR m.file_number LIKE :search_file_number\n                      " : "") . "
                       OR u.first_name LIKE :search_first_name
                       OR u.last_name LIKE :search_last_name
                       OR u.email LIKE :search_email
@@ -1173,6 +1181,9 @@ class Member extends BaseModel
                 'search_email' => $searchTerm,
                 'search_phone' => $searchTerm,
             ];
+            if ($this->hasColumn('file_number')) {
+                $params['search_file_number'] = $searchTerm;
+            }
         }
 
         $sql .= " ORDER BY m.archived_at DESC, m.created_at DESC";

@@ -978,8 +978,8 @@ main {
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">ID Number *</label>
-                        <input type="text" name="id_number" id="editIdNumber" class="form-control" value="<?php echo getOldValue('id_number_edit') ?: ''; ?>" required>
+                        <label class="form-label">ID Number (Optional)</label>
+                        <input type="text" name="id_number" id="editIdNumber" class="form-control" value="<?php echo getOldValue('id_number_edit') ?: ''; ?>">
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Date of Birth</label>
@@ -1024,8 +1024,8 @@ main {
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">ID Number *</label>
-                        <input type="text" name="id_number" class="form-control" value="<?php echo getOldValue('id_number'); ?>" required>
+                        <label class="form-label">ID Number (Optional)</label>
+                        <input type="text" name="id_number" class="form-control" value="<?php echo getOldValue('id_number'); ?>">
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Date of Birth *</label>
