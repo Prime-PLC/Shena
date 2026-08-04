@@ -55,7 +55,7 @@
                         </li>
                         <li class="mb-3 d-flex align-items-center gap-3">
                             <i class="fas fa-envelope" style="color: #C9A659; font-size: 16px;"></i>
-                            <span style="color: rgba(255, 255, 255, 0.65); font-size: 0.9rem;">info@shenacompanion.ac.ke</span>
+                            <span style="color: rgba(255, 255, 255, 0.65); font-size: 0.9rem;">info@shenacompanion.co.ke</span>
                         </li>
                     </ul>
                 </div>

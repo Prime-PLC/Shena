@@ -231,7 +231,7 @@
                         <p style="margin: 0 0 10px; font-weight: 700; font-size: 1rem; color: #2D1A4A;">SHENA Companion Welfare Association</p>
                         <p style="margin: 0 0 6px;"><i class="fas fa-map-marker-alt" style="color: #7F3D9E; width: 20px;"></i> P.O. Box 4018, Kisumu, Kenya</p>
                         <p style="margin: 0 0 6px;"><i class="fas fa-phone" style="color: #7F3D9E; width: 20px;"></i> <a href="tel:+254748585067" style="color: #7F3D9E; font-weight: 600;">0748 585 067</a> / <a href="tel:+254748585071" style="color: #7F3D9E; font-weight: 600;">0748 585 071</a> &nbsp;<em style="font-size:0.82rem; color: #6B7280;">(24/7 Emergency)</em></p>
-                        <p style="margin: 0;"><i class="fas fa-envelope" style="color: #7F3D9E; width: 20px;"></i> <a href="mailto:info@shenacompanion.ac.ke" style="color: #7F3D9E; font-weight: 600;">info@shenacompanion.ac.ke</a></p>
+                        <p style="margin: 0;"><i class="fas fa-envelope" style="color: #7F3D9E; width: 20px;"></i> <a href="mailto:info@shenacompanion.co.ke" style="color: #7F3D9E; font-weight: 600;">info@shenacompanion.co.ke</a></p>
                     </div>
                     <p style="margin-top: 16px;">Formal complaints should be submitted in writing (letter or email). SHENA commits to acknowledging all complaints within <strong>5 business days</strong> and providing a resolution or progress update within <strong>21 business days</strong>.</p>
                 '],

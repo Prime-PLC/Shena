@@ -193,7 +193,7 @@
                             <p style="margin: 0 0 8px;"><strong>SHENA Companion Welfare Association</strong></p>
                             <p style="margin: 0 0 4px;">P.O. Box 4018, Kisumu, Kenya</p>
                             <p style="margin: 0 0 4px;">Phone: <a href="tel:+254748585067" style="color: #7F3D9E; font-weight: 600;">0748 585 067</a> / <a href="tel:+254748585071" style="color: #7F3D9E; font-weight: 600;">0748 585 071</a></p>
-                            <p style="margin: 0;">Email: <a href="mailto:info@shenacompanion.ac.ke" style="color: #7F3D9E; font-weight: 600;">info@shenacompanion.ac.ke</a></p>
+                            <p style="margin: 0;">Email: <a href="mailto:info@shenacompanion.co.ke" style="color: #7F3D9E; font-weight: 600;">info@shenacompanion.co.ke</a></p>
                         </div>
                     '],
                 ];
