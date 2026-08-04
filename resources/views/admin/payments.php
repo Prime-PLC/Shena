@@ -45,6 +45,13 @@ $selectedPaymentGroupLabel = $paymentGroupLabels[$selectedPaymentGroup] ?? 'All 
 $selectedGroupData = $paymentBreakdownSummary['groups'][$selectedPaymentGroup] ?? ['count' => 0, 'balance_due' => 0];
 $selectedGroupCampaignAction = $selectedPaymentGroup === 'paid_current' ? 'Send Thank You' : 'Send Reminder';
 $breakdownFilterFields = ['search', 'package', 'payment_method', 'amount_min', 'amount_max', 'missed_months'];
+$paymentBreakdownExportUrl = '/admin/reports/export?' . http_build_query(array_filter(array_merge([
+    'type' => 'payment_breakdown',
+    'format' => 'csv',
+    'group' => $selectedPaymentGroup,
+], array_intersect_key($paymentFilters, array_flip($breakdownFilterFields))), static function ($value) {
+    return $value !== '' && $value !== null && $value !== 'all';
+}));
 ?>
 
 <?php include_once __DIR__ . '/../layouts/admin-header.php'; ?>
@@ -780,7 +787,7 @@ $breakdownFilterFields = ['search', 'package', 'payment_method', 'amount_min', '
                     <?php endforeach; ?>
                     <button type="submit" class="filter-btn">Create SMS Campaign</button>
                 </form>
-                <a class="filter-btn" href="<?php echo htmlspecialchars($paymentExportUrl); ?>">Export</a>
+                <a class="filter-btn" href="<?php echo htmlspecialchars($paymentBreakdownExportUrl); ?>">Export Breakdown</a>
             </div>
         </div>
 
@@ -846,7 +853,8 @@ $breakdownFilterFields = ['search', 'package', 'payment_method', 'amount_min', '
     <?php endif; ?>
 </div>
 
-<!-- Payment Tabs -->
+<?php if ($selectedPaymentGroup === 'all'): ?>
+<!-- Transaction tabs are intentionally exclusive to All Payments. -->
 <div class="tabs-container">
     <div class="tabs-header">
         <button class="tab-btn active" onclick="showTab('all')" id="tab-all">
@@ -1191,6 +1199,7 @@ $breakdownFilterFields = ['search', 'package', 'payment_method', 'amount_min', '
         </div>
     </div>
 </div>
+<?php endif; ?>
 
 <script>
 const paymentFiltersForm = document.getElementById('paymentFiltersForm');

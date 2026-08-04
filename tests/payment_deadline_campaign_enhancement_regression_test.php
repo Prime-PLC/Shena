@@ -89,6 +89,9 @@ $assertNotContains($adminController, 'FROM financial_transactions', 'Financial d
 $assertNotContains($adminController, 'vw_financial_summary', 'Financial dashboard charts should not depend on stale financial summary views.');
 
 $assertContains($bulkSmsService, 'payment_group', 'Campaign recipient queries should support payment-aware groups.');
+$assertContains($bulkSmsService, 'coverage_balance_due', 'Payment reminder audiences should exclude members covered by advance contribution credit.');
+$assertContains($paymentStatusService, 'buildContributionCoverageSnapshot', 'Advance contribution coverage should be calculated separately from Payment Breakdown grouping.');
+$assertNotContains($bulkSmsService, "\$payment_group !== 'all'", 'The All payment-group reminder should include only members with a contribution balance due.');
 $assertContains($bulkSmsService, 'agent_all', 'SMS campaigns should support all agents.');
 $assertContains($bulkSmsService, 'agent_active', 'SMS campaigns should support active agents.');
 $assertContains($bulkSmsService, 'agent_inactive', 'SMS campaigns should support inactive agents.');

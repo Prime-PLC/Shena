@@ -76,7 +76,7 @@ $assertContains($agentMemberDetailsView, "name=\"csrf_token\"", 'Agent payment a
 $assertContains($agentDashboardController, '$this->validateCsrf();', 'Agent payment assistance endpoint must validate CSRF.');
 $assertNotContains($agentMemberDetailsView, 'id="paymentAssistModal"', 'Agent member details should not keep duplicate payment assistance modal.');
 
-$assertContains($agentController, "\$this->agentModel->getAllAgents(['search' => \$search, 'status' => \$statusFilter], 10000, 0)", 'Agent CSV export should call getAllAgents with filter array.');
+$assertContains($agentController, "\$this->agentModel->getAllAgents(['search' => \$search, 'status' => \$statusFilter], null, 0)", 'Agent CSV export should call getAllAgents without a snapshot limit.');
 $assertContains($router, '$this->registerAgentRoutes();', 'Router should group agent routes once.');
 $assertNotContains($router, "\$this->addRoute('GET', '/agent/dashboard', 'AgentDashboardController@dashboard');\r\n        \$this->addRoute('GET', '/agent/payouts'", 'Router should not duplicate agent dashboard route block.');
 

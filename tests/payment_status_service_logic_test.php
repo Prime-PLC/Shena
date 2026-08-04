@@ -63,4 +63,20 @@ $beforeDeadlineUnpaid = $service->buildMonthlyPaymentSnapshot([
 $assertSame('unpaid_current', $beforeDeadlineUnpaid['payment_group'], 'No current-month payment should appear under Not Paid before the 7th so campaign audiences stay usable.');
 $assertFloat(100.0, $beforeDeadlineUnpaid['balance_due'], 'Before-deadline unpaid members should still show the current payment balance.');
 
+$advancePayments = [
+    ['status' => 'completed', 'payment_type' => 'monthly', 'amount' => 600, 'payment_date' => '2026-05-05 10:00:00'],
+];
+$advancePayment = $service->buildMonthlyPaymentSnapshot($member, $advancePayments, new DateTime('2026-07-08'));
+$advanceCoverage = $service->buildContributionCoverageSnapshot($member, $advancePayments, new DateTime('2026-07-08'));
+
+$assertSame('defaulted', $advancePayment['payment_group'], 'Advance coverage must not change the existing Payment Breakdown grouping.');
+$assertFloat(0.0, $advanceCoverage['coverage_balance_due'], 'Advance-paid members must not enter reminder audiences.');
+$assertFloat(300.0, $advanceCoverage['contribution_credit'], 'The unused amount should remain available for later months.');
+$assertSame('2026-10-31', $advanceCoverage['covered_through'], 'Advance credit should expose the last fully covered month.');
+
+$futureCoveredMonth = $service->buildContributionCoverageSnapshot($member, $advancePayments, new DateTime('2026-10-08'));
+
+$assertFloat(0.0, $futureCoveredMonth['coverage_balance_due'], 'Carried contribution credit should continue covering later reminder months.');
+$assertFloat(0.0, $futureCoveredMonth['contribution_credit'], 'Credit should be consumed as each covered month becomes due.');
+
 exit($failed ? 1 : 0);

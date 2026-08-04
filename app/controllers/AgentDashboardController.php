@@ -1070,13 +1070,17 @@ class AgentDashboardController extends BaseController
             header('Content-Disposition: attachment; filename="' . $filenameBase . '.csv"');
 
             $output = fopen('php://output', 'w');
-            fputcsv($output, [$payload['title'] ?? 'Member Statement'], ',', '"', '\\', '');
-            fputcsv($output, ['Generated', $payload['generated_at'] ?? date('Y-m-d H:i')], ',', '"', '\\', '');
-            fputcsv($output, [], ',', '"', '\\', '');
-            fputcsv($output, $table['headers'] ?? [], ',', '"', '\\', '');
+            fwrite($output, "\xEF\xBB\xBF");
+            fputcsv($output, ['Report', $payload['title'] ?? 'Member Statement'], ',', '"', '\\', "\r\n");
+            if (!empty($payload['subtitle'])) {
+                fputcsv($output, ['Member', $payload['subtitle']], ',', '"', '\\', "\r\n");
+            }
+            fputcsv($output, ['Generated', $payload['generated_at'] ?? date('Y-m-d H:i')], ',', '"', '\\', "\r\n");
+            fputcsv($output, [], ',', '"', '\\', "\r\n");
+            fputcsv($output, $table['headers'] ?? [], ',', '"', '\\', "\r\n");
 
             foreach (($table['rows'] ?? []) as $row) {
-                fputcsv($output, $row, ',', '"', '\\', '');
+                fputcsv($output, $row, ',', '"', '\\', "\r\n");
             }
 
             fclose($output);

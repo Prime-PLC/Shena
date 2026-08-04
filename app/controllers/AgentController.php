@@ -634,7 +634,7 @@ class AgentController extends BaseController
         $status = $_GET['status'] ?? 'all';
         $statusFilter = $status === 'all' ? '' : $status;
         
-        $agents = $this->agentModel->getAllAgents(['search' => $search, 'status' => $statusFilter], 10000, 0);
+        $agents = $this->agentModel->getAllAgents(['search' => $search, 'status' => $statusFilter], null, 0);
         
         // Set headers for CSV download
         header('Content-Type: text/csv');
@@ -663,11 +663,11 @@ class AgentController extends BaseController
         // Add agent data
         foreach ($agents as $agent) {
             fputcsv($output, [
-                $agent['agent_number'] ?? '',
+                $this->formatCsvIdentifier($agent['agent_number'] ?? ''),
                 $agent['first_name'] ?? '',
                 $agent['last_name'] ?? '',
                 $agent['email'] ?? '',
-                $agent['phone'] ?? '',
+                $this->formatCsvIdentifier($agent['phone'] ?? ''),
                 $agent['county'] ?? '',
                 ucfirst($agent['status'] ?? 'active'),
                 $agent['total_members'] ?? 0,
@@ -709,7 +709,7 @@ class AgentController extends BaseController
             'Commission Amount',
             'Status',
             'Created At'
-        ], ',', '"', '\\', '');
+        ], ',', '"', '\\', "\r\n");
 
         foreach ($commissions as $commission) {
             fputcsv($output, [
@@ -723,7 +723,7 @@ class AgentController extends BaseController
                 $commission['commission_amount'] ?? 0,
                 $commission['status'] ?? 'pending',
                 $commission['created_at'] ?? ''
-            ], ',', '"', '\\', '');
+            ], ',', '"', '\\', "\r\n");
         }
 
         fclose($output);
@@ -792,7 +792,7 @@ class AgentController extends BaseController
     {
         $this->requireRole(['admin', 'super_admin']);
 
-        $agents = $this->agentModel->getAllAgents([], 10000, 0);
+        $agents = $this->agentModel->getAllAgents([], null, 0);
         $html = $this->renderPdfView('admin/agents-performance-report-pdf', [
             'agents' => $agents,
             'generatedAt' => date('Y-m-d H:i')
@@ -1115,7 +1115,7 @@ class AgentController extends BaseController
         header('Expires: 0');
 
         $output = fopen('php://output', 'w');
-        fputcsv($output, ['ID', 'Title', 'Category', 'File Size', 'Upload Date', 'Description', 'Download Count'], ',', '"', '\\', '');
+        fputcsv($output, ['ID', 'Title', 'Category', 'File Size', 'Upload Date', 'Description', 'Download Count'], ',', '"', '\\', "\r\n");
 
         foreach ($resources as $resource) {
             fputcsv($output, [
@@ -1126,11 +1126,17 @@ class AgentController extends BaseController
                 $resource['created_at'],
                 $resource['description'],
                 $resource['download_count']
-            ], ',', '"', '\\', '');
+            ], ',', '"', '\\', "\r\n");
         }
 
         fclose($output);
         exit;
+    }
+
+    private function formatCsvIdentifier($value): string
+    {
+        $value = (string)$value;
+        return $value === '' ? '' : '="' . str_replace('"', '""', $value) . '"';
     }
 
     

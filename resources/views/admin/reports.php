@@ -228,11 +228,17 @@ $summary = $payload['summary'] ?? 'Select a report and date range to review syst
             <h1 class="reports-title">Reports & Analytics</h1>
             <p class="reports-summary"><?= htmlspecialchars($summary) ?></p>
         </div>
-        <div class="report-actions">
-            <a class="report-btn" href="<?= htmlspecialchars('/admin/reports/export?' . http_build_query(array_merge($_GET, ['type' => $reportType, 'format' => 'csv']))) ?>">Export CSV</a>
-            <a class="report-btn" href="<?= htmlspecialchars('/admin/reports/export?' . http_build_query(array_merge($_GET, ['type' => $reportType, 'format' => 'excel']))) ?>">Export Excel</a>
-            <a class="report-btn primary" href="<?= htmlspecialchars('/admin/reports/export?' . http_build_query(array_merge($_GET, ['type' => $reportType, 'format' => 'pdf']))) ?>">Export PDF</a>
-        </div>
+        <?php if (!empty($hasExplicitPeriod)): ?>
+            <div class="report-actions">
+                <a class="report-btn" href="<?= htmlspecialchars('/admin/reports/export?' . http_build_query(array_merge($_GET, ['type' => $reportType, 'format' => 'csv']))) ?>">Export CSV</a>
+                <a class="report-btn" href="<?= htmlspecialchars('/admin/reports/export?' . http_build_query(array_merge($_GET, ['type' => $reportType, 'format' => 'excel']))) ?>">Export Excel</a>
+                <a class="report-btn primary" href="<?= htmlspecialchars('/admin/reports/export?' . http_build_query(array_merge($_GET, ['type' => $reportType, 'format' => 'pdf']))) ?>">Export PDF</a>
+            </div>
+        <?php else: ?>
+            <div class="report-actions">
+                <span class="report-btn" aria-disabled="true">Select and apply a reporting period to export</span>
+            </div>
+        <?php endif; ?>
     </div>
 
     <form class="reports-filters" method="GET" action="/admin/reports">
@@ -248,13 +254,13 @@ $summary = $payload['summary'] ?? 'Select a report and date range to review syst
         </div>
         <div class="report-field">
             <label for="date_from">From</label>
-            <input id="date_from" type="date" name="date_from" value="<?= htmlspecialchars($startDate) ?>">
+            <input id="date_from" type="date" name="date_from" value="<?= htmlspecialchars($startDate) ?>" required>
         </div>
         <div class="report-field">
             <label for="date_to">To</label>
-            <input id="date_to" type="date" name="date_to" value="<?= htmlspecialchars($endDate) ?>">
+            <input id="date_to" type="date" name="date_to" value="<?= htmlspecialchars($endDate) ?>" required>
         </div>
-        <button class="report-btn primary" type="submit">Apply</button>
+        <button class="report-btn primary" type="submit">Apply Period</button>
     </form>
 
     <nav class="report-tabs" aria-label="Report sections">

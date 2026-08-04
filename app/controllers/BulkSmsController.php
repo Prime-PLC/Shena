@@ -1065,8 +1065,8 @@ class BulkSmsController extends BaseController
                 $campaign['id'] ?? $id,
                 $campaign['title'] ?? '',
                 trim(($recipient['first_name'] ?? '') . ' ' . ($recipient['last_name'] ?? '')),
-                $recipient['member_number'] ?? '',
-                $recipient['recipient_value'] ?? $recipient['phone'] ?? '',
+                $this->formatCsvIdentifier($recipient['member_number'] ?? ''),
+                $this->formatCsvIdentifier($recipient['recipient_value'] ?? $recipient['phone'] ?? ''),
                 $recipient['status'] ?? 'pending',
                 $recipient['delivery_method'] ?? '',
                 $recipient['provider_message_id'] ?? '',
@@ -1082,6 +1082,12 @@ class BulkSmsController extends BaseController
 
         fclose($out);
         exit;
+    }
+
+    private function formatCsvIdentifier($value): string
+    {
+        $value = (string)$value;
+        return $value === '' ? '' : '="' . str_replace('"', '""', $value) . '"';
     }
 
     public function resendPendingFailed($id)

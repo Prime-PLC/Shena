@@ -565,23 +565,23 @@ class AdminController extends BaseController
             'Registration Date',
             'Last Payment Date',
             'Last Payment Amount'
-        ], ',', '"', '\\', '');
+        ], ',', '"', '\\', "\r\n");
 
         // Add member data
         foreach ($members as $member) {
             fputcsv($output, [
-                $member['member_number'] ?? '',
+                $this->formatCsvIdentifier($member['member_number'] ?? ''),
                 $member['first_name'] ?? '',
                 $member['last_name'] ?? '',
-                $member['national_id'] ?? $member['id_number'] ?? '',
+                $this->formatCsvIdentifier($member['national_id'] ?? $member['id_number'] ?? ''),
                 $member['email'] ?? '',
-                $member['phone'] ?? '',
+                $this->formatCsvIdentifier($member['phone'] ?? ''),
                 $member['package'] ?? 'Standard',
                 ucfirst($member['status'] ?? 'active'),
                 $member['registration_date'] ?? $member['created_at'] ?? '',
                 $member['last_payment_date'] ?? '',
                 $member['last_payment_amount'] ?? ''
-            ], ',', '"', '\\', '');
+            ], ',', '"', '\\', "\r\n");
         }
 
         fclose($output);
@@ -1684,7 +1684,7 @@ class AdminController extends BaseController
     {
         $this->requireAdminAccess();
 
-        $group = $this->queryString('group', 'all');
+        $group = $this->queryString('group', 'unpaid_current');
         $filters = [
             'search' => $this->queryString('search'),
             'package' => $this->queryString('package', 'all'),
@@ -2434,6 +2434,9 @@ class AdminController extends BaseController
         $reportType = $_GET['report_type'] ?? 'overview';
         $startDate = $_GET['date_from'] ?? date('Y-m-01');
         $endDate = $_GET['date_to'] ?? date('Y-m-d');
+        $hasExplicitPeriod = isset($_GET['date_from'], $_GET['date_to'])
+            && $this->isValidReportDate((string)$_GET['date_from'])
+            && $this->isValidReportDate((string)$_GET['date_to']);
         $reportService = new ReportService();
         $payload = $reportService->getReportPayload($reportType, $startDate, $endDate, $_GET);
 
@@ -2442,6 +2445,7 @@ class AdminController extends BaseController
             'reportType' => $reportType,
             'startDate' => $startDate,
             'endDate' => $endDate,
+            'hasExplicitPeriod' => $hasExplicitPeriod,
             'payload' => $payload,
             'availableReports' => $payload['available_reports'] ?? [],
             'previewRows' => $payload['tables'][0]['rows'] ?? [],
@@ -2460,8 +2464,21 @@ class AdminController extends BaseController
         $this->requireAdminAccess();
 
         $type = $_GET['type'] ?? ($_GET['report_type'] ?? 'overview');
-        $dateFrom = $_GET['date_from'] ?? date('Y-m-01');
-        $dateTo = $_GET['date_to'] ?? date('Y-m-d');
+        $hasDateFrom = isset($_GET['date_from']) && $_GET['date_from'] !== '';
+        $hasDateTo = isset($_GET['date_to']) && $_GET['date_to'] !== '';
+        if ($hasDateFrom xor $hasDateTo) {
+            http_response_code(422);
+            echo 'Select both the start date and end date before exporting.';
+            return;
+        }
+
+        $dateFrom = $hasDateFrom ? (string)$_GET['date_from'] : '1900-01-01';
+        $dateTo = $hasDateTo ? (string)$_GET['date_to'] : date('Y-m-d');
+        if (!$this->isValidReportDate($dateFrom) || !$this->isValidReportDate($dateTo) || $dateFrom > $dateTo) {
+            http_response_code(422);
+            echo 'Select a valid reporting period before exporting.';
+            return;
+        }
         $format = strtolower($_GET['format'] ?? 'pdf');
         set_time_limit(120);
 
@@ -2504,16 +2521,28 @@ class AdminController extends BaseController
         header('Content-Disposition: attachment; filename="' . $filename . '"');
 
         $output = fopen('php://output', 'w');
-        fputcsv($output, [$payload['title'] ?? 'SHENA Report'], ',', '"', '\\', '');
-        fputcsv($output, ['Generated', $payload['generated_at'] ?? date('Y-m-d H:i')], ',', '"', '\\', '');
-        if (!empty($payload['date_range'])) {
-            fputcsv($output, ['Period', $payload['date_range']], ',', '"', '\\', '');
+        fwrite($output, "\xEF\xBB\xBF");
+        fputcsv($output, ['Report', $payload['title'] ?? 'SHENA Report'], ',', '"', '\\', "\r\n");
+        if (!empty($payload['subtitle'])) {
+            fputcsv($output, ['Description', $payload['subtitle']], ',', '"', '\\', "\r\n");
         }
-        fputcsv($output, [], ',', '"', '\\', '');
-        fputcsv($output, $table['headers'] ?? [], ',', '"', '\\', '');
+        fputcsv($output, ['Generated', $payload['generated_at'] ?? date('Y-m-d H:i')], ',', '"', '\\', "\r\n");
+        if (!empty($payload['date_range'])) {
+            fputcsv($output, ['Period', $payload['date_range']], ',', '"', '\\', "\r\n");
+        }
+        fputcsv($output, [], ',', '"', '\\', "\r\n");
+        fputcsv($output, $table['headers'] ?? [], ',', '"', '\\', "\r\n");
 
+        $headers = $table['headers'] ?? [];
         foreach (($table['rows'] ?? []) as $row) {
-            fputcsv($output, $row, ',', '"', '\\', '');
+            $formattedRow = [];
+            foreach ($row as $index => $value) {
+                $header = (string)($headers[$index] ?? '');
+                $formattedRow[] = $this->isSpreadsheetIdentifierHeader($header)
+                    ? $this->formatCsvIdentifier($value)
+                    : $value;
+            }
+            fputcsv($output, $formattedRow, ',', '"', '\\', "\r\n");
         }
 
         fclose($output);
@@ -2527,64 +2556,24 @@ class AdminController extends BaseController
         header('Pragma: no-cache');
         header('Expires: 0');
 
-        $title = htmlspecialchars($payload['title'] ?? 'SHENA Report', ENT_QUOTES);
-        $subtitle = htmlspecialchars($payload['subtitle'] ?? '', ENT_QUOTES);
-        $preparedFor = htmlspecialchars($payload['prepared_for'] ?? 'Admin', ENT_QUOTES);
-        $generatedAt = htmlspecialchars($payload['generated_at'] ?? date('Y-m-d H:i'), ENT_QUOTES);
-        $dateRange = htmlspecialchars($payload['date_range'] ?? '', ENT_QUOTES);
-        $metrics = $payload['metrics'] ?? [];
         $tables = $payload['tables'] ?? [];
 
         echo "\xEF\xBB\xBF";
         ?>
 <!doctype html>
-<html>
+<html xmlns:x="urn:schemas-microsoft-com:office:excel">
 <head>
     <meta charset="utf-8">
     <style>
-        body { font-family: Arial, sans-serif; color: #111827; }
-        .letterhead { border-bottom: 4px solid #7F3D9E; padding: 12px 0; margin-bottom: 14px; }
-        .brand { color: #7F3D9E; font-size: 22px; font-weight: 800; }
-        .brand-sub { color: #10B981; font-size: 12px; font-weight: 700; }
-        .meta { color: #6B7280; font-size: 12px; }
-        h1 { color: #111827; font-size: 20px; margin: 12px 0 4px; }
-        .subtitle { color: #6B7280; margin-bottom: 14px; }
-        .metrics td { border: 1px solid #E5E7EB; background: #F9FAFB; padding: 9px 12px; }
-        .metric-label { color: #6B7280; font-size: 11px; font-weight: 700; text-transform: uppercase; }
-        .metric-value { color: #111827; font-size: 16px; font-weight: 800; }
-        .section-title { color: #7F3D9E; font-size: 14px; font-weight: 800; margin-top: 16px; }
-        table.data { border-collapse: collapse; width: 100%; margin-top: 8px; }
-        table.data th { background: #7F3D9E; color: #FFFFFF; border: 1px solid #6f328b; padding: 8px; text-align: left; font-weight: 800; }
-        table.data td { border: 1px solid #E5E7EB; padding: 8px; mso-number-format: "\@"; }
-        table.data tr:nth-child(even) td { background: #F9FAFB; }
+        body { font-family: Calibri, Arial, sans-serif; color: #111827; font-size: 11pt; }
+        table { border-collapse: collapse; }
+        table.data { width: 100%; }
+        table.data th { background: #E5E7EB; color: #111827; border: 1px solid #9CA3AF; padding: 5px 7px; text-align: left; font-weight: 700; }
+        table.data td { border: 1px solid #D1D5DB; padding: 4px 7px; mso-number-format: "\@"; }
     </style>
 </head>
 <body>
-    <div class="letterhead">
-        <div class="brand">SHENA Companion</div>
-        <div class="brand-sub">Welfare Association</div>
-        <div class="meta">Prepared for: <?php echo $preparedFor; ?> | Generated: <?php echo $generatedAt; ?><?php echo $dateRange ? ' | Period: ' . $dateRange : ''; ?></div>
-    </div>
-
-    <h1><?php echo $title; ?></h1>
-    <?php if ($subtitle): ?><div class="subtitle"><?php echo $subtitle; ?></div><?php endif; ?>
-
-    <?php if (!empty($metrics)): ?>
-        <table class="metrics">
-            <tr>
-                <?php foreach (array_values($metrics) as $index => $metric): ?>
-                    <?php if ($index > 0 && $index % 4 === 0): ?></tr><tr><?php endif; ?>
-                    <td>
-                        <div class="metric-label"><?php echo htmlspecialchars($metric['label'] ?? '', ENT_QUOTES); ?></div>
-                        <div class="metric-value"><?php echo htmlspecialchars((string)($metric['value'] ?? '0'), ENT_QUOTES); ?></div>
-                    </td>
-                <?php endforeach; ?>
-            </tr>
-        </table>
-    <?php endif; ?>
-
     <?php foreach ($tables as $table): ?>
-        <div class="section-title"><?php echo htmlspecialchars($table['title'] ?? 'Details', ENT_QUOTES); ?></div>
         <table class="data">
             <thead>
                 <tr>
@@ -2596,8 +2585,13 @@ class AdminController extends BaseController
             <tbody>
                 <?php foreach (($table['rows'] ?? []) as $row): ?>
                     <tr>
-                        <?php foreach ($row as $value): ?>
-                            <td><?php echo htmlspecialchars((string)$value, ENT_QUOTES); ?></td>
+                        <?php foreach ($row as $index => $value): ?>
+                            <?php $header = (string)(($table['headers'] ?? [])[$index] ?? ''); ?>
+                            <?php if ($this->isSpreadsheetIdentifierHeader($header)): ?>
+                                <td x:str style="mso-number-format:'\@';"><?php echo htmlspecialchars((string)$value, ENT_QUOTES); ?></td>
+                            <?php else: ?>
+                                <td><?php echo htmlspecialchars((string)$value, ENT_QUOTES); ?></td>
+                            <?php endif; ?>
                         <?php endforeach; ?>
                     </tr>
                 <?php endforeach; ?>
@@ -2616,6 +2610,27 @@ class AdminController extends BaseController
     private function queryParam(string $key, $default = null)
     {
         return $_GET[$key] ?? $default;
+    }
+
+    private function isValidReportDate(string $date): bool
+    {
+        $parsed = DateTime::createFromFormat('Y-m-d', $date);
+        return $parsed !== false && $parsed->format('Y-m-d') === $date;
+    }
+
+    private function isSpreadsheetIdentifierHeader(string $header): bool
+    {
+        return (bool)preg_match('/(?:phone|mobile|member\\s*(?:no\\.?|number)|national\\s*id|reference|receipt|transaction\\s*id)/i', $header);
+    }
+
+    private function formatCsvIdentifier($value): string
+    {
+        $value = (string)$value;
+        if ($value === '') {
+            return '';
+        }
+
+        return '="' . str_replace('"', '""', $value) . '"';
     }
 
     private function renderPdfView($template, $data = [])

@@ -241,7 +241,17 @@ class BulkSmsService
         $payment_group = $payment_group === 'all' ? 'all' : $payment_group;
         $rows = $this->paymentStatusService->getMembersByPaymentGroup($payment_group, $customFilters, 100000, 0);
 
+        // Payment Breakdown retains its established month-by-month grouping.
+        // Reminder audiences additionally exclude members whose cumulative
+        // contribution credit covers all dues through the current month.
+        if ($payment_group !== 'paid_current') {
+            $rows = array_values(array_filter($rows, static function (array $row): bool {
+                return (float)($row['coverage_balance_due'] ?? $row['balance_due'] ?? 0) > 0;
+            }));
+        }
+
         return array_map(static function (array $row): array {
+            $campaignBalance = (float)($row['coverage_balance_due'] ?? $row['balance_due'] ?? 0);
             return [
                 'user_id' => $row['user_id'] ?? null,
                 'phone' => $row['phone'] ?? '',
@@ -255,11 +265,13 @@ class BulkSmsService
                 'payment_group' => $row['payment_group'] ?? '',
                 'monthly_contribution' => $row['monthly_contribution'] ?? 0,
                 'paid_amount' => $row['paid_amount'] ?? 0,
-                'balance_due' => $row['balance_due'] ?? 0,
-                'amount_due' => $row['balance_due'] ?? 0,
+                'balance_due' => $campaignBalance,
+                'amount_due' => $campaignBalance,
                 'arrears_amount' => $row['arrears_amount'] ?? 0,
                 'missed_months' => $row['missed_months'] ?? 0,
                 'last_payment_date' => $row['last_payment_date'] ?? '',
+                'contribution_credit' => $row['contribution_credit'] ?? 0,
+                'covered_through' => $row['covered_through'] ?? '',
             ];
         }, $rows);
     }

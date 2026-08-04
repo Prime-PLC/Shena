@@ -231,7 +231,8 @@ class PaymentStatusService
         foreach ($members as $member) {
             $payments = $this->paymentsForMember((int)$member['id']);
             $snapshot = $this->buildMonthlyPaymentSnapshot($member, $payments);
-            $row = array_merge($member, $snapshot);
+            $coverage = $this->buildContributionCoverageSnapshot($member, $payments);
+            $row = array_merge($member, $snapshot, $coverage);
 
             if (!$this->matchesComputedFilters($row, $filters)) {
                 continue;
@@ -330,6 +331,56 @@ class PaymentStatusService
         return [
             'missed_months' => $missed,
             'arrears_amount' => $arrearsAmount,
+        ];
+    }
+
+    /**
+     * Calculates reminder eligibility without changing Payment Breakdown.
+     * Completed contribution payments are applied oldest-first and any excess
+     * is carried forward as credit for future monthly reminders.
+     */
+    public function buildContributionCoverageSnapshot(array $member, array $payments, ?DateTime $asOf = null): array
+    {
+        $asOf = $asOf ?: new DateTime('today');
+        $monthlyContribution = max(0, (float)($member['monthly_contribution'] ?? 0));
+        if ($monthlyContribution <= 0) {
+            return ['coverage_balance_due' => 0.0, 'contribution_credit' => 0.0, 'covered_through' => null];
+        }
+
+        $createdAt = $member['created_at'] ?? $asOf->format('Y-m-d');
+        $start = new DateTime(date('Y-m-01', strtotime($createdAt)));
+        $current = new DateTime($asOf->format('Y-m-01'));
+        $monthsThroughCurrent = (((int)$current->format('Y') - (int)$start->format('Y')) * 12)
+            + ((int)$current->format('n') - (int)$start->format('n')) + 1;
+        $monthsThroughCurrent = max(1, $monthsThroughCurrent);
+        $totalPaid = 0.0;
+        $asOfEnd = (clone $asOf)->setTime(23, 59, 59)->getTimestamp();
+
+        foreach ($payments as $payment) {
+            if (($payment['status'] ?? '') !== 'completed' || !$this->isContributionPayment($payment)) {
+                continue;
+            }
+            $paymentDate = $payment['payment_date'] ?? $payment['created_at'] ?? null;
+            if ($paymentDate && strtotime($paymentDate) <= $asOfEnd) {
+                $totalPaid += max(0, (float)($payment['amount'] ?? 0));
+            }
+        }
+
+        $requiredThroughCurrent = $monthsThroughCurrent * $monthlyContribution;
+        $coverageBalance = max(0, $requiredThroughCurrent - $totalPaid);
+        $credit = max(0, $totalPaid - $requiredThroughCurrent);
+        $fullyCoveredMonths = (int)floor($totalPaid / $monthlyContribution);
+        $coveredThrough = null;
+        if ($fullyCoveredMonths > 0) {
+            $coveredMonth = clone $start;
+            $coveredMonth->modify('+' . ($fullyCoveredMonths - 1) . ' months');
+            $coveredThrough = $coveredMonth->format('Y-m-t');
+        }
+
+        return [
+            'coverage_balance_due' => $coverageBalance,
+            'contribution_credit' => $credit,
+            'covered_through' => $coveredThrough,
         ];
     }
 

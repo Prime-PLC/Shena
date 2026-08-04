@@ -737,7 +737,8 @@ class MemberController extends BaseController
         header('Content-Disposition: attachment; filename="' . $filename . '"');
 
         $output = fopen('php://output', 'w');
-        fputcsv($output, ['Date', 'Reference Number', 'Amount (KES)', 'Period', 'Payment Method', 'Status'], ',', '"', '\\', '');
+        fwrite($output, "\xEF\xBB\xBF");
+        fputcsv($output, ['Date', 'Reference Number', 'Amount (KES)', 'Period', 'Payment Method', 'Status'], ',', '"', '\\', "\r\n");
 
         foreach ($payments as $payment) {
             $reference = strip_tags(html_entity_decode($payment['transaction_id']
@@ -751,7 +752,7 @@ class MemberController extends BaseController
                 strip_tags(html_entity_decode($payment['period'] ?? 'N/A', ENT_QUOTES | ENT_HTML5)),
                 strip_tags(html_entity_decode($payment['payment_method'] ?? 'M-Pesa', ENT_QUOTES | ENT_HTML5)),
                 strip_tags(html_entity_decode($payment['status'] ?? 'pending', ENT_QUOTES | ENT_HTML5))
-            ], ',', '"', '\\', '');
+            ], ',', '"', '\\', "\r\n");
         }
 
         fclose($output);

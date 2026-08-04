@@ -5,6 +5,7 @@ require_once __DIR__ . '/../models/Member.php';
 require_once __DIR__ . '/../models/Payment.php';
 require_once __DIR__ . '/../models/Claim.php';
 require_once __DIR__ . '/../models/Agent.php';
+require_once __DIR__ . '/PaymentStatusService.php';
 
 class ReportService
 {
@@ -13,6 +14,7 @@ class ReportService
     private $paymentModel;
     private $claimModel;
     private $agentModel;
+    private $paymentStatusService;
 
     public function __construct()
     {
@@ -21,6 +23,7 @@ class ReportService
         $this->paymentModel = new Payment();
         $this->claimModel = new Claim();
         $this->agentModel = new Agent();
+        $this->paymentStatusService = new PaymentStatusService();
     }
 
     public function getReportPayload(string $type, string $dateFrom, string $dateTo, array $filters = []): array
@@ -79,10 +82,11 @@ class ReportService
 
         $memberName = trim(($member['first_name'] ?? '') . ' ' . ($member['last_name'] ?? '')) ?: 'Member';
         $memberNumber = $member['member_number'] ?? ('member-' . $memberId);
+        $memberPhone = $member['phone'] ?? '';
 
         return [
             'title' => $options['title'] ?? 'Member Payment Statement',
-            'subtitle' => $memberName . ' | ' . $memberNumber,
+            'subtitle' => $memberName . ' | ' . $memberNumber . ($memberPhone !== '' ? ' | ' . $memberPhone : ''),
             'prepared_for' => $options['prepared_for'] ?? $memberName,
             'generated_at' => date('Y-m-d H:i'),
             'date_range' => ($dateFrom ?: 'All time') . ' to ' . ($dateTo ?: date('Y-m-d')),
@@ -90,6 +94,7 @@ class ReportService
                 ['label' => 'Completed Paid', 'value' => 'KES ' . number_format($total, 2)],
                 ['label' => 'Payments Listed', 'value' => number_format(count($rows))],
                 ['label' => 'Member No.', 'value' => $memberNumber],
+                ['label' => 'Phone', 'value' => $memberPhone ?: 'N/A'],
             ],
             'tables' => [[
                 'title' => 'Payment History',
@@ -122,6 +127,7 @@ class ReportService
                 'rows' => [
                     ['Member', $memberName],
                     ['Member Number', $member['member_number'] ?? $member['member_id'] ?? 'N/A'],
+                    ['Phone', $member['phone'] ?? 'N/A'],
                     ['Payment Date', $payment['payment_date'] ?? $payment['created_at'] ?? 'N/A'],
                     ['Payment Type', $payment['payment_type'] ?? 'monthly'],
                     ['Payment Method', $payment['payment_method'] ?? 'N/A'],
@@ -139,6 +145,9 @@ class ReportService
         }
         if ($type === 'payments') {
             return $this->getPaymentsReport($dateFrom, $dateTo, $filters);
+        }
+        if ($type === 'payment_breakdown') {
+            return $this->getPaymentBreakdownReport($filters);
         }
         if ($type === 'claims') {
             return $this->getClaimsReport($dateFrom, $dateTo, $filters);
@@ -205,11 +214,16 @@ class ReportService
 
             $tableRows[] = [
                 $member['member_number'] ?? '',
-                trim(($member['first_name'] ?? '') . ' ' . ($member['last_name'] ?? '')),
+                $member['first_name'] ?? '',
+                $member['last_name'] ?? '',
+                $member['national_id'] ?? $member['id_number'] ?? '',
+                $member['email'] ?? '',
                 $member['phone'] ?? '',
                 $member['package'] ?? '',
                 $member['status'] ?? '',
-                $created ?: 'N/A',
+                $member['registration_date'] ?? ($created ?: 'N/A'),
+                $member['last_payment_date'] ?? '',
+                $member['last_payment_amount'] ?? '',
             ];
         }
 
@@ -223,7 +237,19 @@ class ReportService
             ],
             'tables' => [[
                 'title' => 'Members',
-                'headers' => ['Member No.', 'Name', 'Phone', 'Package', 'Status', 'Joined'],
+                'headers' => [
+                    'Member Number',
+                    'First Name',
+                    'Last Name',
+                    'National ID',
+                    'Email',
+                    'Phone',
+                    'Package',
+                    'Status',
+                    'Registration Date',
+                    'Last Payment Date',
+                    'Last Payment Amount',
+                ],
                 'rows' => $tableRows,
             ]],
         ];
@@ -254,6 +280,7 @@ class ReportService
                 substr((string)($payment['created_at'] ?? ''), 0, 10),
                 $payment['member_number'] ?? '',
                 trim(($payment['first_name'] ?? '') . ' ' . ($payment['last_name'] ?? '')),
+                $payment['phone'] ?? '',
                 'KES ' . number_format((float)($payment['amount'] ?? 0), 2),
                 $payment['payment_type'] ?? '',
                 $payment['status'] ?? '',
@@ -272,8 +299,45 @@ class ReportService
             ],
             'tables' => [[
                 'title' => 'Payment Transactions',
-                'headers' => ['Date', 'Member No.', 'Member', 'Amount', 'Type', 'Status', 'Reference'],
+                'headers' => ['Date', 'Member No.', 'Member', 'Phone', 'Amount', 'Type', 'Status', 'Reference'],
                 'rows' => $rows,
+            ]],
+        ];
+    }
+
+    public function getPaymentBreakdownReport(array $filters = []): array
+    {
+        $group = (string)($filters['group'] ?? 'all');
+        $rows = $this->paymentStatusService->getMembersByPaymentGroup($group, $filters, PHP_INT_MAX, 0);
+        $tableRows = [];
+        $balanceDue = 0.0;
+
+        foreach ($rows as $member) {
+            $balanceDue += (float)($member['balance_due'] ?? 0);
+            $tableRows[] = [
+                $member['member_number'] ?? '',
+                trim(($member['first_name'] ?? '') . ' ' . ($member['last_name'] ?? '')),
+                $member['phone'] ?? '',
+                $member['payment_group_label'] ?? $this->paymentStatusService->labelForGroup($member['payment_group'] ?? ''),
+                'KES ' . number_format((float)($member['monthly_contribution'] ?? 0), 2),
+                'KES ' . number_format((float)($member['paid_amount'] ?? 0), 2),
+                'KES ' . number_format((float)($member['balance_due'] ?? 0), 2),
+                (int)($member['missed_months'] ?? 0),
+                $member['last_payment_date'] ?? 'N/A',
+            ];
+        }
+
+        return [
+            'title' => 'Payment Breakdown Report',
+            'subtitle' => $this->paymentStatusService->labelForGroup($group) . ' member contribution status',
+            'metrics' => [
+                ['label' => 'Members Listed', 'value' => number_format(count($tableRows))],
+                ['label' => 'Outstanding Balance', 'value' => 'KES ' . number_format($balanceDue, 2)],
+            ],
+            'tables' => [[
+                'title' => 'Member Payment Status',
+                'headers' => ['Member No.', 'Member', 'Phone', 'Group', 'Monthly Contribution', 'Paid This Month', 'Balance', 'Missed Months', 'Last Payment'],
+                'rows' => $tableRows,
             ]],
         ];
     }
@@ -300,6 +364,7 @@ class ReportService
                 '#' . str_pad((string)($claim['id'] ?? ''), 4, '0', STR_PAD_LEFT),
                 $claim['member_number'] ?? '',
                 trim(($claim['first_name'] ?? '') . ' ' . ($claim['last_name'] ?? '')),
+                $claim['phone'] ?? '',
                 $claim['deceased_name'] ?? '',
                 $claim['status'] ?? '',
                 substr((string)($claim['created_at'] ?? ''), 0, 10),
@@ -316,7 +381,7 @@ class ReportService
             ],
             'tables' => [[
                 'title' => 'Claims',
-                'headers' => ['Claim', 'Member No.', 'Member', 'Deceased', 'Status', 'Submitted'],
+                'headers' => ['Claim', 'Member No.', 'Member', 'Phone', 'Deceased', 'Status', 'Submitted'],
                 'rows' => $rows,
             ]],
         ];
@@ -362,7 +427,7 @@ class ReportService
 
     public function getAgentsReport(string $dateFrom, string $dateTo, array $filters = []): array
     {
-        $agents = $this->agentModel->getAllAgents([], 500, 0);
+        $agents = $this->agentModel->getAllAgents([], null, 0);
         $rows = [];
         foreach ($agents as $agent) {
             $rows[] = [
@@ -445,6 +510,7 @@ class ReportService
             'overview' => 'Overview',
             'members' => 'Members',
             'payments' => 'Payments',
+            'payment_breakdown' => 'Payment Breakdown',
             'claims' => 'Claims',
             'financial' => 'Financial',
             'agents' => 'Agents',

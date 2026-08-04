@@ -154,9 +154,12 @@ class Agent extends BaseModel
             $params[] = $searchTerm;
         }
         
-        $sql .= " GROUP BY a.id ORDER BY a.created_at DESC LIMIT ? OFFSET ?";
-        $params[] = $limit;
-        $params[] = $offset;
+        $sql .= " GROUP BY a.id ORDER BY a.created_at DESC";
+        if ($limit !== null) {
+            $sql .= " LIMIT ? OFFSET ?";
+            $params[] = max(1, (int)$limit);
+            $params[] = max(0, (int)$offset);
+        }
         
         return $this->db->query($sql, $params)->fetchAll();
     }
