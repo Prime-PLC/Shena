@@ -3,13 +3,15 @@ deployment:
   tasks:
     - export DEPLOYPATH=/home3/peepalmt/shenacompanion.co.ke/
     - /bin/cp -R ./app $DEPLOYPATH
-    - /bin/cp -R ./assets $DEPLOYPATH
     - /bin/cp -R ./config $DEPLOYPATH
     - /bin/cp -R ./database $DEPLOYPATH
     - /bin/cp -R ./public $DEPLOYPATH
+    - /bin/cp -R ./resources $DEPLOYPATH
     - /bin/cp -R ./storage $DEPLOYPATH
     - /bin/cp -R ./vendor $DEPLOYPATH
     - /bin/cp -R ./UI $DEPLOYPATH
     - /bin/cp index.php $DEPLOYPATH
     - /bin/cp composer.json $DEPLOYPATH
     - /bin/cp composer.lock $DEPLOYPATH
+    - /bin/cp .htaccess $DEPLOYPATH
+    - /bin/cp coming-soon.php $DEPLOYPATH
