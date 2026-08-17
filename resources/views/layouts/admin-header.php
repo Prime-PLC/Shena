@@ -911,6 +911,13 @@ if ($notificationCount === null) {
                         </a>
                     </li>
 
+                    <li class="nav-item">
+                        <a class="nav-link <?php echo (strpos($_SERVER['REQUEST_URI'], '/admin/platinum-requests') !== false || strpos($_SERVER['REQUEST_URI'], '/admin/inpatient-requests') !== false) ? 'active' : ''; ?>" href="/admin/platinum-requests">
+                            <i class="fas fa-hospital"></i>
+                            <span>Platinum</span>
+                        </a>
+                    </li>
+
                     <!-- Payments -->
                     <li class="nav-item">
                         <a class="nav-link has-submenu <?php echo (strpos($_SERVER['REQUEST_URI'], '/admin/payments') !== false || strpos($_SERVER['REQUEST_URI'], '/admin/financial') !== false || strpos($_SERVER['REQUEST_URI'], '/admin/plan-upgrades') !== false) ? 'active' : ''; ?>" href="#" onclick="toggleSubmenu(event, 'payments-submenu')">
@@ -965,7 +972,7 @@ if ($notificationCount === null) {
                                 </a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link <?php echo (strpos($_SERVER['REQUEST_URI'], 'sms-campaigns') !== false) ? 'active' : ''; ?>" href="/admin/sms-campaigns">
+                                <a class="nav-link <?php echo (strpos($_SERVER['REQUEST_URI'], 'sms-campaigns') !== false) ? 'active' : ''; ?>" href="/admin/sms-campaigns" onclick="showSmsCampaignUnavailable(event)">
                                     <i class="fas fa-sms"></i>
                                     <span>SMS Campaigns</span>
                                 </a>
@@ -1293,6 +1300,54 @@ if ($notificationCount === null) {
             
             if (searchBar && !searchBar.contains(event.target)) {
                 resultsContainer.classList.remove('show');
+            }
+        });
+    </script>
+
+    <div id="smsCampaignUnavailableModal" class="sms-unavailable-modal" role="dialog" aria-modal="true" aria-labelledby="smsCampaignUnavailableTitle" hidden>
+        <div class="sms-unavailable-backdrop" data-close-sms-unavailable></div>
+        <div class="sms-unavailable-dialog">
+            <button type="button" class="sms-unavailable-close" aria-label="Close" data-close-sms-unavailable>&times;</button>
+            <div class="sms-unavailable-icon"><i class="fas fa-shield-halved"></i></div>
+            <h2 id="smsCampaignUnavailableTitle">SMS Campaigns Temporarily Unavailable</h2>
+            <p>SMS campaign sending is temporarily disabled while we complete safety checks for campaign audiences, balances, and controls.</p>
+            <button type="button" class="sms-unavailable-action" data-close-sms-unavailable>Close</button>
+        </div>
+    </div>
+
+    <style>
+        .sms-unavailable-modal[hidden] { display: none; }
+        .sms-unavailable-modal { position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; padding: 20px; }
+        .sms-unavailable-backdrop { position: absolute; inset: 0; background: rgba(17, 24, 39, 0.65); }
+        .sms-unavailable-dialog { position: relative; width: min(100%, 460px); background: #fff; border-radius: 12px; padding: 30px; text-align: center; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25); }
+        .sms-unavailable-close { position: absolute; top: 10px; right: 14px; border: 0; background: transparent; color: #6b7280; font-size: 26px; cursor: pointer; }
+        .sms-unavailable-icon { width: 52px; height: 52px; margin: 0 auto 16px; display: grid; place-items: center; border-radius: 50%; background: #fef3c7; color: #b45309; font-size: 22px; }
+        .sms-unavailable-dialog h2 { margin: 0 0 10px; color: #1f2937; font-size: 22px; }
+        .sms-unavailable-dialog p { margin: 0 auto 22px; max-width: 360px; color: #4b5563; line-height: 1.55; }
+        .sms-unavailable-action { border: 0; border-radius: 7px; padding: 10px 22px; background: #5e2b7a; color: #fff; cursor: pointer; font-weight: 700; }
+    </style>
+
+    <script>
+        function showSmsCampaignUnavailable(event) {
+            event.preventDefault();
+            const modal = document.getElementById('smsCampaignUnavailableModal');
+            if (modal) {
+                modal.hidden = false;
+                modal.querySelector('[data-close-sms-unavailable]')?.focus();
+            }
+        }
+
+        document.querySelectorAll('[data-close-sms-unavailable]').forEach((element) => {
+            element.addEventListener('click', () => {
+                const modal = document.getElementById('smsCampaignUnavailableModal');
+                if (modal) modal.hidden = true;
+            });
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                const modal = document.getElementById('smsCampaignUnavailableModal');
+                if (modal) modal.hidden = true;
             }
         });
     </script>

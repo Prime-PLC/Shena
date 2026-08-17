@@ -377,6 +377,13 @@ class BulkSmsService
             return ['success' => false, 'error' => 'Campaign target audience is missing; refusing to send'];
         }
 
+        if ($this->hasMismatchedPaymentAudience($campaign)) {
+            // A payment-group filter was saved but the audience isn't payment-scoped:
+            // this is exactly the corruption pattern that broadcasts to all members.
+            // Fail closed instead of sending until an admin reviews/fixes the campaign.
+            return ['success' => false, 'error' => 'Campaign audience does not match its saved payment-group filter; refusing to send until reviewed'];
+        }
+
         $shouldRefreshRecipients = $this->shouldRefreshRecipientsBeforeSend($campaign);
         if (($campaign['status'] ?? '') === 'paused') {
             return ['success' => false, 'error' => 'Campaign is paused'];
@@ -670,6 +677,15 @@ class BulkSmsService
 
         $decoded = json_decode((string)$campaign['custom_filters'], true);
         return is_array($decoded) ? $decoded : [];
+    }
+
+    private function hasMismatchedPaymentAudience(array $campaign): bool
+    {
+        $filters = $this->decodeCampaignFilters($campaign);
+        $hasPaymentGroupFilter = !empty($filters['payment_group']);
+        $isPaymentAudience = $this->isPaymentGroupAudience(trim((string)($campaign['target_audience'] ?? '')));
+
+        return $hasPaymentGroupFilter && !$isPaymentAudience;
     }
 
     public function sendCampaignUntilComplete($bulkMessageId, $batchSize = 50, $maxBatches = 10)
