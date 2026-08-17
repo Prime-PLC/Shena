@@ -12,7 +12,7 @@
 </section>
 
 <section class="reveal-exempt" style="padding: 70px 0; background: #F7F7F9;">
-    <div class="container" style="max-width: 860px;">
+    <div class="container" style="max-width: 1160px;">
 
         <!-- Meta strip -->
         <div style="background: #fff; border-radius: 16px; padding: 28px 36px; box-shadow: 0 4px 20px rgba(0,0,0,0.07); margin-bottom: 36px; display: flex; flex-wrap: wrap; gap: 20px; align-items: center; justify-content: space-between;">
@@ -33,6 +33,22 @@
             </a>
         </div>
 
+        <div class="row g-4 align-items-start">
+            <aside class="col-lg-3 d-none d-lg-block" style="position: sticky; top: 80px;">
+                <div style="background: white; border-radius: 14px; padding: 22px; box-shadow: 0 4px 16px rgba(0,0,0,0.07);">
+                    <p style="font-size: 0.72rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #7F3D9E; margin: 0 0 14px;">Terms sections</p>
+                    <nav style="display: flex; flex-direction: column; gap: 3px;">
+                        <?php foreach (['Acceptance of Terms','Membership Eligibility','Contributions & Payments','Benefits & Coverage','Claims Process','Member Responsibilities','Termination & Suspension','Limitation of Liability','Amendments','Governing Law','Contact'] as $index => $label): ?>
+                            <a href="#tc-<?php echo $index + 1; ?>" style="text-decoration: none; color: #4B5563; font-size: 0.82rem; padding: 8px 10px; border-radius: 8px; display: flex; align-items: center; gap: 8px;" onmouseover="this.style.background='#F3E8FF';this.style.color='#7F3D9E';" onmouseout="this.style.background='';this.style.color='#4B5563';"><i class="fas fa-chevron-right fa-fw" style="color:#7F3D9E; opacity:.7;"></i><?php echo $label; ?></a>
+                        <?php endforeach; ?>
+                    </nav>
+                    <div style="border-top: 1px solid #F3F4F6; padding-top: 16px; margin-top: 16px;">
+                        <a href="/policy-booklet" style="color:#7F3D9E; font-weight:600; text-decoration:none; display:flex; gap:8px; align-items:center;"><i class="fas fa-book-open fa-fw"></i> Policy Booklet</a>
+                        <a href="/privacy-policy" style="color:#7F3D9E; font-weight:600; text-decoration:none; display:flex; gap:8px; align-items:center;"><i class="fas fa-shield-alt fa-fw"></i> Privacy Policy</a>
+                    </div>
+                </div>
+            </aside>
+            <div class="col-lg-9">
         <div style="background: #fff; border-radius: 16px; padding: 48px; box-shadow: 0 4px 20px rgba(0,0,0,0.07); color: #374151; line-height: 1.8;">
 
             <?php
@@ -54,6 +70,8 @@
                     <ul>
                         <li>Monthly contributions are payable via <strong>M-Pesa Paybill 4163987</strong>, using your name or ID number as the account reference.</li>
                         <li>Contribution rates are determined by your selected package and the age brackets of covered individuals.</li>
+                        <li><strong>SHENA Platinum</strong> is an optional add-on to SHENA Basic, not a replacement for Basic and not a Last Respect service. Platinum is selected and charged per covered person.</li>
+                        <li>Current Platinum individual rates are KES 300 below age 70, KES 650 for ages 71–80, KES 650 for ages 81–90, and KES 850 for ages 91–100. Platinum family and Executive schedules are shown on the membership page.</li>
                         <li>A member is considered <strong>active</strong> only when all current and past contributions are fully settled.</li>
                         <li>Contributions that are <strong>3 or more months in arrears</strong> will result in suspension of benefit coverage.</li>
                         <li>Contributions that are <strong>6 or more months in arrears</strong> may result in termination of membership.</li>
@@ -78,6 +96,16 @@
                         <li>Coverage does not apply to deaths that occur during a <strong>waiting period</strong> as defined by your package terms.</li>
                         <li>SHENA does not cover funeral costs for individuals not registered as dependents under the member\'s account.</li>
                         <li>Benefits are provided in-kind by SHENA-contracted service providers and are <strong>not transferable to cash</strong>.</li>
+                    </ul>
+                    <p><strong>SHENA Platinum inpatient support:</strong> This is a separate inpatient benefit added to Basic. It is not automatic for every person on an account, and it does not replace Basic funeral cover.</p>
+                    <ul>
+                        <li>Platinum provides up to <strong>20 inpatient bed-cover days per selected covered person per calendar year</strong>.</li>
+                        <li>Requests may be split across admissions, but the total approved days for that person cannot exceed 20 in the calendar year.</li>
+                        <li>An inpatient request must identify the covered person and provide the facility name and location or contact, admission date, requested days, and any available admission or doctor reference.</li>
+                        <li>Unused Platinum days expire at the end of the calendar year and do not carry forward.</li>
+                        <li>Platinum maturity is <strong>4 months for a selected person below age 60</strong> and <strong>7 months for a selected person aged 60 and above</strong>.</li>
+                        <li>Inpatient support is subject to active and mature cover, current contributions, available annual days, eligibility review, and SHENA approval. Approval may be partial where fewer days remain.</li>
+                        <li>Platinum cover may be selected for the principal member, registered dependents, or eligible corporate covered persons. The final monthly amount depends on the selected people and the applicable age/package schedule.</li>
                     </ul>
                 '],
                 ['icon' => 'fas fa-file-alt', 'title' => '5. Claims Process', 'content' => '
@@ -141,8 +169,8 @@
                     </div>
                 '],
             ];
-            foreach ($terms as $t): ?>
-            <div style="margin-bottom: 44px;">
+            foreach ($terms as $index => $t): ?>
+            <div id="tc-<?php echo $index + 1; ?>" style="margin-bottom: 44px; scroll-margin-top: 90px;">
                 <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
                     <div style="width: 42px; height: 42px; background: #F3E8FF; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
                         <i class="<?php echo $t['icon']; ?>" style="color: #7F3D9E;"></i>
@@ -164,6 +192,8 @@
                 <a href="/contact" style="display: inline-flex; align-items: center; gap: 8px; color: #7F3D9E; font-weight: 600; text-decoration: none; background: #F3E8FF; padding: 10px 20px; border-radius: 8px;">
                     <i class="fas fa-envelope"></i> Contact Us
                 </a>
+            </div>
+        </div>
             </div>
         </div>
     </div>

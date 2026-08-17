@@ -25,6 +25,11 @@
 <!-- Package Options Section -->
 <section id="packages" style="padding: 80px 0; background: #F7F7F9;">
     <div class="container">
+        <div style="max-width: 980px; margin: 0 auto 34px;">
+            <span style="color: #7F3D9E; font-size: 0.82rem; font-weight: 700; letter-spacing: 1.5px;">SHENA BASIC</span>
+            <p style="font-family: 'Playfair Display', serif; color: #2D1A4A; font-size: 1.45rem; line-height: 1.3; margin: 10px 0;">Your main funeral cover for yourself and your family.</p>
+            <p style="color: #6B7280; line-height: 1.7; margin: 0;">Choose an individual, family, or Executive package below. Basic is the cover that supports your family with funeral arrangements when a covered person dies.</p>
+        </div>
         <div class="row">
             <div class="col-lg-8">
                 <ul class="nav nav-tabs mb-4" id="packageTabs" role="tablist" style="border-bottom: 2px solid #E5E7EB;">
@@ -49,7 +54,7 @@
                     <div class="tab-pane fade show active" id="individual" role="tabpanel">
                         <div style="background: white; border-radius: 20px; padding: 40px; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
-                                <h2 style="font-family: 'Playfair Display', serif; font-size: 2rem; font-weight: 700; color: #1A1A1A; margin: 0;">Individual Package Rates</h2>
+                                <h2 style="font-family: 'Playfair Display', serif; font-size: 2rem; font-weight: 700; color: #1A1A1A; margin: 0;">SHENA Basic Packages</h2>
                                 <span style="color: #6B7280; font-size: 0.85rem; font-weight: 600; letter-spacing: 1px;">PRICING 2026</span>
                             </div>
 
@@ -257,15 +262,86 @@
     </div>
 </section>
 
+<!-- SHENA Platinum Packages -->
+<section id="platinum-packages" style="padding: 80px 0; background: #F7F7F9; border-top: 1px solid #E5E7EB;">
+    <div class="container">
+        <div style="max-width: 980px; margin: 0 auto 34px;">
+            <span style="color: #7F3D9E; font-size: 0.82rem; font-weight: 700; letter-spacing: 1.5px;">SHENA PLATINUM</span>
+            <p style="font-family: 'Playfair Display', serif; color: #2D1A4A; font-size: 1.45rem; line-height: 1.3; margin: 10px 0;">Optional inpatient support for selected people.</p>
+            <p style="color: #6B7280; line-height: 1.7; margin: 0;">After joining Basic, add Platinum for up to 20 inpatient bed-cover days per selected person each year. Platinum adds to Basic; it does not replace it. The cover must be active before a request can be considered.</p>
+        </div>
+        <div class="row">
+            <div class="col-lg-8">
+                <ul class="nav nav-tabs mb-4" id="platinumPackageTabs" role="tablist" style="border-bottom: 2px solid #E5E7EB;">
+                    <li class="nav-item" role="presentation"><button class="nav-link active" id="platinum-individual-tab" data-bs-toggle="tab" data-bs-target="#platinum-individual" type="button" role="tab" style="color: #7F3D9E; font-weight: 600; border: none; border-bottom: 3px solid transparent; padding: 12px 24px;">Individual</button></li>
+                    <li class="nav-item" role="presentation"><button class="nav-link" id="platinum-family-tab" data-bs-toggle="tab" data-bs-target="#platinum-family" type="button" role="tab" style="color: #6B7280; font-weight: 600; border: none; border-bottom: 3px solid transparent; padding: 12px 24px;">Family Plans</button></li>
+                    <li class="nav-item" role="presentation"><button class="nav-link" id="platinum-executive-tab" data-bs-toggle="tab" data-bs-target="#platinum-executive" type="button" role="tab" style="color: #6B7280; font-weight: 600; border: none; border-bottom: 3px solid transparent; padding: 12px 24px;">Executive</button></li>
+                </ul>
+
+                <div class="tab-content" id="platinumPackageTabContent">
+                    <div class="tab-pane fade show active" id="platinum-individual" role="tabpanel">
+                        <div style="background: white; border-radius: 20px; padding: 40px; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;"><h2 style="font-family: 'Playfair Display', serif; font-size: 2rem; font-weight: 700; color: #1A1A1A; margin: 0;">SHENA Platinum Packages</h2><span style="color: #7F3D9E; font-size: 0.85rem; font-weight: 600; letter-spacing: 1px;">OPTIONAL ADD-ON</span></div>
+                            <table class="table" style="margin-bottom: 0;"><thead style="background: #F7F7F9;"><tr><th style="padding: 16px; color: #6B7280; font-size: 0.85rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; border: none;">Age Bracket</th><th style="padding: 16px; color: #6B7280; font-size: 0.85rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; border: none;">Monthly Rate (KES)</th><th style="padding: 16px; color: #6B7280; font-size: 0.85rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; border: none; text-align: right;">Action</th></tr></thead><tbody>
+                                <tr style="border-bottom: 1px solid #E5E7EB;"><td style="padding: 20px; font-weight: 600;">Below 70 Years</td><td style="padding: 20px; font-size: 1.5rem; font-weight: 700; color: #7F3D9E;">300</td><td style="padding: 20px; text-align: right;"><a href="/login" class="btn" style="background: #7F3D9E; color: white; padding: 10px 30px; border-radius: 8px; font-weight: 600; text-decoration: none;">Get Started</a></td></tr>
+                                <tr style="border-bottom: 1px solid #E5E7EB;"><td style="padding: 20px; font-weight: 600;">71 - 80 Years</td><td style="padding: 20px; font-size: 1.5rem; font-weight: 700; color: #7F3D9E;">650</td><td style="padding: 20px; text-align: right;"><a href="/login" class="btn" style="background: #7F3D9E; color: white; padding: 10px 30px; border-radius: 8px; font-weight: 600; text-decoration: none;">Get Started</a></td></tr>
+                                <tr style="border-bottom: 1px solid #E5E7EB;"><td style="padding: 20px; font-weight: 600;">81 - 90 Years</td><td style="padding: 20px; font-size: 1.5rem; font-weight: 700; color: #7F3D9E;">650</td><td style="padding: 20px; text-align: right;"><a href="/login" class="btn" style="background: #7F3D9E; color: white; padding: 10px 30px; border-radius: 8px; font-weight: 600; text-decoration: none;">Get Started</a></td></tr>
+                                <tr><td style="padding: 20px; font-weight: 600;">91 - 100 Years</td><td style="padding: 20px; font-size: 1.5rem; font-weight: 700; color: #7F3D9E;">850</td><td style="padding: 20px; text-align: right;"><a href="/login" class="btn" style="background: #7F3D9E; color: white; padding: 10px 30px; border-radius: 8px; font-weight: 600; text-decoration: none;">Get Started</a></td></tr>
+                            </tbody></table>
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="platinum-family" role="tabpanel"><div style="background: white; border-radius: 20px; padding: 40px; box-shadow: 0 4px 20px rgba(0,0,0,0.08);"><h2 style="font-family: 'Playfair Display', serif; font-size: 2rem; font-weight: 700; color: #1A1A1A; margin-bottom: 8px;">SHENA Platinum Family Plans</h2><p style="color: #6B7280; margin-bottom: 24px;">Platinum is priced per family package according to the age band shown below.</p><table class="table" style="margin-bottom: 0;"><thead style="background: #F7F7F9;"><tr><th style="padding: 14px; border: none;">Family package and age band</th><th style="padding: 14px; border: none;">Monthly rate (KES)</th><th style="padding: 14px; border: none; text-align: right;">Action</th></tr></thead><tbody>
+                        <tr><td colspan="3" style="padding: 14px 0 8px; border: none;"><h3 style="font-family: 'Playfair Display', serif; font-size: 1.35rem; font-weight: 700; color: #1A1A1A; margin: 0 0 4px;">Family Plan <span style="font-size: .7rem; background: #F3E8FF; color: #7F3D9E; border-radius: 20px; padding: 4px 10px; font-family: sans-serif; font-weight: 700; vertical-align: middle;">COUPLE</span></h3><p style="color: #6B7280; margin: 0; font-size: .85rem;">Principal member + spouse.</p></td></tr>
+                        <tr><td style="padding: 14px; font-weight: 600;">Couple below 70 years</td><td style="padding: 14px; color: #7F3D9E; font-weight: 700;">350</td><td style="padding: 14px; text-align: right;"><a href="/login" class="btn" style="background: #7F3D9E; color: white; padding: 8px 20px; border-radius: 8px; font-weight: 600; text-decoration: none;">Get Started</a></td></tr>
+                        <tr><td style="padding: 14px; font-weight: 600;">Couple below 70 years & children below 18</td><td style="padding: 14px; color: #7F3D9E; font-weight: 700;">400</td><td style="padding: 14px; text-align: right;"><a href="/login" class="btn" style="background: #7F3D9E; color: white; padding: 8px 20px; border-radius: 8px; font-weight: 600; text-decoration: none;">Get Started</a></td></tr>
+                        <tr><td colspan="3" style="padding: 20px 0 8px; border: none;"><h3 style="font-family: 'Playfair Display', serif; font-size: 1.35rem; font-weight: 700; color: #1A1A1A; margin: 0 0 4px;">Extended Family 1 <span style="font-size: .7rem; background: #F3E8FF; color: #7F3D9E; border-radius: 20px; padding: 4px 10px; font-family: sans-serif; font-weight: 700; vertical-align: middle;">COUPLE + CHILDREN + PARENTS</span></h3><p style="color: #6B7280; margin: 0; font-size: .85rem;">Rate based on the age of the oldest parent being covered.</p></td></tr>
+                        <tr><td style="padding: 14px; font-weight: 600;">Couple, children & parents below 70</td><td style="padding: 14px; color: #7F3D9E; font-weight: 700;">450</td><td style="padding: 14px; text-align: right;"><a href="/login" class="btn" style="background: #7F3D9E; color: white; padding: 8px 20px; border-radius: 8px; font-weight: 600; text-decoration: none;">Get Started</a></td></tr>
+                        <tr><td style="padding: 14px; font-weight: 600;">Couple, children, parents & in-laws below 70</td><td style="padding: 14px; color: #7F3D9E; font-weight: 700;">500</td><td style="padding: 14px; text-align: right;"><a href="/login" class="btn" style="background: #7F3D9E; color: white; padding: 8px 20px; border-radius: 8px; font-weight: 600; text-decoration: none;">Get Started</a></td></tr>
+                        <tr><td colspan="3" style="padding: 20px 0 8px; border: none;"><h3 style="font-family: 'Playfair Display', serif; font-size: 1.35rem; font-weight: 700; color: #1A1A1A; margin: 0 0 4px;">Extended Family 2 <span style="font-size: .7rem; background: #FEF3E8; color: #D97706; border-radius: 20px; padding: 4px 10px; font-family: sans-serif; font-weight: 700; vertical-align: middle;">COUPLE + CHILDREN + PARENTS + IN-LAWS</span></h3><p style="color: #6B7280; margin: 0; font-size: .85rem;">Rate based on the age of the oldest parent or in-law being covered.</p></td></tr>
+                        <tr><td style="padding: 14px; font-weight: 600;">Couple, children & parents, 71-80 years</td><td style="padding: 14px; color: #7F3D9E; font-weight: 700;">550</td><td style="padding: 14px; text-align: right;"><a href="/login" class="btn" style="background: #7F3D9E; color: white; padding: 8px 20px; border-radius: 8px; font-weight: 600; text-decoration: none;">Get Started</a></td></tr>
+                        <tr><td style="padding: 14px; font-weight: 600;">Couple, children & parents & in-laws, 71-80 years</td><td style="padding: 14px; color: #7F3D9E; font-weight: 700;">600</td><td style="padding: 14px; text-align: right;"><a href="/login" class="btn" style="background: #7F3D9E; color: white; padding: 8px 20px; border-radius: 8px; font-weight: 600; text-decoration: none;">Get Started</a></td></tr>
+                        <tr><td style="padding: 14px; font-weight: 600;">Couple, children & parents, 81-90 years</td><td style="padding: 14px; color: #7F3D9E; font-weight: 700;">650</td><td style="padding: 14px; text-align: right;"><a href="/login" class="btn" style="background: #7F3D9E; color: white; padding: 8px 20px; border-radius: 8px; font-weight: 600; text-decoration: none;">Get Started</a></td></tr>
+                        <tr><td style="padding: 14px; font-weight: 600;">Couple, children & parents & in-laws, 81-90 years</td><td style="padding: 14px; color: #7F3D9E; font-weight: 700;">750</td><td style="padding: 14px; text-align: right;"><a href="/login" class="btn" style="background: #7F3D9E; color: white; padding: 8px 20px; border-radius: 8px; font-weight: 600; text-decoration: none;">Get Started</a></td></tr>
+                        <tr><td style="padding: 14px; font-weight: 600;">Couple, children & parents, 91-100 years</td><td style="padding: 14px; color: #7F3D9E; font-weight: 700;">850</td><td style="padding: 14px; text-align: right;"><a href="/login" class="btn" style="background: #7F3D9E; color: white; padding: 8px 20px; border-radius: 8px; font-weight: 600; text-decoration: none;">Get Started</a></td></tr>
+                        <tr><td style="padding: 14px; font-weight: 600;">Couple, children & parents & in-laws, 91-100 years</td><td style="padding: 14px; color: #7F3D9E; font-weight: 700;">850</td><td style="padding: 14px; text-align: right;"><a href="/login" class="btn" style="background: #7F3D9E; color: white; padding: 8px 20px; border-radius: 8px; font-weight: 600; text-decoration: none;">Get Started</a></td></tr>
+                    </tbody></table></div></div>
+                    <div class="tab-pane fade" id="platinum-executive" role="tabpanel"><div style="background: white; border-radius: 20px; padding: 40px; box-shadow: 0 4px 20px rgba(0,0,0,0.08);"><h2 style="font-family: 'Playfair Display', serif; font-size: 2rem; font-weight: 700; color: #1A1A1A; margin-bottom: 8px;">SHENA Platinum Executive</h2><p style="color: #6B7280; margin-bottom: 24px;">Age-based Platinum add-on rates for Executive membership.</p><table class="table" style="margin-bottom: 0;"><thead style="background: #FEF3E8;"><tr><th style="padding: 16px; border: none;">Executive covered person</th><th style="padding: 16px; border: none;">Monthly rate (KES)</th><th style="padding: 16px; border: none; text-align: right;">Action</th></tr></thead><tbody><tr><td style="padding: 20px; font-weight: 600;">Executive individual below 70 years</td><td style="padding: 20px; font-size: 1.5rem; font-weight: 700; color: #D97706;">500</td><td style="padding: 20px; text-align: right;"><a href="/login" class="btn" style="background: #D97706; color: white; padding: 10px 30px; border-radius: 8px; font-weight: 600; text-decoration: none;">Get Started</a></td></tr><tr><td style="padding: 20px; font-weight: 600;">Executive individual above 70 years</td><td style="padding: 20px; font-size: 1.5rem; font-weight: 700; color: #D97706;">700</td><td style="padding: 20px; text-align: right;"><a href="/login" class="btn" style="background: #D97706; color: white; padding: 10px 30px; border-radius: 8px; font-weight: 600; text-decoration: none;">Get Started</a></td></tr></tbody></table></div></div>
+                </div>
+            </div>
+            <div class="col-lg-4"><div style="position: sticky; top: 100px;"><div style="background: white; border-radius: 20px; padding: 35px; box-shadow: 0 4px 20px rgba(0,0,0,0.08);"><div style="display: flex; align-items: center; gap: 12px; margin-bottom: 24px;"><i class="fas fa-hospital" style="color: #7F3D9E; font-size: 1.5rem;"></i><h3 style="font-family: 'Playfair Display', serif; font-size: 1.5rem; font-weight: 700; margin: 0;">Platinum at a Glance</h3></div><p style="color: #6B7280; font-size: .85rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 16px;">ANNUAL INPATIENT SUPPORT</p><div style="background: #F3E8FF; border-radius: 12px; padding: 20px; margin-bottom: 24px;"><p style="color: #7F3D9E; font-size: 2rem; font-weight: 700; margin: 0;">20 <span style="font-size: 1rem; font-weight: 500;">days</span></p><p style="color: #6B7280; font-size: .85rem; margin: 0;">per selected person each year</p></div><p style="color: #6B7280; font-size: .85rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 16px;">MATURITY PERIOD</p><div style="background: #F7F7F9; border-radius: 12px; padding: 20px; display: flex; justify-content: space-around;"><div style="text-align: center;"><p style="color: #6B7280; font-size: .85rem; margin-bottom: 8px;">Under 60</p><p style="color: #7F3D9E; font-size: 1.6rem; font-weight: 700; margin: 0;">4<span style="font-size: .9rem; font-weight: 500;"> mos</span></p></div><div style="width: 1px; background: #E5E7EB;"></div><div style="text-align: center;"><p style="color: #6B7280; font-size: .85rem; margin-bottom: 8px;">60+</p><p style="color: #7F3D9E; font-size: 1.6rem; font-weight: 700; margin: 0;">7<span style="font-size: .9rem; font-weight: 500;"> mos</span></p></div></div></div></div></div>
+        </div>
+    </div>
+</section>
+
+<?php
+$platinumPriceByBracket = ['Below 70' => 300, '71 - 80' => 650, '81 - 90' => 650, '91 - 100' => 850];
+$comparisonRows = [];
+foreach (($packages ?? []) as $package) {
+    $name = (string) ($package['name'] ?? 'Basic package');
+    $base = (int) ($package['monthly_contribution'] ?? 0);
+    $category = (string) ($package['category'] ?? '');
+    $bracket = str_contains($name, '71-80') ? '71 - 80' : (str_contains($name, '81-90') ? '81 - 90' : (str_contains($name, '91-100') ? '91 - 100' : 'Below 70'));
+    $platinum = $platinumPriceByBracket[$bracket];
+    $comparisonRows[] = ['name' => $name, 'base' => $base, 'platinum' => $platinum, 'category' => $category];
+}
+?>
+
 <!-- Compare Plans Section (same design language as cards) -->
 <section style="padding: 80px 0; background: white;">
     <div class="container">
         <div class="text-center mb-5">
             <h2 class="mb-3" style="font-family: 'Playfair Display', serif; font-size: 3rem; font-weight: 700; color: #1A1A1A;">Compare Plans</h2>
-            <p style="color: #6B7280; font-size: 1.1rem; max-width: 700px; margin: 0 auto;">Quick side-by-side plan comparison with the same card design style used across this page.</p>
+            <p style="color: #6B7280; font-size: 1.1rem; max-width: 760px; margin: 0 auto;">This comparison helps you see the difference at a glance: Basic supports your family with funeral services, while Platinum adds inpatient support for the people you select. The Platinum contribution is charged per selected person and depends on that person's age.</p>
         </div>
 
-        <div class="row g-4">
+        <div class="table-responsive mb-5" style="display:none;">
+            <table class="table mb-0 align-middle"><thead style="background:#2D1A4A;color:#fff;"><tr><th style="padding:16px;">Basic plan</th><th style="padding:16px;">Basic / month</th><th style="padding:16px;">Platinum add-on*</th><th style="padding:16px;">Basic + Platinum example</th></tr></thead><tbody>
+            <?php foreach ($comparisonRows as $row): ?><tr><td style="padding:15px;font-weight:600;color:#2D1A4A;"><?php echo htmlspecialchars($row['name']); ?></td><td style="padding:15px;">KES <?php echo number_format($row['base']); ?></td><td style="padding:15px;color:#7F3D9E;font-weight:700;">KES <?php echo number_format($row['platinum']); ?> / selected person</td><td style="padding:15px;font-weight:700;color:#7F3D9E;">KES <?php echo number_format($row['base'] + $row['platinum']); ?> / month</td></tr><?php endforeach; ?>
+            </tbody></table>
+        </div>
+        <p style="display:none;">* Platinum age bands: below 70 = KES 300; 71-80 = KES 650; 81-90 = KES 650; 91-100 = KES 850. Family plans may select Platinum for one or more eligible covered people, so the final total depends on who is selected.</p>
+
+        <div class="row g-4" style="display:none;">
             <div class="col-lg-3 col-md-6">
                 <div style="background: white; border: 2px solid #E5E7EB; border-radius: 20px; padding: 40px 30px; height: 100%; box-shadow: 0 4px 20px rgba(0,0,0,0.06); text-align: center; display: flex; flex-direction: column;">
                     <div style="width: 70px; height: 70px; background: #F3E8FF; border-radius: 16px; display: flex; align-items: center; justify-content: center; margin: 0 auto 24px;"><i class="fas fa-user" style="color: #7F3D9E; font-size: 2rem;"></i></div>
@@ -321,11 +397,66 @@
                     <a href="/register?plan=executive" class="btn" style="background-color: #D97706; color: white; border-radius: 8px; font-weight: 600; text-decoration: none; padding: 10px 0; width: 100%; display: block;">Get Started</a>
                 </div>
             </div>
+
+            <div class="col-lg-3 col-md-6" id="platinum">
+                <div style="background: #2D1A4A; border: 2px solid #C9A659; border-radius: 20px; padding: 40px 30px; height: 100%; box-shadow: 0 8px 30px rgba(45,26,74,0.18); text-align: center; display: flex; flex-direction: column;">
+                    <div style="width: 70px; height: 70px; background: #C9A659; border-radius: 16px; display: flex; align-items: center; justify-content: center; margin: 0 auto 24px;"><i class="fas fa-hospital" style="color: #2D1A4A; font-size: 2rem;"></i></div>
+                    <h3 class="mb-2" style="font-family: 'Playfair Display', serif; font-size: 1.5rem; font-weight: 700; color: white;">Platinum Add-on</h3>
+                    <p style="color: rgba(255,255,255,.75); font-size: 0.9rem; margin-bottom: 18px;">Optional inpatient support</p>
+                    <div style="margin-bottom: 12px;"><span style="color: #E8C879; font-size: 2rem; font-weight: 700;">KES 300+</span><small style="color:rgba(255,255,255,.7);"> / selected person / month</small></div>
+                    <p style="color: rgba(255,255,255,.75); font-size: 0.88rem; margin-bottom: 20px; flex: 1;">The exact add-on amount follows the person's age band. Add it to any Basic plan after membership.</p>
+                    <a href="/login" class="btn" style="background-color: #C9A659; color: #2D1A4A; border-radius: 8px; font-weight: 700; text-decoration: none; padding: 10px 0; width: 100%; display: block;">Get Started</a>
+                </div>
+            </div>
         </div>
+
+        <div style="max-width: 980px; margin: 0 auto; border: 1px solid #E5E7EB; border-radius: 20px; overflow: hidden; box-shadow: 0 12px 35px rgba(45,26,74,.10); background: white;">
+            <div class="row g-0" style="background: #2D1A4A; color: white; margin: 0;">
+                <div class="col-6" style="padding: 22px 28px; font-weight: 700; font-size: 1.05rem;">Feature</div>
+                <div class="col-3 text-center" style="padding: 22px 12px; background: #7F3D9E; font-weight: 700;">SHENA Basic</div>
+                <div class="col-3 text-center" style="padding: 22px 12px; background: #C9A659; color: #2D1A4A; font-weight: 700;">SHENA Platinum</div>
+            </div>
+            <div class="row g-0 align-items-center" style="margin: 0; border-bottom: 1px solid #E5E7EB;">
+                <div class="col-6" style="padding: 18px 28px; color: #2D1A4A; font-weight: 600;">Last Respect funeral cover</div>
+                <div class="col-3 text-center" style="padding: 18px; color: #7F3D9E; font-size: 1.25rem;">&#10003;</div>
+                <div class="col-3 text-center" style="padding: 18px; color: #6B7280;">Add-on</div>
+            </div>
+            <div class="row g-0 align-items-center" style="margin: 0; border-bottom: 1px solid #E5E7EB; background: #FCFBFE;">
+                <div class="col-6" style="padding: 18px 28px; color: #2D1A4A; font-weight: 600;">Mortuary support up to 14 days</div>
+                <div class="col-3 text-center" style="padding: 18px; color: #7F3D9E; font-size: 1.25rem;">&#10003;</div>
+                <div class="col-3 text-center" style="padding: 18px; color: #6B7280;">Included with Basic</div>
+            </div>
+            <div class="row g-0 align-items-center" style="margin: 0; border-bottom: 1px solid #E5E7EB;">
+                <div class="col-6" style="padding: 18px 28px; color: #2D1A4A; font-weight: 600;">Inpatient bed-cover support</div>
+                <div class="col-3 text-center" style="padding: 18px; color: #9CA3AF; font-size: 1.25rem;">&mdash;</div>
+                <div class="col-3 text-center" style="padding: 18px; color: #7F3D9E; font-size: 1.25rem;">&#10003;</div>
+            </div>
+            <div class="row g-0 align-items-center" style="margin: 0; border-bottom: 1px solid #E5E7EB; background: #FCFBFE;">
+                <div class="col-6" style="padding: 18px 28px; color: #2D1A4A; font-weight: 600;">Annual inpatient allowance</div>
+                <div class="col-3 text-center" style="padding: 18px; color: #9CA3AF;">&mdash;</div>
+                <div class="col-3 text-center" style="padding: 18px; color: #7F3D9E; font-weight: 700;">20 days</div>
+            </div>
+            <div class="row g-0 align-items-center" style="margin: 0; border-bottom: 1px solid #E5E7EB;">
+                <div class="col-6" style="padding: 18px 28px; color: #2D1A4A; font-weight: 600;">Selected per covered person</div>
+                <div class="col-3 text-center" style="padding: 18px; color: #6B7280;">Basic member</div>
+                <div class="col-3 text-center" style="padding: 18px; color: #7F3D9E; font-size: 1.25rem;">&#10003;</div>
+            </div>
+            <div class="row g-0 align-items-center" style="margin: 0; background: #FCFBFE;">
+                <div class="col-6" style="padding: 18px 28px; color: #2D1A4A; font-weight: 600;">Monthly contribution</div>
+                <div class="col-3 text-center" style="padding: 18px; color: #7F3D9E; font-weight: 700;">Basic rates</div>
+                <div class="col-3 text-center" style="padding: 18px; color: #7F3D9E; font-weight: 700;">KES 300 - 850</div>
+            </div>
+        </div>
+        <p style="color:#6B7280;font-size:.9rem;max-width:980px;margin:20px auto 0;text-align:center;">SHENA Platinum is an optional add-on to SHENA Basic. Its contribution is charged per selected covered person and follows the age and package schedules above.</p>
     </div>
 </section>
 
 <style>
+#packages .row > div[style*="border-left"],
+#platinum-packages .row > div[style*="border-left"] {
+    border-left: 0 !important;
+    border-top: 1px solid #D9D3DF;
+}
 #packageTabs .nav-link.active {
     color: #7F3D9E !important;
     border-bottom-color: #7F3D9E !important;

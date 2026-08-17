@@ -29,10 +29,55 @@
     .booklet-wrap ul li { margin-bottom: 6px; }
     .booklet-toc a { text-decoration: none; color: #7F3D9E; font-weight: 500; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px dotted #D1D5DB; padding: 6px 0; }
     .booklet-toc a:hover { color: #5A1F73; }
+    .policy-sidebar a { text-decoration: none; color: #4B5563; font-size: 0.82rem; padding: 8px 10px; border-radius: 8px; display: flex; align-items: center; gap: 8px; transition: background 0.2s, color 0.2s; }
+    .policy-sidebar a:hover { background: #F3E8FF; color: #7F3D9E; }
+    @media (min-width: 992px) {
+        body:has(.policy-booklet-body) { overflow: hidden; }
+        .policy-booklet-body { position: fixed; top: 194px; right: 0; bottom: 0; left: 0; overflow: hidden; padding: 16px 0 24px !important; z-index: 1; }
+        .policy-booklet-body > .container > .row { display: block; }
+        .policy-sidebar { position: fixed; top: 210px; left: max(16px, calc((100vw - 1160px) / 2)); width: 262px; z-index: 10; }
+        .policy-sidebar > div { max-height: calc(100vh - 124px); overflow-y: auto; }
+        .policy-document-scroll { width: calc(100% - 292px); margin-left: 292px; height: calc(100vh - 234px); overflow-y: auto; padding-right: 10px; }
+        .policy-document-scroll::-webkit-scrollbar { width: 8px; }
+        .policy-document-scroll::-webkit-scrollbar-thumb { background: #D8B4FE; border-radius: 8px; }
+    }
+    @media (max-width: 991.98px) { .policy-sidebar { margin-bottom: 24px; } }
+    @media (max-width: 991.98px) {
+        .policy-booklet-body { overflow-x: hidden; }
+        .policy-booklet-body .container { max-width: 100%; padding-left: 12px; padding-right: 12px; }
+        .policy-booklet-body .booklet-wrap { width: 100%; max-width: 100%; padding: 32px 20px !important; overflow-wrap: anywhere; }
+        .policy-booklet-body [style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
+        .policy-booklet-body table { min-width: 0; }
+    }
+    @media (max-width: 575.98px) {
+        .policy-booklet-body .booklet-wrap { padding: 26px 16px !important; border-radius: 10px; }
+        .policy-booklet-body .booklet-cover h1 { font-size: 1.65rem !important; }
+        .policy-booklet-body .booklet-cover h2 { font-size: 1.2rem !important; }
+        .policy-booklet-body .section-block h2 { font-size: 1.08rem !important; }
+    }
+    @media print {
+        .policy-document-scroll { height: auto !important; overflow: visible !important; padding-right: 0 !important; }
+    }
 </style>
 
 <section class="policy-booklet-body reveal-exempt" style="padding: 60px 0; background: #F7F7F9;">
-    <div class="container" style="max-width: 840px;">
+    <div class="container" style="max-width: 1160px;">
+        <div class="row g-4 align-items-start">
+            <aside class="col-lg-3 d-none d-lg-block policy-sidebar d-print-none">
+                <div style="background: white; border-radius: 14px; padding: 22px; box-shadow: 0 4px 16px rgba(0,0,0,0.07); position: sticky; top: 80px;">
+                    <p style="font-size: 0.72rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #7F3D9E; margin: 0 0 14px;">Policy sections</p>
+                    <nav style="display: flex; flex-direction: column; gap: 3px;">
+                        <?php foreach ([['pb-intro','About SHENA'],['pb-eligibility','Eligibility & Registration'],['pb-packages','Packages & Contributions'],['pb-waiting','Waiting Period'],['pb-benefits','Last Respect Benefits'],['pb-dependents','Registered Dependents'],['pb-claims','Claims Procedure'],['pb-suspension','Suspension & Reinstatement'],['pb-obligations','Member Obligations'],['pb-exclusions','Exclusions'],['pb-termination','Termination'],['pb-amendments','Policy Amendments'],['pb-contact','Contact & Complaints']] as $link): ?>
+                            <a href="#<?php echo $link[0]; ?>"><i class="fas fa-chevron-right fa-fw" style="color:#7F3D9E; opacity:.7;"></i><?php echo $link[1]; ?></a>
+                        <?php endforeach; ?>
+                    </nav>
+                    <div style="border-top: 1px solid #F3F4F6; padding-top: 16px; margin-top: 16px;">
+                        <a href="/terms-and-conditions" style="color:#7F3D9E; font-weight:600;"><i class="fas fa-file-contract fa-fw"></i> Terms &amp; Conditions</a>
+                        <a href="/privacy-policy" style="color:#7F3D9E; font-weight:600;"><i class="fas fa-shield-alt fa-fw"></i> Privacy Policy</a>
+                    </div>
+                </div>
+            </aside>
+            <div class="col-lg-9 policy-document-scroll">
         <div class="booklet-wrap" style="background: #fff; border-radius: 16px; padding: 60px 56px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); color: #374151; line-height: 1.85;">
 
             <!-- Cover Block -->
@@ -93,34 +138,35 @@
                     <p>Providing false or misleading information during registration is grounds for immediate cancellation of membership without refund.</p>
                 '],
                 ['id' => 'pb-packages', 'num' => '3', 'title' => 'Membership Packages & Contributions', 'body' => '
-                    <p>SHENA offers three membership tiers. Monthly contribution rates are as follows:</p>
+                    <p><strong>SHENA Basic</strong> is the core membership. It provides the Association\'s Last Respect funeral support when a covered person dies. <strong>SHENA Platinum</strong> is an optional add-on to Basic, not a replacement for it and not a funeral benefit. Platinum adds inpatient bed-cover support for each person specifically selected for Platinum.</p>
                     <div style="overflow-x: auto; margin: 16px 0;">
                         <table style="width: 100%; border-collapse: collapse; font-size: 0.93rem;">
                             <thead>
                                 <tr style="background: #7F3D9E; color: white;">
                                     <th style="padding: 12px 16px; text-align: left; border-radius: 6px 0 0 6px;">Package</th>
                                     <th style="padding: 12px 16px; text-align: left;">Coverage</th>
-                                    <th style="padding: 12px 16px; text-align: left;">Age Below 70</th>
-                                    <th style="padding: 12px 16px; text-align: left; border-radius: 0 6px 6px 0;">Age 70+</th>
+                                    <th style="padding: 12px 16px; text-align: left;">Basic monthly schedule</th>
+                                    <th style="padding: 12px 16px; text-align: left; border-radius: 0 6px 6px 0;">Platinum monthly schedule</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr style="border-bottom: 1px solid #E5E7EB;">
-                                    <td style="padding: 12px 16px; font-weight: 600;">Individual</td>
+                                    <td style="padding: 12px 16px; font-weight: 600;">SHENA Basic — Individual</td>
                                     <td style="padding: 12px 16px; color: #6B7280;">Member only</td>
-                                    <td style="padding: 12px 16px;">KES 100/mo</td>
-                                    <td style="padding: 12px 16px;">KES 200/mo</td>
+                                    <td style="padding: 12px 16px;">KES 100–650/mo by age</td>
+                                    <td style="padding: 12px 16px;">See Basic schedule</td>
                                 </tr>
                                 <tr style="border-bottom: 1px solid #E5E7EB; background: #FAF5FF;">
-                                    <td style="padding: 12px 16px; font-weight: 600;">Family / Couples</td>
-                                    <td style="padding: 12px 16px; color: #6B7280;">Member + spouse + up to 4 children</td>
-                                    <td style="padding: 12px 16px;">KES 150/mo</td>
-                                    <td style="padding: 12px 16px;">KES 300/mo</td>
+                                    <td style="padding: 12px 16px; font-weight: 600;">SHENA Basic — Family</td>
+                                    <td style="padding: 12px 16px; color: #6B7280;">Family package as registered</td>
+                                    <td style="padding: 12px 16px;">KES 150–650/mo</td>
+                                    <td style="padding: 12px 16px;">See Basic schedule</td>
                                 </tr>
                                 <tr>
-                                    <td style="padding: 12px 16px; font-weight: 600;">Executive</td>
-                                    <td style="padding: 12px 16px; color: #6B7280;">Member + extended family (as registered)</td>
-                                    <td style="padding: 12px 16px;" colspan="2">KES 500/mo (all ages)</td>
+                                    <td style="padding: 12px 16px; font-weight: 600;">SHENA Platinum</td>
+                                    <td style="padding: 12px 16px; color: #6B7280;">Optional inpatient add-on per selected person</td>
+                                    <td style="padding: 12px 16px;">KES 300-850/mo</td>
+                                    <td style="padding: 12px 16px;">See Platinum schedule</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -129,8 +175,10 @@
                     <p><strong>Payment method:</strong> M-Pesa Paybill <strong>4163987</strong>. Use your full name or National ID number as the account reference. Retain your M-Pesa confirmation SMS as proof of payment.</p>
                 '],
                 ['id' => 'pb-waiting', 'num' => '4', 'title' => 'Waiting Period', 'body' => '
-                    <p>New members must complete a <strong>minimum 3-month waiting period</strong> before claims on their own behalf are eligible. During the waiting period, contributions are mandatory and are applied toward future benefit eligibility.</p>
-                    <p>Newly registered dependents are similarly subject to a waiting period from the date of their registration within the member\'s account. Claims filed during a waiting period will not be approved except in exceptional circumstances at the sole discretion of the SHENA management committee.</p>
+                    <p>SHENA Basic cover follows the waiting period applicable to the selected Basic package. For SHENA Platinum, maturity is <strong>4 months for selected people below age 60</strong> and <strong>7 months for selected people aged 60 and above</strong>, calculated from the effective date of that person\'s approved Platinum cover.</p>
+                    <p>Platinum inpatient requests are considered only after the selected person\'s cover is active and mature, contributions are current, and the request passes eligibility and administrative review. Newly added or changed covered people may have a new waiting period from their effective date.</p>
+                    <p>To request Platinum inpatient support, the member must identify the covered person and provide the facility name and location or contact, admission date, requested number of days, and any available admission or doctor reference. SHENA may approve fewer days than requested when the annual balance is lower.</p>
+                    <p>A request may be declined where the person is not selected for Platinum, the admission is not an inpatient case, the annual 20-day balance is exhausted, the facility details cannot be verified, the admission falls outside the active cover period, contributions are overdue, or false information has been provided. Unused days expire at year-end and do not carry forward.</p>
                 '],
                 ['id' => 'pb-benefits', 'num' => '5', 'title' => 'Benefits — Last Respect Services', 'body' => '
                     <p>Upon approval of a valid claim, SHENA will coordinate and provide the following services directly:</p>
@@ -149,6 +197,23 @@
                     </div>
                     <p style="color: #DC2626; font-size: 0.9rem; margin-top: 12px;"><i class="fas fa-exclamation-triangle me-1"></i> <strong>Important:</strong> SHENA covers mortuary fees only from the point of claim approval. Hospital admission fees, initial morgue entry charges, and any costs incurred before claim submission are the responsibility of the member\'s family.</p>
                     <p>All services are provided <strong>in-kind</strong> through SHENA-authorized service providers. Benefits cannot be converted to cash payments.</p>
+                    <div style="margin-top: 28px; padding-top: 22px; border-top: 1px solid #E9DDF2;">
+                        <h3 style="font-family: \'Playfair Display\', serif; color: #2D1A4A; font-size: 1.35rem; margin: 0 0 8px;">Platinum Inpatient Bed-Cover</h3>
+                        <p>For a person specifically selected for SHENA Platinum, the following inpatient support applies after the cover is active and mature:</p>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0;">
+                            ' . implode('', array_map(function($b) {
+                                return '<div style="background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 10px; padding: 14px 16px; display: flex; align-items: start; gap: 10px;"><i class="fas fa-check-circle" style="color: #7F3D9E; margin-top: 2px; flex-shrink: 0;"></i><span style="font-size: 0.92rem;">'.$b.'</span></div>';
+                            }, [
+                                'Up to <strong>20 inpatient bed-cover days</strong> per selected person each year',
+                                'Cover may be used across more than one inpatient admission',
+                                'The person must be specifically selected and approved for Platinum',
+                                'Facility name, location or contact, admission date, and requested days are required',
+                                'Requests are subject to active cover, current contributions, and administrative review',
+                                'Unused days expire at year-end and do not carry forward',
+                            ])) . '
+                        </div>
+                        <p style="color: #DC2626; font-size: 0.9rem; margin-top: 12px;"><i class="fas fa-exclamation-triangle me-1"></i> <strong>Important:</strong> Platinum is an optional add-on to Basic. It does not replace Last Respect Services, and SHENA may approve fewer days than requested where the remaining annual balance is lower.</p>
+                    </div>
                 '],
                 ['id' => 'pb-dependents', 'num' => '6', 'title' => 'Registered Dependents', 'body' => '
                     <p>Members may register the following persons as covered dependents (subject to package limits):</p>
@@ -253,6 +318,8 @@
                 <p style="margin: 0; opacity: 0.6; font-size: 0.82rem;">Document Version: April 2026 &nbsp;|&nbsp; <em>"We Are Royal"</em></p>
             </div>
 
+        </div>
+            </div>
         </div>
     </div>
 </section>

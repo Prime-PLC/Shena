@@ -80,7 +80,10 @@
     <button onclick="nextSlide()" style="position:absolute; right:20px; top:50%; transform:translateY(-50%); z-index:20; background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.3); color:white; width:46px; height:46px; border-radius:50%; font-size:1.1rem; cursor:pointer; backdrop-filter:blur(4px); transition:background 0.2s;" aria-label="Next slide">
         <i class="fas fa-chevron-right"></i>
     </button>
+
 </section>
+
+<section style="padding:56px 0;background:#F7F7F9;border-top:1px solid #E5E7EB;border-bottom:1px solid #E5E7EB;"><div class="container"><div class="row align-items-center g-0"><div class="col-lg-5 pe-lg-5 pb-4 pb-lg-0"><span style="color:#7F3D9E;font-weight:700;letter-spacing:1.4px;">SHENA BASIC</span><p style="color:#2D1A4A;font-family:'Playfair Display',serif;font-size:1.45rem;line-height:1.3;margin:10px 0;">The cover that helps your family arrange a dignified funeral.</p><p style="color:#6B7280;line-height:1.7;margin:0;">Basic is where every SHENA membership begins, with practical funeral support when a covered loved one dies.</p></div><div class="col-lg-5 px-lg-5 py-4 py-lg-0" style="border-left:1px solid #D9D3DF;"><span style="color:#7F3D9E;font-weight:700;letter-spacing:1.4px;">SHENA PLATINUM</span><p style="color:#2D1A4A;font-family:'Playfair Display',serif;font-size:1.45rem;line-height:1.3;margin:10px 0;">Extra inpatient support for the people you choose.</p><p style="color:#6B7280;line-height:1.7;margin:0;">Add Platinum to Basic for up to 20 inpatient bed-cover days per selected person each year. It is optional and does not replace Basic.</p></div><div class="col-lg-2 text-lg-end pt-4 pt-lg-0 ps-lg-4"><a href="/membership#platinum" class="btn" style="background:#7F3D9E;color:#fff;margin-bottom:10px;">Compare covers</a><a href="/services#platinum" style="color:#7F3D9E;font-weight:600;display:block;">See services</a></div></div></div></section>
 
 <script>
 (function() {
@@ -135,14 +138,14 @@
                 Professional Care & Services
                 <span style="display: block; width: 80px; height: 3px; background: linear-gradient(90deg, #C9A659, #E8C879); margin: 15px auto 0;"></span>
             </h2>
-            <p style="color: #718096; max-width: 650px; margin: 0 auto; font-size: 1rem; line-height: 1.6;">
-                Providing a comprehensive range of services with the highest standard of respect and royal attention.
+            <p style="color: #718096; max-width: 700px; margin: 0 auto; font-size: 1rem; line-height: 1.6;">
+                When a family needs support, SHENA helps coordinate the practical arrangements with care. Start with Basic funeral support, then explore Platinum if you would also like inpatient bed-cover support for selected family members.
             </p>
         </div>
 
         <div class="text-center mb-4">
             <h3 style="font-family: 'Playfair Display', serif; font-size: 1.8rem; color: #1A1A1A; margin-bottom: 8px;">Last Respect Services</h3>
-            <p style="color: #6B7280; font-size: 0.95rem; margin: 0;">Funeral support services provided in-kind by SHENA during bereavement.</p>
+            <p style="color: #6B7280; font-size: 0.95rem; margin: 0;">These are the funeral arrangements SHENA coordinates directly with approved service providers, so your family can focus on one another during bereavement.</p>
         </div>
 
         <div class="row g-4 justify-content-center">
@@ -210,10 +213,13 @@
                     </p>
                 </div>
             </div>
+
         </div>
 
     </div>
 </section>
+
+<section id="platinum" style="padding:72px 0;background:#F7F7F9;border-top:1px solid #E5E7EB;"><div class="container"><div class="text-center mb-4"><h2 style="font-family:'Playfair Display',serif;font-size:2.2rem;font-weight:700;color:#2D1A4A;margin-bottom:8px;">SHENA Platinum</h2><p style="color:#6B7280;font-size:.95rem;max-width:650px;margin:0 auto;line-height:1.6;">A separate add-on to SHENA Basic providing inpatient bed-cover support for selected covered people.</p></div><div class="row g-4 justify-content-center"><div class="col-lg col-md-4 col-sm-6" style="max-width:220px;"><div class="text-center" style="padding:20px;"><div style="width:70px;height:70px;background:#F3E8FF;border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;"><i class="fas fa-hospital" style="color:#7F3D9E;font-size:2rem;"></i></div><h4 style="color:#2D3748;font-weight:600;font-size:1.1rem;margin-bottom:12px;">Inpatient Bed-Cover</h4><p style="color:#718096;font-size:.9rem;line-height:1.6;">Up to 20 inpatient bed-cover days per selected person each calendar year.</p></div></div><div class="col-lg col-md-4 col-sm-6" style="max-width:220px;"><div class="text-center" style="padding:20px;"><div style="width:70px;height:70px;background:#F3E8FF;border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;"><i class="fas fa-user-check" style="color:#7F3D9E;font-size:2rem;"></i></div><h4 style="color:#2D3748;font-weight:600;font-size:1.1rem;margin-bottom:12px;">Selected People</h4><p style="color:#718096;font-size:.9rem;line-height:1.6;">Choose yourself, registered dependants, or eligible corporate members individually.</p></div></div><div class="col-lg col-md-4 col-sm-6" style="max-width:220px;"><div class="text-center" style="padding:20px;"><div style="width:70px;height:70px;background:#F3E8FF;border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;"><i class="fas fa-calendar-check" style="color:#7F3D9E;font-size:2rem;"></i></div><h4 style="color:#2D3748;font-weight:600;font-size:1.1rem;margin-bottom:12px;">Annual Allowance</h4><p style="color:#718096;font-size:.9rem;line-height:1.6;">Active, mature cover provides an annual inpatient support allowance.</p></div></div></div><div class="text-center mt-3"><a href="/membership#platinum" style="color:#7F3D9E;font-weight:600;text-decoration:none;">See Platinum and Basic pricing <i class="fas fa-arrow-right"></i></a></div></div></section>
 
 <!-- Why We Are The Royal Choice Section -->
 <section style="padding: 80px 0; background: #F7FAFC;">
