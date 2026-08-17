@@ -842,7 +842,7 @@ $editCampaignToOpenJson = $editCampaignToOpen ? json_encode([
                             <button class="action-btn" onclick="viewCampaign(<?php echo $campaign['id']; ?>)" title="View Details">
                                 <i class="fas fa-eye"></i>
                             </button>
-                            <?php if ($campaign['status'] === 'draft' || $campaign['status'] === 'scheduled'): ?>
+                            <?php if (in_array($campaign['status'], ['draft', 'scheduled', 'paused'], true)): ?>
                                 <button class="action-btn" data-campaign="<?php echo $campaignEditJson; ?>" onclick="editSmsCampaign(this)" title="Edit">
                                     <i class="fas fa-edit"></i>
                                 </button>
