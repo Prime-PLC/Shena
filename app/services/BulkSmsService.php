@@ -441,8 +441,14 @@ class BulkSmsService
         $emailFallbackCount = 0;
         $processedCount = 0;
         $deferredCount = 0;
+        $pausedMidBatch = false;
 
         foreach ($recipients as $recipient) {
+            if ($this->isCampaignPausedOrCancelled($bulkMessageId)) {
+                $pausedMidBatch = true;
+                break;
+            }
+
             try {
                 if ($this->notificationPreference->isInQuietHours($recipient['user_id'])) {
                     $this->updateRecipientStatus($recipient['id'], 'pending');
@@ -535,9 +541,18 @@ class BulkSmsService
             }
         }
 
+        if ($pausedMidBatch) {
+            // Recipients still claimed as 'processing' were never submitted; return them to the
+            // pending queue so a paused campaign stops immediately instead of draining the batch.
+            $releaseSql = "UPDATE bulk_message_recipients
+                    SET status = 'pending', processing_token = NULL, processing_started_at = NULL
+                    WHERE bulk_message_id = ? AND processing_token = ? AND status = 'processing'";
+            $this->db->prepare($releaseSql)->execute([$bulkMessageId, $claimToken]);
+        }
+
         $counts = $this->recalculateCampaignCounts($bulkMessageId);
 
-        if ((int) $counts['pending_count'] === 0) {
+        if (!$pausedMidBatch && (int) $counts['pending_count'] === 0) {
             $finalStatus = $this->campaignStatusFromCounts($counts);
             $this->updateCampaignStatus($bulkMessageId, $finalStatus, false, in_array($finalStatus, ['completed', 'failed'], true));
         }
@@ -552,8 +567,18 @@ class BulkSmsService
             'email_fallback_count' => $emailFallbackCount,
             'pending_count' => (int) $counts['pending_count'],
             'processed_count' => $processedCount,
-            'deferred_count' => $deferredCount
+            'deferred_count' => $deferredCount,
+            'paused' => $pausedMidBatch
         ];
+    }
+
+    private function isCampaignPausedOrCancelled(int $bulkMessageId): bool
+    {
+        $stmt = $this->db->prepare("SELECT status FROM bulk_messages WHERE id = ?");
+        $stmt->execute([$bulkMessageId]);
+        $status = $stmt->fetchColumn();
+
+        return in_array($status, ['paused', 'cancelled'], true);
     }
 
     private function shouldRefreshRecipientsBeforeSend(array $campaign): bool
@@ -682,7 +707,8 @@ class BulkSmsService
 
             if ((int) $result['pending_count'] === 0
                 || (int) ($result['processed_count'] ?? 0) === 0
-                || (int) ($result['deferred_count'] ?? 0) > 0) {
+                || (int) ($result['deferred_count'] ?? 0) > 0
+                || !empty($result['paused'])) {
                 break;
             }
         }

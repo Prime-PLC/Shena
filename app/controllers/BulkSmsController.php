@@ -1202,11 +1202,19 @@ class BulkSmsController extends BaseController
             $campaignId = (int)($input['campaign_id'] ?? 0);
             $title = trim((string)($input['title'] ?? ''));
             $message = trim((string)($input['message'] ?? ''));
-            $targetAudience = $this->normalizeTargetAudience($input['target_audience'] ?? '');
+            $rawTargetAudience = trim((string)($input['target_audience'] ?? ''));
+            $targetAudience = $this->normalizeTargetAudience($rawTargetAudience);
             $scheduledAt = !empty($input['scheduled_at']) ? $input['scheduled_at'] : null;
 
             if ($campaignId <= 0 || $title === '' || $message === '') {
                 throw new Exception('Campaign ID, title, and message are required');
+            }
+
+            if ($rawTargetAudience === '') {
+                // Never silently widen an edited campaign's audience to all_members;
+                // reject the edit instead so filtered/payment-breakdown campaigns can't
+                // be blasted to every member due to a missing/unselected UI value.
+                throw new Exception('Target audience is required');
             }
 
             $customFilters = $this->extractCustomFilters($input);

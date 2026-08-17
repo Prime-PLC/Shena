@@ -975,6 +975,7 @@ $editCampaignToOpenJson = $editCampaignToOpen ? json_encode([
                         <option value="active">Active Members Only</option>
                         <option value="inactive">Inactive Members</option>
                         <option value="grace_period">Grace Period Members</option>
+                        <option value="payment_all">All Payment Groups</option>
                         <option value="payment_paid_current">Paid</option>
                         <option value="payment_unpaid_current">Not Paid</option>
                         <option value="payment_partially_paid">Partially Paid</option>
@@ -1140,6 +1141,7 @@ $editCampaignToOpenJson = $editCampaignToOpen ? json_encode([
                         <option value="active">Active Members Only</option>
                         <option value="inactive">Inactive Members</option>
                         <option value="grace_period">Grace Period Members</option>
+                        <option value="payment_all">All Payment Groups</option>
                         <option value="payment_paid_current">Paid</option>
                         <option value="payment_unpaid_current">Not Paid</option>
                         <option value="payment_partially_paid">Partially Paid</option>
@@ -1631,9 +1633,23 @@ function openSmsCampaignEditor(campaign) {
     document.getElementById('edit-campaign-id').value = campaign.id || '';
     document.getElementById('edit-campaign-title').value = campaign.title || '';
     document.getElementById('edit-campaign-message').value = campaign.message || '';
-    document.getElementById('edit-target-audience').value = campaign.target_audience || 'all_members';
+
+    const audienceSelect = document.getElementById('edit-target-audience');
+    const storedAudience = campaign.target_audience || 'all_members';
+    // Defensive: if the stored audience has no matching option (e.g. a payment group
+    // added after this dropdown was last updated), preserve it instead of silently
+    // losing the selection, which previously caused campaigns to fall back to all_members.
+    const hasMatchingOption = Array.from(audienceSelect.options).some((opt) => opt.value === storedAudience);
+    if (!hasMatchingOption) {
+        const preservedOption = document.createElement('option');
+        preservedOption.value = storedAudience;
+        preservedOption.textContent = String(storedAudience).replace(/_/g, ' ');
+        audienceSelect.appendChild(preservedOption);
+    }
+    audienceSelect.value = storedAudience;
+
     setEditFilterValues(campaign.custom_filters || {});
-    document.getElementById('edit-target-audience').dispatchEvent(new Event('change'));
+    audienceSelect.dispatchEvent(new Event('change'));
     document.getElementById('edit-campaign-scheduled-at').value = campaign.scheduled_at || '';
     openModal('editCampaignModal');
 }
@@ -1669,6 +1685,14 @@ openRequestedCampaignEditor();
 document.getElementById('editCampaignForm')?.addEventListener('submit', function(e) {
     e.preventDefault();
     const formData = new FormData(this);
+    const targetAudience = formData.get('target_audience');
+    // Never silently widen a campaign's audience: if nothing is selected, block the
+    // save instead of defaulting to all_members (this previously caused filtered
+    // payment-breakdown campaigns to be sent to the entire membership).
+    if (!targetAudience) {
+        ShenaApp.showNotification('Please select a target audience before saving.', 'error');
+        return;
+    }
     fetch('/admin/communications/edit-campaign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1676,7 +1700,7 @@ document.getElementById('editCampaignForm')?.addEventListener('submit', function
             campaign_id: formData.get('campaign_id'),
             title: formData.get('title'),
             message: formData.get('message'),
-            target_audience: formData.get('target_audience') || 'all_members',
+            target_audience: targetAudience,
             filter_status: formData.get('filter_status') || '',
             filter_package: formData.get('filter_package') || '',
             filter_joined_after: formData.get('filter_joined_after') || '',
