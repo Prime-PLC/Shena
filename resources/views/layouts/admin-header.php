@@ -972,7 +972,7 @@ if ($notificationCount === null) {
                                 </a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link <?php echo (strpos($_SERVER['REQUEST_URI'], 'sms-campaigns') !== false) ? 'active' : ''; ?>" href="/admin/sms-campaigns" onclick="showSmsCampaignUnavailable(event)">
+                                <a class="nav-link <?php echo (strpos($_SERVER['REQUEST_URI'], 'sms-campaigns') !== false) ? 'active' : ''; ?>" href="/admin/sms-campaigns">
                                     <i class="fas fa-sms"></i>
                                     <span>SMS Campaigns</span>
                                 </a>

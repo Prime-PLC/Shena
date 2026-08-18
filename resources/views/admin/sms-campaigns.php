@@ -697,10 +697,10 @@ $editCampaignToOpenJson = $editCampaignToOpen ? json_encode([
             <p>Create and manage bulk SMS campaigns for members</p>
         </div>
         <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-            <button class="modern-btn primary" onclick="openModal('createCampaignModal')">
+            <button class="modern-btn primary" onclick="openSmsCampaignOperationModal('createCampaignModal')">
                 <i class="fas fa-plus"></i> Create Campaign
             </button>
-            <button class="modern-btn secondary" onclick="processScheduledCampaigns()">
+            <button class="modern-btn secondary" onclick="tryProcessScheduledCampaigns()">
                 <i class="fas fa-clock"></i> Process Due
             </button>
             <button class="modern-btn secondary" onclick="syncDeliveryStatuses()">
@@ -775,7 +775,7 @@ $editCampaignToOpenJson = $editCampaignToOpen ? json_encode([
             <i class="fas fa-sms"></i>
             <h3>No SMS Campaigns Yet</h3>
             <p>Create your first SMS campaign to send bulk messages to members</p>
-            <button class="modern-btn primary" onclick="openModal('createCampaignModal')">
+            <button class="modern-btn primary" onclick="openSmsCampaignOperationModal('createCampaignModal')">
                 <i class="fas fa-plus"></i> Create First Campaign
             </button>
         </div>
@@ -1281,6 +1281,29 @@ function openModal(modalId) {
 
 function closeModal(modalId) {
     document.getElementById(modalId).classList.remove('active');
+}
+
+// Check SMS campaign availability and show modal if unavailable
+function showSmsCampaignUnavailableModal() {
+    const modal = document.getElementById('smsCampaignUnavailableModal');
+    if (modal) {
+        modal.hidden = false;
+        modal.querySelector('[data-close-sms-unavailable]')?.focus();
+    }
+}
+
+// Wrapper to check availability before opening campaign operations modal
+function openSmsCampaignOperationModal(modalId) {
+    // Check if SMS campaigns are temporarily unavailable
+    // For now, they are unavailable, so show the modal instead of opening the requested modal
+    showSmsCampaignUnavailableModal();
+}
+
+// Wrapper to check availability before processing scheduled campaigns
+function tryProcessScheduledCampaigns() {
+    // Check if SMS campaigns are temporarily unavailable
+    // For now, they are unavailable, so show the modal instead of processing
+    showSmsCampaignUnavailableModal();
 }
 
 function switchSmsTab(tab) {
