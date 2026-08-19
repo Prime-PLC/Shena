@@ -267,8 +267,8 @@
     <div class="container">
         <div style="max-width: 980px; margin: 0 auto 34px;">
             <span style="color: #7F3D9E; font-size: 0.82rem; font-weight: 700; letter-spacing: 1.5px;">SHENA PLATINUM</span>
-            <p style="font-family: 'Playfair Display', serif; color: #2D1A4A; font-size: 1.45rem; line-height: 1.3; margin: 10px 0;">Optional inpatient support for selected people.</p>
-            <p style="color: #6B7280; line-height: 1.7; margin: 0;">After joining Basic, add Platinum for up to 20 inpatient bed-cover days per selected person each year. Platinum adds to Basic; it does not replace it. The cover must be active before a request can be considered.</p>
+            <p style="font-family: 'Playfair Display', serif; color: #2D1A4A; font-size: 1.45rem; line-height: 1.3; margin: 10px 0;">Extra inpatient support for selected family members.</p>
+            <p style="color: #6B7280; line-height: 1.7; margin: 0;">SHENA Platinum provides inpatient support for members and their loved ones. It is a complimentary service to SHENA BASIC. It pays for daily bed charges for members and their dependants. Up to 20 inpatient bed-cover days per selected person each year.</p>
         </div>
         <div class="row">
             <div class="col-lg-8">
@@ -284,7 +284,7 @@
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;"><h2 style="font-family: 'Playfair Display', serif; font-size: 2rem; font-weight: 700; color: #1A1A1A; margin: 0;">SHENA Platinum Packages</h2><span style="color: #7F3D9E; font-size: 0.85rem; font-weight: 600; letter-spacing: 1px;">OPTIONAL ADD-ON</span></div>
                             <table class="table" style="margin-bottom: 0;"><thead style="background: #F7F7F9;"><tr><th style="padding: 16px; color: #6B7280; font-size: 0.85rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; border: none;">Age Bracket</th><th style="padding: 16px; color: #6B7280; font-size: 0.85rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; border: none;">Monthly Rate (KES)</th><th style="padding: 16px; color: #6B7280; font-size: 0.85rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; border: none; text-align: right;">Action</th></tr></thead><tbody>
                                 <tr style="border-bottom: 1px solid #E5E7EB;"><td style="padding: 20px; font-weight: 600;">Below 70 Years</td><td style="padding: 20px; font-size: 1.5rem; font-weight: 700; color: #7F3D9E;">300</td><td style="padding: 20px; text-align: right;"><a href="/login" class="btn" style="background: #7F3D9E; color: white; padding: 10px 30px; border-radius: 8px; font-weight: 600; text-decoration: none;">Get Started</a></td></tr>
-                                <tr style="border-bottom: 1px solid #E5E7EB;"><td style="padding: 20px; font-weight: 600;">71 - 80 Years</td><td style="padding: 20px; font-size: 1.5rem; font-weight: 700; color: #7F3D9E;">650</td><td style="padding: 20px; text-align: right;"><a href="/login" class="btn" style="background: #7F3D9E; color: white; padding: 10px 30px; border-radius: 8px; font-weight: 600; text-decoration: none;">Get Started</a></td></tr>
+                                <tr style="border-bottom: 1px solid #E5E7EB;"><td style="padding: 20px; font-weight: 600;">71 - 80 Years</td><td style="padding: 20px; font-size: 1.5rem; font-weight: 700; color: #7F3D9E;">550</td><td style="padding: 20px; text-align: right;"><a href="/login" class="btn" style="background: #7F3D9E; color: white; padding: 10px 30px; border-radius: 8px; font-weight: 600; text-decoration: none;">Get Started</a></td></tr>
                                 <tr style="border-bottom: 1px solid #E5E7EB;"><td style="padding: 20px; font-weight: 600;">81 - 90 Years</td><td style="padding: 20px; font-size: 1.5rem; font-weight: 700; color: #7F3D9E;">650</td><td style="padding: 20px; text-align: right;"><a href="/login" class="btn" style="background: #7F3D9E; color: white; padding: 10px 30px; border-radius: 8px; font-weight: 600; text-decoration: none;">Get Started</a></td></tr>
                                 <tr><td style="padding: 20px; font-weight: 600;">91 - 100 Years</td><td style="padding: 20px; font-size: 1.5rem; font-weight: 700; color: #7F3D9E;">850</td><td style="padding: 20px; text-align: right;"><a href="/login" class="btn" style="background: #7F3D9E; color: white; padding: 10px 30px; border-radius: 8px; font-weight: 600; text-decoration: none;">Get Started</a></td></tr>
                             </tbody></table>
@@ -314,7 +314,7 @@
 </section>
 
 <?php
-$platinumPriceByBracket = ['Below 70' => 300, '71 - 80' => 650, '81 - 90' => 650, '91 - 100' => 850];
+$platinumPriceByBracket = ['Below 70' => 300, '71 - 80' => 550, '81 - 90' => 650, '91 - 100' => 850];
 $comparisonRows = [];
 foreach (($packages ?? []) as $package) {
     $name = (string) ($package['name'] ?? 'Basic package');
@@ -331,7 +331,7 @@ foreach (($packages ?? []) as $package) {
     <div class="container">
         <div class="text-center mb-5">
             <h2 class="mb-3" style="font-family: 'Playfair Display', serif; font-size: 3rem; font-weight: 700; color: #1A1A1A;">Compare Plans</h2>
-            <p style="color: #6B7280; font-size: 1.1rem; max-width: 760px; margin: 0 auto;">This comparison helps you see the difference at a glance: Basic supports your family with funeral services, while Platinum adds inpatient support for the people you select. The Platinum contribution is charged per selected person and depends on that person's age.</p>
+            <p style="color: #6B7280; font-size: 1.1rem; max-width: 760px; margin: 0 auto;">This comparison helps you see the difference at a glance: SHENA BASIC is our primary welfare cover during unforeseen eventualities supporting members and their loved ones with funeral services. SHENA PLATINUM provides inpatient support for members and their loved ones as a complimentary service to SHENA BASIC, paying for daily bed charges.</p>
         </div>
 
         <div class="table-responsive mb-5" style="display:none;">
@@ -339,7 +339,7 @@ foreach (($packages ?? []) as $package) {
             <?php foreach ($comparisonRows as $row): ?><tr><td style="padding:15px;font-weight:600;color:#2D1A4A;"><?php echo htmlspecialchars($row['name']); ?></td><td style="padding:15px;">KES <?php echo number_format($row['base']); ?></td><td style="padding:15px;color:#7F3D9E;font-weight:700;">KES <?php echo number_format($row['platinum']); ?> / selected person</td><td style="padding:15px;font-weight:700;color:#7F3D9E;">KES <?php echo number_format($row['base'] + $row['platinum']); ?> / month</td></tr><?php endforeach; ?>
             </tbody></table>
         </div>
-        <p style="display:none;">* Platinum age bands: below 70 = KES 300; 71-80 = KES 650; 81-90 = KES 650; 91-100 = KES 850. Family plans may select Platinum for one or more eligible covered people, so the final total depends on who is selected.</p>
+        <p style="display:none;">* Platinum age bands: below 70 = KES 300; 71-80 = KES 550; 81-90 = KES 650; 91-100 = KES 850. Family plans may select Platinum for one or more eligible covered people, so the final total depends on who is selected.</p>
 
         <div class="row g-4" style="display:none;">
             <div class="col-lg-3 col-md-6">

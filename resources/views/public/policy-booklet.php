@@ -138,7 +138,7 @@
                     <p>Providing false or misleading information during registration is grounds for immediate cancellation of membership without refund.</p>
                 '],
                 ['id' => 'pb-packages', 'num' => '3', 'title' => 'Membership Packages & Contributions', 'body' => '
-                    <p><strong>SHENA Basic</strong> is the core membership. It provides the Association\'s Last Respect funeral support when a covered person dies. <strong>SHENA Platinum</strong> is an optional add-on to Basic, not a replacement for it and not a funeral benefit. Platinum adds inpatient bed-cover support for each person specifically selected for Platinum.</p>
+                    <p><strong>SHENA BASIC</strong> is our primary welfare cover during unforeseen eventualities. We support our members and their loved ones with funeral services. <strong>SHENA PLATINUM</strong> provides inpatient support for members and their loved ones. It is a complimentary service to SHENA BASIC. It pays for daily bed charges for members and their dependants. Platinum is selected and charged per covered person.</p>
                     <div style="overflow-x: auto; margin: 16px 0;">
                         <table style="width: 100%; border-collapse: collapse; font-size: 0.93rem;">
                             <thead>
