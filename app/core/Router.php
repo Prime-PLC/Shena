@@ -69,6 +69,10 @@ class Router
         
         // Member Routes (Protected)
         $this->addRoute('GET', '/dashboard', 'MemberController@dashboard');
+        $this->addRoute('GET', '/platinum', 'MemberController@platinum');
+        $this->addRoute('POST', '/platinum/request', 'MemberController@submitPlatinumRequest');
+        $this->addRoute('GET', '/inpatient-requests', 'MemberController@inpatientRequests');
+        $this->addRoute('POST', '/inpatient-requests', 'MemberController@submitInpatientRequest');
         $this->addRoute('GET', '/profile', 'MemberController@profile');
         $this->addRoute('POST', '/profile', 'MemberController@updateProfile');
         $this->addRoute('POST', '/member/profile/complete', 'MemberController@completeProfileFromPopup');
@@ -266,6 +270,11 @@ class Router
         
         // Payout Request Routes (Admin)
         $this->addRoute('GET', '/admin/payouts', 'AdminController@payoutRequests');
+        $this->addRoute('GET', '/admin/platinum-requests', 'AdminController@platinumRequests');
+        $this->addRoute('POST', '/admin/platinum-requests/{id}/process', 'AdminController@processPlatinumRequest');
+        $this->addRoute('POST', '/admin/inpatient-requests/{id}/process', 'AdminController@processInpatientRequest');
+        $this->addRoute('POST', '/admin/inpatient-requests/create', 'AdminController@submitInpatientRequestForMember');
+        $this->addRoute('POST', '/admin/members/{id}/platinum/migrate', 'AdminController@migrateMemberToPlatinum');
         $this->addRoute('POST', '/admin/payouts/{id}/process', 'AdminController@processPayoutRequest');
 
 

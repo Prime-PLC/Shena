@@ -317,6 +317,16 @@
 			}
 		}
 
+		function toggleClaimsSubmenu(event) {
+			event.preventDefault();
+			event.stopPropagation();
+			const navItem = event.currentTarget.closest('.sidebar-nav-item');
+			if (navItem) {
+				navItem.classList.toggle('submenu-open');
+			}
+			return false;
+		}
+
 		// Close mobile sidebar on nav link click
 		document.addEventListener('DOMContentLoaded', function() {
 			// Restore desktop collapsed state

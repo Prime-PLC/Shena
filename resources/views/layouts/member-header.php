@@ -223,6 +223,60 @@ if ($notificationCount === null) {
 			border-left-color: #FFD700;
 		}
 
+		/* Expandable submenu (e.g. Claims > Platinum Cover) */
+		.sidebar-nav-link .submenu-chevron {
+			margin-left: auto;
+			font-size: 12px;
+			transition: transform 0.2s ease;
+		}
+
+		.sidebar.collapsed .submenu-chevron {
+			display: none;
+		}
+
+		.sidebar-nav-item.submenu-open > .sidebar-nav-link .submenu-chevron {
+			transform: rotate(180deg);
+		}
+
+		.sidebar-submenu {
+			list-style: none;
+			margin: 0;
+			padding: 0;
+			max-height: 0;
+			overflow: hidden;
+			transition: max-height 0.25s ease;
+			background: rgba(0, 0, 0, 0.15);
+		}
+
+		.sidebar-nav-item.submenu-open > .sidebar-submenu {
+			max-height: 200px;
+		}
+
+		.sidebar.collapsed .sidebar-submenu {
+			display: none;
+		}
+
+		.sidebar-submenu-link {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+			padding: 12px 20px 12px 56px;
+			color: rgba(255, 255, 255, 0.7);
+			text-decoration: none;
+			font-size: 14px;
+			font-weight: 500;
+			transition: all 0.2s ease;
+		}
+
+		.sidebar-submenu-link:hover {
+			background: rgba(255, 255, 255, 0.08);
+			color: white;
+		}
+
+		.sidebar-submenu-link.active {
+			color: #FFD700;
+		}
+
 		/* Member Support Section */
 		.member-support {
 			position: relative;
@@ -817,11 +871,16 @@ if ($notificationCount === null) {
 						<span>Contributions</span>
 					</a>
 				</li>
-				<li class="sidebar-nav-item">
+				<li class="sidebar-nav-item <?php echo (($page ?? '') === 'claims' || strpos($_SERVER['REQUEST_URI'], '/platinum') === 0 || strpos($_SERVER['REQUEST_URI'], '/inpatient-requests') === 0) ? 'submenu-open' : ''; ?>">
 					<a href="/claims" class="sidebar-nav-link <?php echo ($page ?? '') === 'claims' ? 'active' : ''; ?>">
 						<i class="fas fa-file-medical"></i>
 						<span>Claims</span>
+						<i class="fas fa-chevron-down submenu-chevron" onclick="return toggleClaimsSubmenu(event)"></i>
 					</a>
+					<ul class="sidebar-submenu">
+						<li><a href="/claims" class="sidebar-submenu-link <?php echo ($page ?? '') === 'claims' ? 'active' : ''; ?>"><i class="fas fa-hands-helping"></i> Funeral Cover</a></li>
+						<li><a href="/platinum" class="sidebar-submenu-link <?php echo (strpos($_SERVER['REQUEST_URI'], '/platinum') === 0 || strpos($_SERVER['REQUEST_URI'], '/inpatient-requests') === 0) ? 'active' : ''; ?>"><i class="fas fa-hospital"></i> Hospital Cover</a></li>
+					</ul>
 				</li>
 				<li class="sidebar-nav-item">
 					<a href="/beneficiaries" class="sidebar-nav-link <?php echo ($page ?? '') === 'beneficiaries' ? 'active' : ''; ?>">

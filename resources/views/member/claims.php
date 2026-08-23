@@ -824,6 +824,11 @@ main {
     <div style="display: grid; grid-template-columns: 1fr 200px; gap: 30px; align-items: start;">
         <div>
             <h1 class="page-title">Claims Center</h1>
+
+            <div style="background:linear-gradient(135deg,#7F20B0 0%,#5E2B7A 100%);border-radius:14px;padding:16px 22px;margin-bottom:20px;color:#fff;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+                <span style="font-weight:600"><i class="fas fa-shield-alt" style="margin-right:8px"></i>Add SHENA Platinum for up to 20 inpatient bed-cover days/year, per covered person.</span>
+                <a href="/platinum" style="background:rgba(255,255,255,0.18);color:#fff;padding:8px 16px;border-radius:8px;font-weight:700;text-decoration:none;white-space:nowrap">Explore Platinum</a>
+            </div>
             
             <?php if (isset($_SESSION['success']) || isset($_SESSION['error'])): ?>
                 <script>

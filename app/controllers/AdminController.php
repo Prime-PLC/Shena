@@ -8,6 +8,7 @@ require_once __DIR__ . '/../services/PaymentStatusService.php';
 require_once __DIR__ . '/../services/InAppNotificationService.php';
 require_once __DIR__ . '/../services/SmsService.php';
 require_once __DIR__ . '/../helpers/ReportDocumentTemplate.php';
+require_once __DIR__ . '/../models/PlatinumCoverage.php';
 
 class AdminController extends BaseController
 {
@@ -744,6 +745,27 @@ class AdminController extends BaseController
 
             $this->corporateMemberModel->replaceForMember((int)$memberId, $corporateMembers);
 
+            // Optional Platinum add-on selected on the admin registration form (billed separately from Basic).
+            $platinumMonthly = null;
+            if (($_POST['platinum_opt_in'] ?? '') === '1' && !empty($dateOfBirth)) {
+                global $platinum_config;
+                $age = (new DateTimeImmutable($dateOfBirth))->diff(new DateTimeImmutable('today'))->y;
+                $band = $age < 70 ? 'under_70' : ($age <= 80 ? '71_80' : ($age <= 90 ? '81_90' : ($age <= 100 ? '91_100' : null)));
+                $platinumMonthly = $band ? (float) ($platinum_config['prices']['individual'][$band] ?? 0) : null;
+                if ($platinumMonthly) {
+                    $platinumMaturityMonths = $age < 60 ? (int) ($platinum_config['maturity_months']['under_60'] ?? 4) : (int) ($platinum_config['maturity_months']['60_and_above'] ?? 7);
+                    $this->db->insert('platinum_coverages', [
+                        'member_id' => $memberId,
+                        'covered_person_type' => 'principal',
+                        'covered_person_id' => null,
+                        'status' => 'pending_payment',
+                        'monthly_contribution' => $platinumMonthly,
+                        'maturity_months' => $platinumMaturityMonths,
+                        'requested_at' => date('Y-m-d H:i:s'),
+                    ]);
+                }
+            }
+
             $this->db->getConnection()->commit();
 
             // Optionally notify user (email optional)
@@ -770,6 +792,9 @@ class AdminController extends BaseController
                 $smsMsg = "Hi {$firstName}! You've been registered with SHENA Companion. Member No: {$memberNumber}. "
                         . "Set your account password here: {$inviteLink}  (valid 48 hrs). "
                         . "Monthly contribution: KES {$monthlyContribution} via Paybill 4163987, Acct: {$idNumber}.";
+                if ($platinumMonthly) {
+                    $smsMsg .= " You also opted into SHENA Platinum (hospital cover): KES " . number_format($platinumMonthly, 2) . "/month, billed separately once your contribution is confirmed.";
+                }
                 $smsService = new SmsService();
                 $smsService->sendSms($phone, $smsMsg);
             } catch (Throwable $e) {
@@ -1143,6 +1168,7 @@ class AdminController extends BaseController
             'dependant_restrictions' => $dependantRestrictions,
             'packages' => $GLOBALS['membership_packages'] ?? [],
             'membershipPlanData' => $membershipPlanData,
+            'platinum_coverages' => (new PlatinumCoverage())->forMember((int) $id),
             'csrf_token' => $this->generateCsrfToken(),
             'stats' => [
                 'total_contributions' => $totalContributions,
@@ -1235,6 +1261,7 @@ class AdminController extends BaseController
 
         $memberStatus = $_POST['status'] ?? 'active';
         $previousStatus = $member['status'] ?? '';
+        $previousMonthlyContribution = (float) ($member['monthly_contribution'] ?? 0);
         $userStatus = in_array($memberStatus, ['active', 'inactive', 'suspended'], true) ? $memberStatus : 'inactive';
 
         $memberUserData = [
@@ -1273,6 +1300,11 @@ class AdminController extends BaseController
                 $this->db->getConnection()->commit();
                 $_SESSION['success_message'] = 'Member updated successfully!';
                 $this->notifyMemberManagementChange($member, $memberStatus, $previousStatus);
+                $this->notifyContributionChange(
+                    ['first_name' => $memberUserData['first_name'], 'last_name' => $memberUserData['last_name'], 'phone' => $phone],
+                    $previousMonthlyContribution,
+                    $monthlyContribution
+                );
             } else {
                 $this->db->getConnection()->rollBack();
                 $_SESSION['error_message'] = 'Failed to update member.';
@@ -1345,6 +1377,17 @@ class AdminController extends BaseController
                 'phone_number' => $phoneInput !== '' ? formatKenyanPhone($phoneInput) : null,
                 'percentage' => 0,
             ]);
+
+            $previousMonthlyContribution = (float) ($member['monthly_contribution'] ?? 0);
+            $updatedDependants = $this->beneficiaryModel->getActiveBeneficiaries((int) $id) ?: [];
+            $newMonthlyContribution = (float) $this->memberModel->calculateMonthlyContribution($member, $updatedDependants);
+            if (abs($newMonthlyContribution - $previousMonthlyContribution) >= 0.01) {
+                $this->memberModel->update((int) $id, ['monthly_contribution' => $newMonthlyContribution]);
+                $memberWithUser = $this->memberModel->getMemberWithUser((int) $id);
+                if ($memberWithUser) {
+                    $this->notifyContributionChange($memberWithUser, $previousMonthlyContribution, $newMonthlyContribution);
+                }
+            }
 
             $_SESSION['success_message'] = 'Dependant added successfully.';
         } catch (Throwable $e) {
@@ -1879,6 +1922,7 @@ class AdminController extends BaseController
 
             $claimData = [
                 'member_id' => $memberId,
+                'admin_created' => 1,
                 'beneficiary_id' => (int)($_POST['beneficiary_id'] ?? 0),
                 'deceased_name' => $this->sanitizeInput($_POST['deceased_name'] ?? ''),
                 'deceased_id_number' => $this->sanitizeInput($_POST['deceased_id_number'] ?? ''),
@@ -1905,7 +1949,6 @@ class AdminController extends BaseController
             }
 
             $claimId = $this->claimModel->submitClaim($claimData);
-            $this->processAdminClaimDocumentUploads($claimId);
             $this->sendClaimAcknowledgementSms($member, $claimId, $claimData);
 
             $_SESSION['success'] = 'Claim submitted for member successfully.';
@@ -2012,15 +2055,13 @@ class AdminController extends BaseController
                         }
                     }
 
-                    // Check required documents per policy Section 8
-                    $claimDocumentModel = new ClaimDocument();
-                    $documents = $claimDocumentModel->getClaimDocuments($claimId);
-                    $requiredDocs = ['id_copy', 'chief_letter', 'mortuary_invoice'];
-                    $uploadedTypes = array_column($documents, 'document_type');
-
-                    foreach ($requiredDocs as $docType) {
-                        if (!in_array($docType, $uploadedTypes)) {
-                            throw new Exception("Required document missing: {$docType}");
+                    if (empty($claim['admin_created'])) {
+                        $claimDocumentModel = new ClaimDocument();
+                        $documents = $claimDocumentModel->getClaimDocuments($claimId);
+                        foreach (['id_copy', 'chief_letter', 'mortuary_invoice'] as $docType) {
+                            if (!in_array($docType, array_column($documents, 'document_type'), true)) {
+                                throw new Exception("Required document missing: {$docType}");
+                            }
                         }
                     }
 
@@ -3810,6 +3851,332 @@ class AdminController extends BaseController
         ];
 
         $this->view('admin.payout-requests', $data);
+    }
+
+    public function platinumRequests()
+    {
+        $this->requireAdmin();
+        $eligibilityService = new PlatinumEligibilityService();
+
+        $coverages = (new PlatinumCoverage())->pending();
+        foreach ($coverages as &$coverage) {
+            $coverage['payment_verified'] = $eligibilityService->hasVerifiedPayment(
+                (int) $coverage['member_id'],
+                (float) $coverage['monthly_contribution'],
+                (string) $coverage['requested_at']
+            );
+        }
+        unset($coverage);
+
+        $inpatientRequests = $this->db->fetchAll("SELECT ir.*, m.member_number, u.first_name, u.last_name FROM inpatient_requests ir JOIN members m ON m.id = ir.member_id JOIN users u ON u.id = m.user_id WHERE ir.status IN ('submitted', 'under_review') ORDER BY ir.created_at ASC");
+        foreach ($inpatientRequests as &$request) {
+            $request['remaining_days'] = $eligibilityService->remainingDays((int) $request['platinum_coverage_id']);
+        }
+        unset($request);
+
+        $this->view('admin.platinum-requests', [
+            'coverages' => $coverages,
+            'inpatientRequests' => $inpatientRequests,
+            'csrf_token' => $this->generateCsrfToken()
+        ]);
+    }
+
+    public function processPlatinumRequest($id)
+    {
+        $this->requireAdmin();
+        $this->validateCsrf();
+        $coverage = new PlatinumCoverage();
+        $action = $_POST['action'] ?? '';
+        if (!in_array($action, ['approve', 'reject'], true)) {
+            $_SESSION['error'] = 'Select a valid action.';
+            $this->redirect('/admin/platinum-requests');
+        }
+        $requested = $coverage->find((int) $id);
+        if (!$requested || $requested['status'] !== 'pending_approval') {
+            $_SESSION['error'] = 'This Platinum request has already been processed.';
+            $this->redirect('/admin/platinum-requests');
+        }
+        try {
+            if ($action === 'approve') {
+                $override = ($_POST['override'] ?? '') === '1';
+                $overrideReason = trim((string) ($_POST['override_reason'] ?? ''));
+                $paid = (new PlatinumEligibilityService())->hasVerifiedPayment((int) $requested['member_id'], (float) $requested['monthly_contribution'], (string) $requested['requested_at']);
+                if (!$paid && !$override) {
+                    $_SESSION['error'] = 'A completed Platinum contribution is required before activation, or approve with an override reason.';
+                    $this->redirect('/admin/platinum-requests');
+                }
+                if (!$paid && $override) {
+                    if ($overrideReason === '') {
+                        $_SESSION['error'] = 'An override reason is required to approve without a verified payment.';
+                        $this->redirect('/admin/platinum-requests');
+                    }
+                    $coverage->approveWithOverride((int) $id, (int) $_SESSION['user_id'], $overrideReason);
+                    $_SESSION['success'] = 'Platinum coverage approved with an admin override.';
+                } else {
+                    $coverage->approve((int) $id, (int) $_SESSION['user_id']);
+                    $_SESSION['success'] = 'Platinum coverage approved.';
+                }
+            } else {
+                $coverage->reject((int) $id, (int) $_SESSION['user_id']);
+                $_SESSION['success'] = 'Platinum coverage rejected.';
+            }
+            $this->notifyPlatinumDecision((int) $id, $action === 'approve' ? 'active' : 'rejected');
+        } catch (Throwable $e) {
+            error_log('Platinum request processing failed: ' . $e->getMessage());
+            $_SESSION['error'] = 'Unable to process this Platinum request. Please try again.';
+        }
+        $this->redirect('/admin/platinum-requests');
+    }
+
+    /**
+     * Notify a member by SMS/email once their Platinum coverage request has been decided.
+     */
+    private function notifyPlatinumDecision(int $coverageId, string $decision): void
+    {
+        try {
+            $coverage = $this->db->fetch(
+                "SELECT pc.*, m.phone, m.email, u.first_name FROM platinum_coverages pc
+                 JOIN members m ON m.id = pc.member_id
+                 JOIN users u ON u.id = m.user_id
+                 WHERE pc.id = :id",
+                ['id' => $coverageId]
+            );
+            if (!$coverage) {
+                return;
+            }
+            $name = $coverage['first_name'] ?: 'Member';
+            $message = $decision === 'active'
+                ? "Dear {$name}, your SHENA Platinum cover request has been APPROVED and is now active. Maturity date: {$coverage['maturity_date']}. - Shena Companion"
+                : "Dear {$name}, your SHENA Platinum cover request was not approved. Contact us for details or submit a new request. - Shena Companion";
+            (new SmsService())->sendSms($coverage['phone'], $message);
+        } catch (Throwable $exception) {
+            error_log('Platinum decision notification failed: ' . $exception->getMessage());
+        }
+    }
+
+    public function processInpatientRequest($id)
+    {
+        $this->requireAdmin();
+        $this->validateCsrf();
+        try {
+            $approvedDays = filter_var($_POST['approved_days'] ?? null, FILTER_VALIDATE_INT);
+            $overrideBalance = ($_POST['override_balance'] ?? '') === '1';
+            $overrideReason = trim((string) ($_POST['override_reason'] ?? ''));
+            if ($overrideBalance && $overrideReason === '') {
+                $_SESSION['error'] = 'An override reason is required to approve beyond the remaining day balance.';
+                $this->redirect('/admin/platinum-requests');
+                return;
+            }
+            $result = (new PlatinumEligibilityService())->approveInpatientRequest((int) $id, (int) $_SESSION['user_id'], $approvedDays ?: null, trim((string) ($_POST['admin_notes'] ?? '')), $overrideBalance, $overrideReason);
+            $_SESSION['success'] = 'Inpatient request ' . $result['status'] . '.';
+            $this->notifyInpatientDecision((int) $id, (string) $result['status'], (int) ($result['approved_days'] ?? 0));
+        } catch (Throwable $exception) {
+            $_SESSION['error'] = $exception->getMessage();
+        }
+        $this->redirect('/admin/platinum-requests');
+    }
+
+    /**
+     * Admin-side creation of an inpatient request on a member's behalf (phone/paper submissions),
+     * mirroring the admin-created claims pattern. Can optionally bypass member-side eligibility gating
+     * (maturity / active status) with a mandatory override reason, for genuine exception handling.
+     */
+    public function submitInpatientRequestForMember()
+    {
+        $this->requireAdmin();
+        $this->validateCsrf();
+
+        $memberId = (int) ($_POST['member_id'] ?? 0);
+        $coverageId = (int) ($_POST['platinum_coverage_id'] ?? 0);
+        $override = ($_POST['override_eligibility'] ?? '') === '1';
+        $overrideReason = trim((string) ($_POST['override_reason'] ?? ''));
+
+        $coverage = $this->db->fetch('SELECT * FROM platinum_coverages WHERE id = :id AND member_id = :member_id', ['id' => $coverageId, 'member_id' => $memberId]);
+        if (!$coverage) {
+            $_SESSION['error'] = 'Select a valid member and Platinum coverage.';
+            $this->redirect('/admin/platinum-requests');
+            return;
+        }
+
+        $admissionDate = trim((string) ($_POST['admission_date'] ?? ''));
+        $requestedDays = filter_var($_POST['requested_days'] ?? null, FILTER_VALIDATE_INT);
+        $patientName = trim((string) ($_POST['patient_name'] ?? ''));
+        $facilityName = trim((string) ($_POST['facility_name'] ?? ''));
+        $facilityLocation = trim((string) ($_POST['facility_location'] ?? ''));
+
+        if ($patientName === '' || $facilityName === '' || $facilityLocation === '' || !$requestedDays || $requestedDays < 1 || $requestedDays > 20 || $admissionDate === '') {
+            $_SESSION['error'] = 'Patient name, facility details, admission date, and requested days (1-20) are required.';
+            $this->redirect('/admin/platinum-requests');
+            return;
+        }
+
+        if (!$override) {
+            $eligibility = (new PlatinumEligibilityService())->eligibility($coverageId, $admissionDate, $requestedDays);
+            if (empty($eligibility['eligible'])) {
+                $_SESSION['error'] = ($eligibility['reason'] ?? 'This request is not eligible.') . ' Use the admin override option if this is a genuine exception.';
+                $this->redirect('/admin/platinum-requests');
+                return;
+            }
+        } elseif ($overrideReason === '') {
+            $_SESSION['error'] = 'An override reason is required when bypassing eligibility checks.';
+            $this->redirect('/admin/platinum-requests');
+            return;
+        }
+
+        try {
+            $this->db->insert('inpatient_requests', [
+                'member_id' => $memberId,
+                'admin_created' => 1,
+                'created_by' => (int) $_SESSION['user_id'],
+                'platinum_coverage_id' => $coverageId,
+                'covered_person_type' => $coverage['covered_person_type'],
+                'covered_person_id' => $coverage['covered_person_id'],
+                'patient_name' => $patientName,
+                'facility_name' => $facilityName,
+                'facility_location' => $facilityLocation,
+                'facility_contact' => trim((string) ($_POST['facility_contact'] ?? '')),
+                'admission_date' => $admissionDate,
+                'requested_days' => $requestedDays,
+                'admission_reference' => trim((string) ($_POST['admission_reference'] ?? '')),
+                'eligibility_override_reason' => $override ? $overrideReason : null,
+            ]);
+            $_SESSION['success'] = 'Inpatient request created on behalf of the member.' . ($override ? ' (Eligibility override applied.)' : '');
+        } catch (Throwable $e) {
+            error_log('Admin-created inpatient request failed: ' . $e->getMessage());
+            $_SESSION['error'] = 'Unable to create the inpatient request. Please try again.';
+        }
+        $this->redirect('/admin/platinum-requests');
+    }
+
+    /**
+     * Instantly migrate a Basic-only member (or a specific covered person) to Platinum,
+     * bypassing the normal payment/approval workflow as an admin shortcut.
+     */
+    public function migrateMemberToPlatinum($id)
+    {
+        $this->requireAdmin();
+        $this->validateCsrf();
+        $this->initAdminModels();
+
+        $member = $this->memberModel->getMemberById((int) $id);
+        if (!$member) {
+            $_SESSION['error'] = 'Member not found.';
+            $this->redirect('/admin/members');
+            return;
+        }
+
+        $type = $_POST['covered_person_type'] ?? 'principal';
+        $personId = $type === 'principal' ? null : (int) ($_POST['covered_person_id'] ?? 0);
+        if (!in_array($type, ['principal', 'dependent', 'corporate_member'], true) || ($type !== 'principal' && $personId < 1)) {
+            $_SESSION['error'] = 'Select a valid covered person to migrate to Platinum.';
+            $this->redirect('/admin/members/view/' . $id);
+            return;
+        }
+
+        $dateOfBirth = $member['date_of_birth'] ?? null;
+        if ($type === 'dependent') {
+            $dependant = $this->beneficiaryModel->find($personId);
+            $dateOfBirth = $dependant['date_of_birth'] ?? null;
+        } elseif ($type === 'corporate_member') {
+            $corporate = $this->corporateMemberModel->find($personId);
+            $dateOfBirth = $corporate['date_of_birth'] ?? null;
+        }
+
+        global $platinum_config;
+        $age = $dateOfBirth ? (new DateTimeImmutable($dateOfBirth))->diff(new DateTimeImmutable('today'))->y : null;
+        $band = $age === null ? null : ($age < 70 ? 'under_70' : ($age <= 80 ? '71_80' : ($age <= 90 ? '81_90' : ($age <= 100 ? '91_100' : null))));
+        $monthlyContribution = $band ? (float) ($platinum_config['prices']['individual'][$band] ?? 0) : 0.0;
+        $maturityMonths = $age !== null && $age < 60 ? (int) ($platinum_config['maturity_months']['under_60'] ?? 4) : (int) ($platinum_config['maturity_months']['60_and_above'] ?? 7);
+
+        if ($monthlyContribution <= 0) {
+            $_SESSION['error'] = 'Unable to determine the Platinum price for the selected person (missing date of birth).';
+            $this->redirect('/admin/members/view/' . $id);
+            return;
+        }
+
+        try {
+            $coverageModel = new PlatinumCoverage();
+            $existing = $coverageModel->getCoverage((int) $id, $type, $personId);
+            $fields = [
+                'status' => 'active',
+                'activation_method' => 'admin_direct',
+                'monthly_contribution' => $monthlyContribution,
+                'maturity_months' => $maturityMonths,
+                'requested_at' => date('Y-m-d H:i:s'),
+                'approved_at' => date('Y-m-d H:i:s'),
+                'approved_by' => (int) $_SESSION['user_id'],
+                'effective_from' => date('Y-m-d'),
+                'maturity_date' => date('Y-m-d', strtotime("+{$maturityMonths} months")),
+                'override_reason' => trim((string) ($_POST['reason'] ?? 'Admin-initiated Basic to Platinum migration')),
+                'override_by' => (int) $_SESSION['user_id'],
+                'override_at' => date('Y-m-d H:i:s'),
+            ];
+            if ($existing) {
+                $this->db->update('platinum_coverages', $fields, 'id = :id', ['id' => $existing['id']]);
+            } else {
+                $this->db->insert('platinum_coverages', array_merge(['member_id' => $id, 'covered_person_type' => $type, 'covered_person_id' => $personId], $fields));
+            }
+            $_SESSION['success'] = 'Member migrated to SHENA Platinum and activated immediately.';
+            try {
+                $memberData = $this->memberModel->getMemberWithUser((int) $id);
+                if ($memberData) {
+                    (new SmsService())->sendSms($memberData['phone'], "Dear {$memberData['first_name']}, SHENA Platinum cover has been activated for you. Additional monthly contribution: KES " . number_format($monthlyContribution, 2) . ". - Shena Companion");
+                }
+            } catch (Throwable $e) {
+                error_log('Platinum migration SMS failed: ' . $e->getMessage());
+            }
+        } catch (Throwable $e) {
+            error_log('Platinum migration failed: ' . $e->getMessage());
+            $_SESSION['error'] = 'Unable to migrate this member to Platinum. Please try again.';
+        }
+        $this->redirect('/admin/members/view/' . $id);
+    }
+
+    /**
+     * Sends a friendly SMS whenever an admin action changes a member's monthly contribution amount.
+     */
+    private function notifyContributionChange(array $member, float $oldAmount, float $newAmount): void
+    {
+        if (abs($oldAmount - $newAmount) < 0.01 || empty($member['phone'])) {
+            return;
+        }
+        try {
+            $name = trim(($member['first_name'] ?? '') . ' ' . ($member['last_name'] ?? '')) ?: 'Member';
+            $direction = $newAmount > $oldAmount ? 'increased' : 'reduced';
+            $message = "Dear {$name}, your SHENA monthly contribution has been {$direction} from KES " . number_format($oldAmount, 2) . " to KES " . number_format($newAmount, 2) . " following a recent account update. Contact us with any questions. - Shena Companion";
+            (new SmsService())->sendSms($member['phone'], $message);
+        } catch (Throwable $e) {
+            error_log('Contribution change notification failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Notify a member by SMS once their inpatient day request has been decided.
+     */
+    private function notifyInpatientDecision(int $requestId, string $status, int $approvedDays): void
+    {
+        try {
+            $request = $this->db->fetch(
+                "SELECT ir.*, m.phone, u.first_name FROM inpatient_requests ir
+                 JOIN members m ON m.id = ir.member_id
+                 JOIN users u ON u.id = m.user_id
+                 WHERE ir.id = :id",
+                ['id' => $requestId]
+            );
+            if (!$request) {
+                return;
+            }
+            $name = $request['first_name'] ?: 'Member';
+            $statusLabel = str_replace('_', ' ', $status);
+            $message = "Dear {$name}, your inpatient request for {$request['patient_name']} was {$statusLabel}.";
+            if (in_array($status, ['approved', 'partially_approved'], true)) {
+                $message .= " Approved days: {$approvedDays}.";
+            }
+            $message .= " - Shena Companion";
+            (new SmsService())->sendSms($request['phone'], $message);
+        } catch (Throwable $exception) {
+            error_log('Inpatient decision notification failed: ' . $exception->getMessage());
+        }
     }
 
     /**

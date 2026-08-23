@@ -744,6 +744,51 @@ $formatRelation = static function ($value) {
 
         <div class="member-info-card">
             <div class="card-header">
+                <span class="card-title"><i class="fas fa-shield-alt"></i> SHENA Platinum</span>
+            </div>
+            <div class="card-body">
+                <?php $platinumCoverages = $platinum_coverages ?? []; ?>
+                <?php if (empty($platinumCoverages)): ?>
+                    <p style="color:#6B7280;font-size:13px;margin:0 0 12px 0">No Platinum cover on this account yet.</p>
+                <?php else: ?>
+                    <div class="relation-grid">
+                        <?php foreach ($platinumCoverages as $pc): ?>
+                            <div class="corporate-card">
+                                <strong><?= htmlspecialchars($pc['covered_person_name'] ?? ucfirst($pc['covered_person_type'])) ?></strong>
+                                <div><?= htmlspecialchars(ucfirst(str_replace('_', ' ', $pc['status']))) ?></div>
+                                <div>KES <?= number_format((float)($pc['monthly_contribution'] ?? 0), 2) ?>/mo</div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+                <form method="POST" action="/admin/members/<?= (int)($member['id'] ?? 0) ?>/platinum/migrate" style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
+                    <div>
+                        <label style="display:block;font-size:12px;font-weight:600;color:#6B7280;margin-bottom:4px">Covered person</label>
+                        <select name="covered_person_type" id="platinumMigrateType" onchange="document.getElementById('platinumMigratePersonWrap').style.display = this.value === 'principal' ? 'none' : 'block'" style="padding:9px;border:1px solid #D1D5DB;border-radius:6px">
+                            <option value="principal">Principal member</option>
+                            <option value="dependent">Dependant</option>
+                            <option value="corporate_member">Corporate member</option>
+                        </select>
+                    </div>
+                    <div id="platinumMigratePersonWrap" style="display:none">
+                        <label style="display:block;font-size:12px;font-weight:600;color:#6B7280;margin-bottom:4px">Person</label>
+                        <select name="covered_person_id" style="padding:9px;border:1px solid #D1D5DB;border-radius:6px">
+                            <?php foreach ($beneficiaries as $b): ?><option value="<?= (int)$b['id'] ?>"><?= htmlspecialchars($b['full_name'] ?? 'Dependant') ?></option><?php endforeach; ?>
+                            <?php foreach ($corporateMembers as $c): ?><option value="<?= (int)$c['id'] ?>"><?= htmlspecialchars($c['label'] ?? 'Corporate member') ?></option><?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display:block;font-size:12px;font-weight:600;color:#6B7280;margin-bottom:4px">Reason (optional)</label>
+                        <input type="text" name="reason" placeholder="e.g. Verbal request, cash payment collected" style="padding:9px;border:1px solid #D1D5DB;border-radius:6px;width:260px">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm" onclick="return confirm('Activate Platinum immediately for this person, bypassing the normal payment/approval steps?')"><i class="fas fa-bolt"></i> Migrate to Platinum now</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="member-info-card">
+            <div class="card-header">
                 <span class="card-title">Agent & Next of Kin</span>
             </div>
             <div class="card-body">

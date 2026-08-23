@@ -2,6 +2,8 @@
 deployment:
   tasks:
     - export DEPLOYPATH=/home3/peepalmt/shenacompanion.co.ke/
+    - export SHENA_MIGRATION_DB_NAME=peepalmt_shena_welfare_db
+    - /usr/local/bin/php scripts/deploy_migrations.php
     - /bin/cp -R ./app $DEPLOYPATH
     - /bin/cp -R ./config $DEPLOYPATH
     - /bin/cp -R ./database $DEPLOYPATH

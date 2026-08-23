@@ -627,6 +627,15 @@ foreach (($packages ?? []) as $packageKey => $package) {
                         <label class="form-label">Expected Monthly Contribution</label>
                         <div class="form-input corporate-total-preview" id="corporateTotalPreview" aria-live="polite">KES 0/month</div>
                     </div>
+                    <div class="form-group" style="grid-column:1/-1;background:linear-gradient(135deg,#7F20B0 0%,#5E2B7A 100%);border-radius:10px;padding:14px 16px;color:#fff">
+                        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin:0">
+                            <input type="checkbox" name="platinum_opt_in" id="agentPlatinumOptIn" value="1" style="margin-top:4px">
+                            <span>
+                                <strong>Add SHENA Platinum &mdash; Hospital Cover</strong><br>
+                                <span style="font-size:0.85rem;opacity:0.9">Up to 20 inpatient bed-cover days a year, billed separately at <span id="agentPlatinumPrice">--</span>/month once approved.</span>
+                            </span>
+                        </label>
+                    </div>
                 </div>
             </div>
 
@@ -709,6 +718,27 @@ function updateMemberContributionPreview() {
     const total = baseAmount + corporateTotal;
     memberCorporateTotalPreview.textContent = 'KES ' + total.toLocaleString() + '/month';
 }
+
+function updateAgentPlatinumPrice() {
+    const priceEl = document.getElementById('agentPlatinumPrice');
+    const dobInput = document.getElementById('date_of_birth');
+    if (!priceEl) return;
+    let age = null;
+    if (dobInput && dobInput.value) {
+        const dob = new Date(dobInput.value);
+        age = Math.floor((Date.now() - dob.getTime()) / (1000 * 60 * 60 * 24 * 365.25));
+    }
+    let price = null;
+    if (age !== null && !isNaN(age)) {
+        if (age < 70) price = 300;
+        else if (age <= 80) price = 550;
+        else if (age <= 90) price = 650;
+        else if (age <= 100) price = 850;
+    }
+    priceEl.textContent = price ? ('KES ' + price.toLocaleString()) : 'a price based on age';
+}
+document.getElementById('date_of_birth')?.addEventListener('change', updateAgentPlatinumPrice);
+updateAgentPlatinumPrice();
 
 function addAgentCorporateRow() {
     if (!agentCorporateLineItems) return;

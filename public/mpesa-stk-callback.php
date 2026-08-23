@@ -16,6 +16,7 @@ require_once ROOT_PATH . '/app/models/Member.php';
 require_once ROOT_PATH . '/app/models/User.php';
 require_once ROOT_PATH . '/app/services/EmailService.php';
 require_once ROOT_PATH . '/app/services/SmsService.php';
+require_once ROOT_PATH . '/app/models/PlatinumCoverage.php';
 
 // Create logs directory if it doesn't exist
 $logDir = ROOT_PATH . '/storage/logs';
@@ -244,6 +245,24 @@ try {
                     );
                     $processLog .= "  Monthly coverage extended: Member ID {$payment['member_id']}\n";
                 }
+
+                // Handle Platinum coverage contribution — mark payment received and move request to admin review
+                if ($payment['payment_type'] === 'platinum' && !empty($payment['platinum_coverage_id'])) {
+                    $platinumModel = new PlatinumCoverage();
+                    $coverage = $platinumModel->find((int) $payment['platinum_coverage_id']);
+                    if ($coverage) {
+                        $coverageUpdate = [
+                            'payment_reference' => $mpesaReceiptNumber,
+                            'last_payment_at' => $transactionDate ?: date('Y-m-d H:i:s')
+                        ];
+                        if ($coverage['status'] === 'pending_payment') {
+                            $coverageUpdate['status'] = 'pending_approval';
+                            $coverageUpdate['requested_at'] = date('Y-m-d H:i:s');
+                        }
+                        $db->update('platinum_coverages', $coverageUpdate, 'id = :id', ['id' => $coverage['id']]);
+                        $processLog .= "  Platinum coverage payment recorded: Coverage ID {$coverage['id']}\n";
+                    }
+                }
                 
                 // Send notifications
                 try {
@@ -266,6 +285,13 @@ try {
                         ]);
                         
                         $processLog .= "  Notifications Sent\n";
+
+                        if ($payment['payment_type'] === 'platinum') {
+                            $smsService->sendSms(
+                                $memberData['phone'],
+                                "Dear {$memberData['first_name']}, your SHENA Platinum contribution of KES {$amount} was received (Ref: {$mpesaReceiptNumber}). Your request is now under admin review. - Shena Companion"
+                            );
+                        }
                     }
                 } catch (Exception $e) {
                     $processLog .= "  Notification Error: " . $e->getMessage() . "\n";

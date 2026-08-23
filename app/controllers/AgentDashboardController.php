@@ -532,6 +532,27 @@ class AgentDashboardController extends BaseController
             $memberId = (int)$this->db->getConnection()->lastInsertId();
             $this->corporateMemberModel->replaceForMember($memberId, $accountContribution['line_items']);
 
+            // Optional Platinum add-on selected on the agent registration form (billed separately from Basic).
+            $platinumMonthly = null;
+            if (($_POST['platinum_opt_in'] ?? '') === '1' && !empty($_POST['date_of_birth'])) {
+                global $platinum_config;
+                $platinumAge = (new DateTimeImmutable($_POST['date_of_birth']))->diff(new DateTimeImmutable('today'))->y;
+                $band = $platinumAge < 70 ? 'under_70' : ($platinumAge <= 80 ? '71_80' : ($platinumAge <= 90 ? '81_90' : ($platinumAge <= 100 ? '91_100' : null)));
+                $platinumMonthly = $band ? (float) ($platinum_config['prices']['individual'][$band] ?? 0) : null;
+                if ($platinumMonthly) {
+                    $platinumMaturityMonths = $platinumAge < 60 ? (int) ($platinum_config['maturity_months']['under_60'] ?? 4) : (int) ($platinum_config['maturity_months']['60_and_above'] ?? 7);
+                    $this->db->insert('platinum_coverages', [
+                        'member_id' => $memberId,
+                        'covered_person_type' => 'principal',
+                        'covered_person_id' => null,
+                        'status' => 'pending_payment',
+                        'monthly_contribution' => $platinumMonthly,
+                        'maturity_months' => $platinumMaturityMonths,
+                        'requested_at' => date('Y-m-d H:i:s'),
+                    ]);
+                }
+            }
+
             $this->db->getConnection()->commit();
 
             // Send in-app notification to admins about the new member
@@ -569,6 +590,9 @@ class AgentDashboardController extends BaseController
                 $smsMsg = "Hi {$inviteFirstName}! You've been registered with SHENA Companion. Member No: {$inviteMemberNo}. "
                         . "Set your account password here: {$inviteLink}  (valid 48 hrs). "
                         . "Monthly contribution: KES {$inviteAmount} via Paybill 4163987, Acct: {$inviteId}.";
+                if ($platinumMonthly) {
+                    $smsMsg .= " You also opted into SHENA Platinum (hospital cover): KES " . number_format($platinumMonthly, 2) . "/month, billed separately once your contribution is confirmed.";
+                }
                 $smsService = new SmsService();
                 $smsService->sendSms($invitePhone, $smsMsg);
             } catch (Exception $e) {

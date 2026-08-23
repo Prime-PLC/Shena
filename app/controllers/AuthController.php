@@ -187,6 +187,12 @@ class AuthController extends BaseController
                 return;
             }
 
+            if (defined('LOCAL_SMS_VERIFICATION_DISABLED') && LOCAL_SMS_VERIFICATION_DISABLED) {
+                $this->establishUserSession($user);
+                $this->json(['success' => true, 'otp_required' => false, 'redirect' => $this->resolveUserRedirect($user['role'] ?? 'member')]);
+                return;
+            }
+
             // Generate OTP and store session
             $otpCode = $this->generateOtpCode();
             $_SESSION['login_otp'] = [
@@ -1558,6 +1564,27 @@ class AuthController extends BaseController
 
                 $memberId = $this->memberModel->create($memberData);
 
+                // Optional Platinum add-on selected on the registration form (billed separately from Basic).
+                $platinumOptIn = ($_POST['platinum_opt_in'] ?? '') === '1';
+                if ($platinumOptIn && $age !== null) {
+                    require_once __DIR__ . '/../models/PlatinumCoverage.php';
+                    global $platinum_config;
+                    $band = $age < 70 ? 'under_70' : ($age <= 80 ? '71_80' : ($age <= 90 ? '81_90' : ($age <= 100 ? '91_100' : null)));
+                    $platinumMonthly = $band ? (float) ($platinum_config['prices']['individual'][$band] ?? 0) : 0.0;
+                    if ($platinumMonthly > 0) {
+                        $maturityMonths = $age < 60 ? (int) ($platinum_config['maturity_months']['under_60'] ?? 4) : (int) ($platinum_config['maturity_months']['60_and_above'] ?? 7);
+                        $this->db->insert('platinum_coverages', [
+                            'member_id' => $memberId,
+                            'covered_person_type' => 'principal',
+                            'covered_person_id' => null,
+                            'status' => 'pending_payment',
+                            'monthly_contribution' => $platinumMonthly,
+                            'maturity_months' => $maturityMonths,
+                            'requested_at' => date('Y-m-d H:i:s'),
+                        ]);
+                    }
+                }
+
                 // Handle payment based on method
                 $paymentModel = new Payment();
                 $paymentData = null;
@@ -2002,7 +2029,11 @@ class AuthController extends BaseController
     private function establishUserSession(array $user)
     {
         $_SESSION['is_first_login'] = empty($user['last_login']);
-        session_regenerate_id(true);
+        // The built-in HTTP server can lose the rotated cookie after a local
+        // AJAX login; production still rotates the session ID as usual.
+        if (!defined('LOCAL_OVERRIDE_APPLIED')) {
+            session_regenerate_id(true);
+        }
 
         $_SESSION['user_id'] = $user['id'];
         $_SESSION['user_email'] = $user['email'];
@@ -2014,6 +2045,10 @@ class AuthController extends BaseController
             $this->userModel->update($user['id'], ['last_login' => date('Y-m-d H:i:s')]);
         } catch (Exception $e) {
             error_log('Failed to update last login: ' . $e->getMessage());
+        }
+
+        if (defined('LOCAL_OVERRIDE_APPLIED')) {
+            session_write_close();
         }
     }
 

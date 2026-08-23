@@ -4,6 +4,9 @@
  */
 require_once __DIR__ . '/../services/ReportService.php';
 require_once __DIR__ . '/../helpers/ReportDocumentTemplate.php';
+require_once __DIR__ . '/../models/PlatinumCoverage.php';
+require_once __DIR__ . '/../services/PlatinumEligibilityService.php';
+require_once __DIR__ . '/../services/SmsService.php';
 
 class MemberController extends BaseController
 {
@@ -50,6 +53,57 @@ class MemberController extends BaseController
         ];
 
         return $aliases[$value] ?? $value;
+    }
+
+    private function findOwnedPlatinumPerson(array $member, string $type, int $personId): ?array
+    {
+        if ($type === 'principal') {
+            return ['date_of_birth' => $member['date_of_birth'] ?? null];
+        }
+        if ($type === 'dependent') {
+            foreach ($this->beneficiaryModel->getActiveBeneficiaries((int) $member['id']) as $person) {
+                if ((int) ($person['id'] ?? 0) === $personId) return $person;
+            }
+        }
+        if ($type === 'corporate_member') {
+            foreach ((new MemberCorporateMember())->getActiveForMember((int) $member['id']) as $person) {
+                if ((int) ($person['id'] ?? 0) === $personId) return $person;
+            }
+        }
+        return null;
+    }
+
+    private function platinumAge(?string $dateOfBirth): ?int
+    {
+        if (!$dateOfBirth) return null;
+        try {
+            return (new DateTimeImmutable($dateOfBirth))->diff(new DateTimeImmutable('today'))->y;
+        } catch (Throwable $e) {
+            return null;
+        }
+    }
+
+    private function platinumMaturityMonths(?int $age): int
+    {
+        global $platinum_config;
+        return $age !== null && $age < 60
+            ? (int) ($platinum_config['maturity_months']['under_60'] ?? 4)
+            : (int) ($platinum_config['maturity_months']['61_and_above'] ?? 7);
+    }
+
+    private function platinumMonthlyContribution(?int $age): ?float
+    {
+        global $platinum_config;
+        if ($age === null) return null;
+        $band = $age < 70 ? 'under_70' : ($age <= 80 ? '71_80' : ($age <= 90 ? '81_90' : ($age <= 100 ? '91_100' : null)));
+        $price = $band === null ? null : ($platinum_config['prices']['individual'][$band] ?? null);
+        return $price === null ? null : (float) $price;
+    }
+
+    private function validDate(string $date): bool
+    {
+        $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+        return $parsed !== false && $parsed->format('Y-m-d') === $date;
     }
     
     public function dashboard()
@@ -207,6 +261,145 @@ class MemberController extends BaseController
         ];
 
         $this->view('member.dashboard', $data);
+    }
+
+    public function platinum()
+    {
+        $member = $this->memberModel->findByUserId($_SESSION['user_id']);
+        if (!$member) {
+            $_SESSION['error'] = 'Member profile not found.';
+            $this->redirect('/dashboard');
+        }
+        $this->view('member.platinum', [
+            'member' => $member,
+            'coverages' => (new PlatinumCoverage())->forMember((int) $member['id']),
+            'beneficiaries' => $this->beneficiaryModel->getActiveBeneficiaries((int) $member['id']),
+            'corporate_members' => (new MemberCorporateMember())->getActiveForMember((int) $member['id']),
+            'csrf_token' => $this->generateCsrfToken()
+        ]);
+    }
+
+    public function submitPlatinumRequest()
+    {
+        $this->validateCsrf();
+        $member = $this->memberModel->findByUserId($_SESSION['user_id']);
+        if (!$member) {
+            $_SESSION['error'] = 'Member profile not found.';
+            $this->redirect('/dashboard');
+        }
+        $type = $_POST['covered_person_type'] ?? 'principal';
+        $personId = $type === 'principal' ? null : (int) ($_POST['covered_person_id'] ?? 0);
+        if (!in_array($type, ['principal', 'dependent', 'corporate_member'], true) || ($type !== 'principal' && $personId < 1)) {
+            $_SESSION['error'] = 'Select a valid covered person.';
+            $this->redirect('/platinum');
+        }
+        $person = $this->findOwnedPlatinumPerson($member, $type, $personId ?? 0);
+        $age = $this->platinumAge($person['date_of_birth'] ?? null);
+        $monthlyContribution = $person ? $this->platinumMonthlyContribution($age) : null;
+        if (!$person || $monthlyContribution === null) {
+            $_SESSION['error'] = 'The selected person is not attached to your membership or is not eligible for Platinum.';
+            $this->redirect('/platinum');
+        }
+        $coverage = new PlatinumCoverage();
+        $existing = $coverage->getCoverage((int) $member['id'], $type, $personId);
+        if ($existing && in_array($existing['status'], ['pending_payment', 'pending_approval', 'active'], true)) {
+            $_SESSION['error'] = 'A Platinum request already exists for this person.';
+            $this->redirect('/platinum');
+        }
+        try {
+            $fields = [
+                'status' => 'pending_payment',
+                'monthly_contribution' => $monthlyContribution,
+                'maturity_months' => $this->platinumMaturityMonths($age),
+                'requested_at' => date('Y-m-d H:i:s'),
+                'approved_at' => null,
+                'approved_by' => null,
+                'effective_from' => null,
+                'maturity_date' => null,
+            ];
+            if ($existing) {
+                // Re-submitting after a previous rejection/cancellation reuses the row (unique constraint per person).
+                $this->db->update('platinum_coverages', $fields, 'id = :id', ['id' => $existing['id']]);
+            } else {
+                $this->db->insert('platinum_coverages', array_merge(['member_id' => $member['id'], 'covered_person_type' => $type, 'covered_person_id' => $personId], $fields));
+            }
+            $_SESSION['success'] = 'Platinum request created. Complete the KES ' . number_format($monthlyContribution, 2) . ' contribution below to send it for admin approval.';
+        } catch (Throwable $e) {
+            $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Unable to submit your Platinum request.');
+        }
+        $this->redirect('/platinum');
+    }
+
+    public function inpatientRequests()
+    {
+        $member = $this->memberModel->findByUserId($_SESSION['user_id']);
+        if (!$member) {
+            $_SESSION['error'] = 'Member profile not found.';
+            $this->redirect('/dashboard');
+        }
+        $coverage = new PlatinumCoverage();
+        $coverages = $coverage->forMember((int) $member['id']);
+        $requests = $this->db->fetchAll('SELECT * FROM inpatient_requests WHERE member_id = :id ORDER BY created_at DESC', ['id' => $member['id']]);
+        $this->view('member.inpatient-requests', ['coverages' => $coverages, 'requests' => $requests, 'csrf_token' => $this->generateCsrfToken()]);
+    }
+
+    public function submitInpatientRequest()
+    {
+        $this->validateCsrf();
+        $member = $this->memberModel->findByUserId($_SESSION['user_id']);
+        if (!$member) {
+            $_SESSION['error'] = 'Member profile not found.';
+            $this->redirect('/dashboard');
+        }
+        $coverage = new PlatinumCoverage();
+        $selected = $coverage->find((int) ($_POST['platinum_coverage_id'] ?? 0));
+        if (!$selected || (int) $selected['member_id'] !== (int) $member['id'] || $selected['status'] !== 'active') {
+            $_SESSION['error'] = 'Select an active Platinum-covered person.';
+            $this->redirect('/inpatient-requests');
+        }
+        $admissionDate = trim((string) ($_POST['admission_date'] ?? ''));
+        $requestedDays = filter_var($_POST['requested_days'] ?? null, FILTER_VALIDATE_INT);
+        if (!$this->validDate($admissionDate) || $requestedDays === false || $requestedDays < 1 || $requestedDays > 20) {
+            $_SESSION['error'] = 'Enter a valid admission date and request between 1 and 20 days.';
+            $this->redirect('/inpatient-requests');
+        }
+        $eligibility = (new PlatinumEligibilityService())->eligibility((int) $selected['id'], $admissionDate, $requestedDays);
+        if (empty($eligibility['eligible'])) {
+            $_SESSION['error'] = $eligibility['reason'] ?? 'This Platinum request is not eligible.';
+            $this->redirect('/inpatient-requests');
+        }
+        $registeredPeople = $coverage->forMember((int) $member['id']);
+        $registeredPerson = null;
+        foreach ($registeredPeople as $person) {
+            if ((int) $person['id'] === (int) $selected['id']) {
+                $registeredPerson = $person;
+                break;
+            }
+        }
+        $patientName = trim((string) ($_POST['patient_name'] ?? ''));
+        if ($patientName === '' && $registeredPerson) {
+            $patientName = trim((string) ($registeredPerson['covered_person_name'] ?? ''));
+        }
+        $facilityName = trim((string) ($_POST['facility_name'] ?? ''));
+        $facilityLocation = trim((string) ($_POST['facility_location'] ?? ''));
+        if ($patientName === '' || $facilityName === '' || $facilityLocation === '' || strlen($patientName) > 200 || strlen($facilityName) > 200 || strlen($facilityLocation) > 255) {
+            $_SESSION['error'] = 'Patient and facility details are required and must be within the allowed length.';
+            $this->redirect('/inpatient-requests');
+        }
+        try {
+            $this->db->insert('inpatient_requests', ['member_id' => $member['id'], 'platinum_coverage_id' => $selected['id'], 'covered_person_type' => $selected['covered_person_type'], 'covered_person_id' => $selected['covered_person_id'], 'patient_name' => $patientName, 'facility_name' => $facilityName, 'facility_location' => $facilityLocation, 'facility_contact' => trim((string) ($_POST['facility_contact'] ?? '')), 'admission_date' => $admissionDate, 'requested_days' => $requestedDays, 'admission_reference' => trim((string) ($_POST['admission_reference'] ?? ''))]);
+        } catch (Throwable $e) {
+            $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Unable to submit your inpatient request.');
+            $this->redirect('/inpatient-requests');
+        }
+        try {
+            $name = trim(($member['first_name'] ?? '') . ' ' . ($member['last_name'] ?? '')) ?: 'Member';
+            (new SmsService())->sendSms($member['phone'] ?? null, "Dear {$name}, SHENA received your inpatient support request for {$patientName}. Our team will review it and send confirmation. - Shena Companion");
+        } catch (Throwable $exception) {
+            error_log('Inpatient request SMS failed: ' . $exception->getMessage());
+        }
+        $_SESSION['success'] = 'Inpatient request submitted for review.';
+        $this->redirect('/inpatient-requests');
     }
     
     public function profile()
@@ -526,7 +719,31 @@ class MemberController extends BaseController
                 'monthly_contribution' => $monthlyContribution,
             ]);
 
-            echo json_encode(['success' => true, 'message' => 'Membership plan updated successfully.']);
+            // Optional Platinum add-on selected alongside the Basic plan during onboarding.
+            $platinumInfo = null;
+            if (($_POST['platinum_opt_in'] ?? '') === '1') {
+                $dobForAge = $member['date_of_birth'] ?? ($_POST['date_of_birth'] ?? null);
+                $age = $this->platinumAge($dobForAge);
+                $platinumMonthly = $this->platinumMonthlyContribution($age);
+                if ($platinumMonthly !== null) {
+                    $coverage = new PlatinumCoverage();
+                    $existing = $coverage->getCoverage((int) $member['id'], 'principal', null);
+                    if (!$existing || !in_array($existing['status'], ['pending_payment', 'pending_approval', 'active'], true)) {
+                        $this->db->insert('platinum_coverages', [
+                            'member_id' => $member['id'],
+                            'covered_person_type' => 'principal',
+                            'covered_person_id' => null,
+                            'status' => 'pending_payment',
+                            'monthly_contribution' => $platinumMonthly,
+                            'maturity_months' => $this->platinumMaturityMonths($age),
+                            'requested_at' => date('Y-m-d H:i:s'),
+                        ]);
+                    }
+                    $platinumInfo = ['monthly_contribution' => $platinumMonthly];
+                }
+            }
+
+            echo json_encode(['success' => true, 'message' => 'Membership plan updated successfully.', 'platinum' => $platinumInfo]);
 
         } catch (Exception $e) {
             error_log('updatePackageFromOnboarding error: ' . $e->getMessage());
@@ -1324,6 +1541,12 @@ class MemberController extends BaseController
             // Submit claim
             error_log('All eligibility checks passed. Submitting claim to database...');
             $claimId = $this->claimModel->submitClaim($claimData);
+            try {
+                $name = trim(($member['first_name'] ?? '') . ' ' . ($member['last_name'] ?? '')) ?: 'Member';
+                (new SmsService())->sendSms($member['phone'] ?? null, "Dear {$name}, SHENA received claim CLM-{$claimId}. We will confirm the next step after review. - Shena Companion");
+            } catch (Throwable $exception) {
+                error_log('Member claim acknowledgement SMS failed: ' . $exception->getMessage());
+            }
             error_log('Claim submitted successfully with ID: ' . $claimId);
 
             // Supporting documents may be supplied during filing or added later by staff.

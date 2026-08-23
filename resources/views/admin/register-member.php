@@ -307,6 +307,15 @@ foreach (($packages ?? []) as $packageKey => $package) {
                     <label class="form-label">Expected Monthly Contribution</label>
                     <div class="form-input corporate-total-preview" id="corporateTotalPreview" aria-live="polite">KES 0/month</div>
                 </div>
+                <div class="form-group full-width" style="background:linear-gradient(135deg,#7F20B0 0%,#5E2B7A 100%);border-radius:10px;padding:14px 16px;color:#fff">
+                    <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin:0">
+                        <input type="checkbox" name="platinum_opt_in" id="platinumOptIn" value="1" style="margin-top:4px">
+                        <span>
+                            <strong>Add SHENA Platinum &mdash; Hospital Cover</strong><br>
+                            <span style="font-size:0.85rem;opacity:0.9">Up to 20 inpatient bed-cover days a year, billed separately at <span id="platinumOptInPrice">--</span>/month once approved.</span>
+                        </span>
+                    </label>
+                </div>
                 <div class="form-group">
                     <label class="form-label">Referred By (Agent Number)</label>
                     <input type="text" name="agent_number" class="form-input" placeholder="Optional" value="<?php echo $oldValue('agent_number'); ?>">
@@ -422,6 +431,30 @@ foreach (($packages ?? []) as $packageKey => $package) {
         });
         corporateTotalPreview.textContent = 'KES ' + total.toLocaleString() + '/month';
     }
+
+    function platinumBandPrice(age) {
+        if (age === null || age === undefined || isNaN(age)) { return null; }
+        if (age < 70) { return 300; }
+        if (age <= 80) { return 550; }
+        if (age <= 90) { return 650; }
+        if (age <= 100) { return 850; }
+        return null;
+    }
+
+    function updatePlatinumOptInPrice() {
+        const priceEl = document.getElementById('platinumOptInPrice');
+        const dobInput = document.querySelector('input[name="date_of_birth"]');
+        if (!priceEl) return;
+        let age = null;
+        if (dobInput && dobInput.value) {
+            const dob = new Date(dobInput.value);
+            age = Math.floor((Date.now() - dob.getTime()) / (1000 * 60 * 60 * 24 * 365.25));
+        }
+        const price = platinumBandPrice(age);
+        priceEl.textContent = price ? ('KES ' + price.toLocaleString()) : 'a price based on age';
+    }
+    document.querySelector('input[name="date_of_birth"]')?.addEventListener('change', updatePlatinumOptInPrice);
+    updatePlatinumOptInPrice();
 
     packageSelect?.addEventListener('change', updateContributionPreview);
     if (corporateLineItems) {

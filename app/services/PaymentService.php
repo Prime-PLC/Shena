@@ -372,11 +372,11 @@ class PaymentService
         }
     }
     
-    public function recordPaymentAttempt($memberId, $amount, $phoneNumber, $checkoutRequestId, $paymentType = 'monthly', $merchantRequestId = null)
+    public function recordPaymentAttempt($memberId, $amount, $phoneNumber, $checkoutRequestId, $paymentType = 'monthly', $merchantRequestId = null, array $extra = [])
     {
         $paymentModel = new Payment();
 
-        return $paymentModel->recordPayment([
+        return $paymentModel->recordPayment(array_merge([
             'member_id' => $memberId,
             'amount' => $amount,
             'payment_type' => $paymentType,
@@ -386,7 +386,7 @@ class PaymentService
             'transaction_reference' => $checkoutRequestId,
             'checkout_request_id' => $checkoutRequestId,
             'merchant_request_id' => $merchantRequestId
-        ]);
+        ], $extra));
     }
 
     private function findPaymentByCheckoutRequestId($checkoutRequestId)

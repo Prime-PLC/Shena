@@ -7,3 +7,26 @@
 [06-Mar-2026 09:03:12 Africa/Nairobi] PHP Warning:  Undefined array key "county" in C:\xampp\htdocs\Shena\app\controllers\AuthController.php on line 950
 [06-Mar-2026 09:03:12 Africa/Nairobi] PHP Deprecated:  trim(): Passing null to parameter #1 ($string) of type string is deprecated in C:\xampp\htdocs\Shena\app\core\BaseController.php on line 102
 [06-Mar-2026 09:03:13 Africa/Nairobi] SMS sending failed: {"status":"error","statusCode":"216","reason":"Invalid credentials"}
+[20-Aug-2026 00:22:34 Africa/Nairobi] Failed to add dependant: Please fill in dependant name, relationship, and date of birth.
+[20-Aug-2026 00:23:07 Africa/Nairobi] Failed to add dependant: Please enter a valid dependant date of birth.
+[20-Aug-2026 01:02:28 Africa/Nairobi] Application error: PlatinumCoverage::getCoverage(): Return value must be of type ?array, false returned
+[20-Aug-2026 01:02:28 Africa/Nairobi] Stack trace: #0 C:\xampp\htdocs\Shena\app\controllers\MemberController.php(304): PlatinumCoverage->getCoverage()
+#1 C:\xampp\htdocs\Shena\app\core\Router.php(416): MemberController->submitPlatinumRequest()
+#2 C:\xampp\htdocs\Shena\app\core\Router.php(399): Router->executeAction()
+#3 C:\xampp\htdocs\Shena\app\core\Router.php(364): Router->executeRoute()
+#4 C:\xampp\htdocs\Shena\index.php(66): Router->dispatch()
+#5 {main}
+[20-Aug-2026 01:09:44 Africa/Nairobi] Application error: Call to undefined method PDO::fetch()
+[20-Aug-2026 01:09:44 Africa/Nairobi] Stack trace: #0 C:\xampp\htdocs\Shena\app\controllers\AdminController.php(3821): PlatinumEligibilityService->hasVerifiedPayment()
+#1 C:\xampp\htdocs\Shena\app\core\Router.php(416): AdminController->platinumRequests()
+#2 C:\xampp\htdocs\Shena\app\core\Router.php(399): Router->executeAction()
+#3 C:\xampp\htdocs\Shena\app\core\Router.php(364): Router->executeRoute()
+#4 C:\xampp\htdocs\Shena\index.php(66): Router->dispatch()
+#5 {main}
+[20-Aug-2026 01:10:12 Africa/Nairobi] Application error: Call to undefined method PDO::fetch()
+[20-Aug-2026 01:10:12 Africa/Nairobi] Stack trace: #0 C:\xampp\htdocs\Shena\app\controllers\AdminController.php(3821): PlatinumEligibilityService->hasVerifiedPayment()
+#1 C:\xampp\htdocs\Shena\app\core\Router.php(416): AdminController->platinumRequests()
+#2 C:\xampp\htdocs\Shena\app\core\Router.php(399): Router->executeAction()
+#3 C:\xampp\htdocs\Shena\app\core\Router.php(364): Router->executeRoute()
+#4 C:\xampp\htdocs\Shena\index.php(66): Router->dispatch()
+#5 {main}

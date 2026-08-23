@@ -814,6 +814,15 @@ $missingFields = $missing_profile_fields ?? [];
                     <strong id="onb-plan-name"></strong>
                     <span class="onb-plan-summary-price" id="onb-plan-price"></span>
                 </div>
+                <div id="onb-platinum-cta" style="display:none;margin-top:14px;background:linear-gradient(135deg,#7F20B0 0%,#5E2B7A 100%);border-radius:12px;padding:14px 16px;color:#fff">
+                    <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin:0">
+                        <input type="checkbox" id="onb-platinum-opt-in" style="margin-top:4px">
+                        <span>
+                            <strong>Add SHENA Platinum &mdash; Hospital Cover</strong><br>
+                            <span style="font-size:0.85rem;opacity:0.9">Get up to 20 inpatient bed-cover days a year. Billed separately at <span id="onb-platinum-price">--</span>/month, once approved.</span>
+                        </span>
+                    </label>
+                </div>
             </div>
 
             <!-- ── Step 4: Activate Membership ────────────────────── -->
@@ -1028,6 +1037,32 @@ $missingFields = $missing_profile_fields ?? [];
         planNameEl.textContent  = name;
         planPriceEl.textContent = 'KES ' + price.toLocaleString() + '/month';
         planSummary.style.display = '';
+        var platinumCta = document.getElementById('onb-platinum-cta');
+        if (platinumCta) { platinumCta.style.display = ''; }
+        updatePlatinumPriceEstimate();
+    }
+
+    function platinumBandPrice(age) {
+        if (age === null || age === undefined || isNaN(age)) { return null; }
+        if (age < 70) { return 300; }
+        if (age <= 80) { return 550; }
+        if (age <= 90) { return 650; }
+        if (age <= 100) { return 850; }
+        return null;
+    }
+
+    function updatePlatinumPriceEstimate() {
+        var priceEl = document.getElementById('onb-platinum-price');
+        if (!priceEl) { return; }
+        var dobInput = document.getElementById('onb-dob');
+        var age = null;
+        if (dobInput && dobInput.value) {
+            var dob = new Date(dobInput.value);
+            var diffMs = Date.now() - dob.getTime();
+            age = Math.floor(diffMs / (1000 * 60 * 60 * 24 * 365.25));
+        }
+        var price = platinumBandPrice(age);
+        priceEl.textContent = price ? ('KES ' + price.toLocaleString()) : 'a price based on age';
     }
 
     planSelect.addEventListener('change', function () {
@@ -1086,6 +1121,10 @@ $missingFields = $missing_profile_fields ?? [];
             var fd2 = new FormData();
             fd2.append('csrf_token', CSRF);
             fd2.append('package_id', selectedPackageId);
+            var onbDob = document.getElementById('onb-dob');
+            if (onbDob && onbDob.value) { fd2.append('date_of_birth', onbDob.value); }
+            var platinumOptIn = document.getElementById('onb-platinum-opt-in');
+            if (platinumOptIn && platinumOptIn.checked) { fd2.append('platinum_opt_in', '1'); }
             try {
                 var r2 = await fetch('/member/onboarding/package', { method: 'POST', body: fd2, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
                 var d2 = await r2.json();

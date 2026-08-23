@@ -989,7 +989,6 @@ main {
             <div class="total-contributions-card">
                 <h4>TOTAL CONTRIBUTIONS <?php echo !empty($selected_year) ? htmlspecialchars($selected_year) : date('Y'); ?></h4>
                 <h2>KES <?php echo number_format($total_paid, 2); ?></h2>
-                <p><i class="fas fa-arrow-up"></i> 12% increase from 2022</p>
             </div>
 
             <!-- Contribution Logs -->

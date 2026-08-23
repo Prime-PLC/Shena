@@ -905,17 +905,24 @@ if ($notificationCount === null) {
 
                     <!-- Claims -->
                     <li class="nav-item">
-                        <a class="nav-link <?php echo (strpos($_SERVER['REQUEST_URI'], '/admin/claims') !== false) ? 'active' : ''; ?>" href="/admin/claims">
+                        <a class="nav-link has-submenu <?php echo (strpos($_SERVER['REQUEST_URI'], '/admin/claims') !== false || strpos($_SERVER['REQUEST_URI'], '/admin/platinum-requests') !== false || strpos($_SERVER['REQUEST_URI'], '/admin/inpatient-requests') !== false) ? 'active' : ''; ?>" href="#" onclick="toggleSubmenu(event, 'claims-submenu')">
                             <i class="fas fa-file-medical"></i>
                             <span>Claims</span>
                         </a>
-                    </li>
-
-                    <li class="nav-item">
-                        <a class="nav-link <?php echo (strpos($_SERVER['REQUEST_URI'], '/admin/platinum-requests') !== false || strpos($_SERVER['REQUEST_URI'], '/admin/inpatient-requests') !== false) ? 'active' : ''; ?>" href="/admin/platinum-requests">
-                            <i class="fas fa-hospital"></i>
-                            <span>Platinum</span>
-                        </a>
+                        <ul class="nav-submenu" id="claims-submenu">
+                            <li class="nav-item">
+                                <a class="nav-link <?php echo (strpos($_SERVER['REQUEST_URI'], '/admin/claims') !== false) ? 'active' : ''; ?>" href="/admin/claims">
+                                    <i class="fas fa-hands-helping"></i>
+                                    <span>Funeral Cover</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link <?php echo (strpos($_SERVER['REQUEST_URI'], '/admin/platinum-requests') !== false || strpos($_SERVER['REQUEST_URI'], '/admin/inpatient-requests') !== false) ? 'active' : ''; ?>" href="/admin/platinum-requests">
+                                    <i class="fas fa-hospital"></i>
+                                    <span>Hospital Cover</span>
+                                </a>
+                            </li>
+                        </ul>
                     </li>
 
                     <!-- Payments -->
