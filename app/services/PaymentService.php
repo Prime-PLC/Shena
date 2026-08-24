@@ -243,6 +243,14 @@ class PaymentService
                     $confirmedPayment = $paymentModel->find($paymentId);
                     $memberId = $confirmedPayment['member_id'];
                     $paymentType = $confirmedPayment['payment_type'] ?? 'monthly';
+                    if ($paymentType === 'monthly') {
+                        require_once __DIR__ . '/PlatinumBillingService.php';
+                        (new PlatinumBillingService())->applyMonthlyPayment(
+                            (int) $paymentId,
+                            (int) $memberId,
+                            $transactionDate ?: date('Y-m-d H:i:s')
+                        );
+                    }
                     
                     // Get member and user models
                     $memberModel = new Member();

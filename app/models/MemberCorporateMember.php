@@ -29,6 +29,7 @@ class MemberCorporateMember extends BaseModel
                 'member_id' => $memberId,
                 'label' => trim((string)($item['label'] ?? '')),
                 'relationship' => trim((string)($item['relationship'] ?? 'corporate')),
+                'date_of_birth' => !empty($item['date_of_birth']) ? $item['date_of_birth'] : null,
                 'package_key' => $packageKey,
                 'package_name' => trim((string)($item['package_name'] ?? $packageKey)),
                 'monthly_contribution' => (float)($item['monthly_contribution'] ?? 0),
@@ -50,4 +51,5 @@ class MemberCorporateMember extends BaseModel
 
         return (float)($row['total'] ?? 0);
     }
+
 }

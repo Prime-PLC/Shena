@@ -70,7 +70,7 @@
                     <ul>
                         <li>Monthly contributions are payable via <strong>M-Pesa Paybill 4163987</strong>, using your name or ID number as the account reference.</li>
                         <li>Contribution rates are determined by your selected package and the age brackets of covered individuals.</li>
-                        <li><strong>SHENA Platinum</strong> provides inpatient support for members and their loved ones. It is a complimentary service to SHENA BASIC. It pays for daily bed charges for members and their dependants. Platinum is selected and charged per covered person.</li>
+                        <li><strong>SHENA Platinum</strong> is an optional inpatient add-on to a selected SHENA BASIC package. It pays daily bed charges for the package owner and covered dependants, who share one 20-day annual allowance.</li>
                         <li>Current Platinum individual rates are KES 300 below age 70, KES 550 for ages 71–80, KES 650 for ages 81–90, and KES 850 for ages 91–100. Platinum family and Executive schedules are shown on the membership page.</li>
                         <li>A member is considered <strong>active</strong> only when all current and past contributions are fully settled.</li>
                         <li>Contributions that are <strong>3 or more months in arrears</strong> will result in suspension of benefit coverage.</li>
@@ -99,13 +99,13 @@
                     </ul>
                     <p><strong>SHENA Platinum inpatient support:</strong> This is a separate inpatient benefit added to Basic. It is not automatic for every person on an account, and it does not replace Basic funeral cover.</p>
                     <ul>
-                        <li>Platinum provides up to <strong>20 inpatient bed-cover days per selected covered person per calendar year</strong>.</li>
-                        <li>Requests may be split across admissions, but the total approved days for that person cannot exceed 20 in the calendar year.</li>
+                        <li>Platinum provides up to <strong>20 inpatient bed-cover days per selected Basic package group per calendar year</strong>.</li>
+                        <li>Requests may be split across admissions, but the package owner and covered dependants share the group\'s 20-day annual allowance.</li>
                         <li>An inpatient request must identify the covered person and provide the facility name and location or contact, admission date, requested days, and any available admission or doctor reference.</li>
                         <li>Unused Platinum days expire at the end of the calendar year and do not carry forward.</li>
-                        <li>Platinum maturity is <strong>4 months for a selected person below age 60</strong> and <strong>7 months for a selected person aged 60 and above</strong>.</li>
+                        <li>Platinum maturity is <strong>4 months when the selected package owner is below age 60</strong> and <strong>7 months when the owner is aged 60 and above</strong>.</li>
                         <li>Inpatient support is subject to active and mature cover, current contributions, available annual days, eligibility review, and SHENA approval. Approval may be partial where fewer days remain.</li>
-                        <li>Platinum cover may be selected for the principal member, registered dependents, or eligible corporate covered persons. The final monthly amount depends on the selected people and the applicable age/package schedule.</li>
+                        <li>Platinum cover may be selected for the principal package or an eligible corporate member package. Covered dependants share their selected package group\'s cover, allowance, and monthly amount.</li>
                     </ul>
                 '],
                 ['icon' => 'fas fa-file-alt', 'title' => '5. Claims Process', 'content' => '

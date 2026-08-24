@@ -825,10 +825,96 @@ main {
         <div>
             <h1 class="page-title">Claims Center</h1>
 
+            <?php
+                $hasActivePlatinum = !empty($has_active_platinum);
+                $platinumPending = !empty($platinum_pending);
+                $platinumPendingStatus = $platinum_pending_status ?? null;
+            ?>
             <div style="background:linear-gradient(135deg,#7F20B0 0%,#5E2B7A 100%);border-radius:14px;padding:16px 22px;margin-bottom:20px;color:#fff;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
-                <span style="font-weight:600"><i class="fas fa-shield-alt" style="margin-right:8px"></i>Add SHENA Platinum for up to 20 inpatient bed-cover days/year, per covered person.</span>
-                <a href="/platinum" style="background:rgba(255,255,255,0.18);color:#fff;padding:8px 16px;border-radius:8px;font-weight:700;text-decoration:none;white-space:nowrap">Explore Platinum</a>
+                <span style="font-weight:600">
+                    <i class="fas fa-<?php echo $hasActivePlatinum ? 'gem' : 'shield-alt'; ?>" style="margin-right:8px"></i>
+                    <?php if ($hasActivePlatinum): ?>
+                        Your SHENA Platinum cover is active &mdash; 20 inpatient bed-cover days shared by each covered package group, per year.
+                    <?php else: ?>
+                        Add SHENA Platinum for up to 20 inpatient bed-cover days/year, shared by the selected package group.
+                    <?php endif; ?>
+                </span>
+                <?php if ($hasActivePlatinum): ?>
+                    <a href="/inpatient-requests" style="background:rgba(255,255,255,0.18);color:#fff;padding:8px 16px;border-radius:8px;font-weight:700;text-decoration:none;white-space:nowrap"><i class="fas fa-notes-medical"></i> Hospital cover requests</a>
+                <?php else: ?>
+                    <button type="button" onclick="PlatinumGate.open()" style="background:rgba(255,255,255,0.18);color:#fff;padding:8px 16px;border-radius:8px;font-weight:700;border:1px solid rgba(255,255,255,0.35);cursor:pointer;white-space:nowrap">
+                        <i class="fas fa-lock"></i> Unlock hospital cover
+                    </button>
+                <?php endif; ?>
             </div>
+
+            <?php if (!$hasActivePlatinum): ?>
+            <!-- Blocking gate: hospital cover is unavailable until Platinum is added -->
+            <div id="platinumGateModal" class="platinum-gate-overlay" style="display:none" role="dialog" aria-modal="true" aria-labelledby="platinumGateTitle">
+                <div class="platinum-gate-box">
+                    <div class="platinum-gate-icon"><i class="fas fa-hospital"></i></div>
+                    <h3 id="platinumGateTitle">Hospital cover requires SHENA Platinum</h3>
+                    <p>
+                        Inpatient bed-cover is part of <strong>SHENA Platinum</strong>, an optional add-on that sits on top of your
+                        Basic membership. Add Platinum for a covered person to unlock
+                        <strong>20 inpatient bed-cover days per year</strong> for them.
+                    </p>
+                    <ul class="platinum-gate-list">
+                        <li><i class="fas fa-check"></i> Choose exactly who is covered &mdash; yourself, a dependant, or a corporate member</li>
+                        <li><i class="fas fa-check"></i> 20 days per Platinum package group, per calendar year, usable across separate admissions</li>
+                        <li><i class="fas fa-check"></i> Maturity period of 4 months (under 60) or 7 months (60 and above)</li>
+                    </ul>
+                    <?php if ($platinumPending): ?>
+                        <div class="platinum-gate-pending">
+                            <i class="fas fa-hourglass-half"></i>
+                            <?php if ($platinumPendingStatus === 'pending_payment'): ?>
+                                You have a Platinum request awaiting payment. Complete the contribution to send it for approval.
+                            <?php else: ?>
+                                Your Platinum request is with our team for approval. We&rsquo;ll notify you by SMS once it&rsquo;s active.
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
+                    <div class="platinum-gate-actions">
+                        <button type="button" class="platinum-gate-btn ghost" onclick="PlatinumGate.close()">Maybe later</button>
+                        <a href="/platinum" class="platinum-gate-btn primary"><i class="fas fa-gem"></i> <?php echo $platinumPending ? 'Continue Platinum setup' : 'Add Platinum cover'; ?></a>
+                    </div>
+                </div>
+            </div>
+
+            <style>
+                .platinum-gate-overlay { position: fixed; inset: 0; background: rgba(17,24,39,0.6); z-index: 1200; display: flex; align-items: center; justify-content: center; padding: 20px; }
+                .platinum-gate-box { background: #fff; border-radius: 20px; padding: 32px; max-width: 500px; width: 100%; box-shadow: 0 24px 48px -12px rgba(0,0,0,0.35); max-height: 90vh; overflow-y: auto; text-align: center; }
+                .platinum-gate-icon { width: 62px; height: 62px; margin: 0 auto 16px; border-radius: 18px; background: linear-gradient(135deg,#7F20B0 0%,#5E2B7A 100%); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 24px; }
+                .platinum-gate-box h3 { font-size: 1.25rem; font-weight: 700; color: #1F2937; margin: 0 0 10px 0; }
+                .platinum-gate-box p { color: #6B7280; font-size: 0.92rem; line-height: 1.6; margin: 0 0 18px 0; }
+                .platinum-gate-list { list-style: none; padding: 0; margin: 0 0 18px 0; text-align: left; }
+                .platinum-gate-list li { display: flex; gap: 10px; align-items: flex-start; font-size: 0.87rem; color: #374151; padding: 7px 0; }
+                .platinum-gate-list li i { color: #10B981; margin-top: 3px; flex-shrink: 0; }
+                .platinum-gate-pending { background: #FEF3C7; border-left: 4px solid #F59E0B; color: #78350F; padding: 12px 14px; border-radius: 10px; font-size: 0.85rem; text-align: left; margin-bottom: 18px; }
+                .platinum-gate-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+                .platinum-gate-btn { padding: 11px 22px; border-radius: 10px; font-weight: 700; font-size: 0.9rem; text-decoration: none; cursor: pointer; border: none; display: inline-flex; align-items: center; gap: 8px; }
+                .platinum-gate-btn.ghost { background: #F3F4F6; color: #4B5563; }
+                .platinum-gate-btn.primary { background: linear-gradient(135deg,#7F20B0 0%,#5E2B7A 100%); color: #fff; }
+                .platinum-gate-btn.primary:hover { filter: brightness(1.08); }
+            </style>
+
+            <script>
+                window.PlatinumGate = {
+                    open: function () {
+                        var modal = document.getElementById('platinumGateModal');
+                        if (modal) { modal.style.display = 'flex'; document.body.style.overflow = 'hidden'; }
+                    },
+                    close: function () {
+                        var modal = document.getElementById('platinumGateModal');
+                        if (modal) { modal.style.display = 'none'; document.body.style.overflow = ''; }
+                    }
+                };
+                document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { PlatinumGate.close(); } });
+                document.getElementById('platinumGateModal')?.addEventListener('click', function (e) {
+                    if (e.target === this) { PlatinumGate.close(); }
+                });
+            </script>
+            <?php endif; ?>
             
             <?php if (isset($_SESSION['success']) || isset($_SESSION['error'])): ?>
                 <script>

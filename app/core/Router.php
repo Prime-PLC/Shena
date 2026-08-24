@@ -129,6 +129,7 @@ class Router
         $this->addRoute('GET', '/admin/members/view/{id}', 'AdminController@viewMember');
         $this->addRoute('GET', '/admin/members/edit/{id}', 'AdminController@editMember');
         $this->addRoute('POST', '/admin/members/update/{id}', 'AdminController@updateMember');
+        $this->addRoute('POST', '/admin/members/{id}/corporate-members/update', 'AdminController@updateMemberCorporateMembers');
         $this->addRoute('POST', '/admin/members/{id}/dependants/add', 'AdminController@addMemberDependant');
         $this->addRoute('POST', '/admin/members/{id}/dependants/update', 'AdminController@updateMemberDependant');
         $this->addRoute('POST', '/admin/members/{id}/dependants/delete', 'AdminController@deleteMemberDependant');

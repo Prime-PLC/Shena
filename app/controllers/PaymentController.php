@@ -301,7 +301,8 @@ class PaymentController extends BaseController
             case 'reactivation':
                 return defined('REACTIVATION_FEE') ? REACTIVATION_FEE : 100;
             case 'monthly':
-                return $member['monthly_contribution'] ?? $requestedAmount;
+                require_once __DIR__ . '/../services/PlatinumBillingService.php';
+                return (new PlatinumBillingService())->monthlyAmount($member);
             default:
                 return $requestedAmount;
         }

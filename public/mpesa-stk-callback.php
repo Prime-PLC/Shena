@@ -17,6 +17,7 @@ require_once ROOT_PATH . '/app/models/User.php';
 require_once ROOT_PATH . '/app/services/EmailService.php';
 require_once ROOT_PATH . '/app/services/SmsService.php';
 require_once ROOT_PATH . '/app/models/PlatinumCoverage.php';
+require_once ROOT_PATH . '/app/services/PlatinumBillingService.php';
 
 // Create logs directory if it doesn't exist
 $logDir = ROOT_PATH . '/storage/logs';
@@ -241,6 +242,11 @@ try {
                 if ($payment['payment_type'] === 'monthly') {
                     $memberModel->applySuccessfulMonthlyPayment(
                         $payment['member_id'],
+                        $transactionDate ?: date('Y-m-d H:i:s')
+                    );
+                    (new PlatinumBillingService())->applyMonthlyPayment(
+                        (int) $payment['id'],
+                        (int) $payment['member_id'],
                         $transactionDate ?: date('Y-m-d H:i:s')
                     );
                     $processLog .= "  Monthly coverage extended: Member ID {$payment['member_id']}\n";

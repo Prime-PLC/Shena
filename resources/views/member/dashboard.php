@@ -819,7 +819,7 @@ $missingFields = $missing_profile_fields ?? [];
                         <input type="checkbox" id="onb-platinum-opt-in" style="margin-top:4px">
                         <span>
                             <strong>Add SHENA Platinum &mdash; Hospital Cover</strong><br>
-                            <span style="font-size:0.85rem;opacity:0.9">Get up to 20 inpatient bed-cover days a year. Billed separately at <span id="onb-platinum-price">--</span>/month, once approved.</span>
+                            <span style="font-size:0.85rem;opacity:0.9">Get up to 20 inpatient bed-cover days shared by the selected package group. Added to your combined monthly contribution at <span id="onb-platinum-price">--</span>/month, once approved.</span>
                         </span>
                     </label>
                 </div>

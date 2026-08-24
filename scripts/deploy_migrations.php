@@ -21,7 +21,13 @@ if ((int) $lock !== 1) {
 
 try {
     $pdo->exec("CREATE TABLE IF NOT EXISTS schema_migrations (migration VARCHAR(120) PRIMARY KEY, applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB");
-    $allowed = ['018_platinum_foundation.sql', '019_admin_created_claims.sql'];
+    $allowed = [
+        '018_platinum_foundation.sql',
+        '019_admin_created_claims.sql',
+        '020_platinum_payment_integration.sql',
+        '021_platinum_overrides_and_admin_flows.sql',
+        '022_platinum_group_coverage_and_cumulative_billing.sql',
+    ];
     foreach ($allowed as $migration) {
         $applied = $pdo->prepare('SELECT 1 FROM schema_migrations WHERE migration = ?');
         $applied->execute([$migration]);

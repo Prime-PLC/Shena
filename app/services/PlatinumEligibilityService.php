@@ -103,8 +103,19 @@ class PlatinumEligibilityService
         ];
     }
 
-    public function hasVerifiedPayment(int $memberId, float $amount, string $requestedAt): bool
+    public function hasVerifiedPayment(int $memberId, float $amount, string $requestedAt, ?int $coverageId = null): bool
     {
+        if ($coverageId) {
+            $payment = $this->wrapper->fetch(
+                "SELECT p.id FROM payments p
+                 LEFT JOIN platinum_payment_allocations pa ON pa.payment_id = p.id AND pa.platinum_coverage_id = :coverage_id
+                 WHERE p.member_id = :member_id AND p.status = 'completed'
+                   AND (p.platinum_coverage_id = :coverage_id OR pa.allocated_amount >= :amount)
+                 ORDER BY p.created_at ASC LIMIT 1",
+                ['coverage_id' => $coverageId, 'member_id' => $memberId, 'amount' => $amount]
+            );
+            return !empty($payment);
+        }
         $payment = $this->wrapper->fetch(
             "SELECT id FROM payments WHERE member_id = :member_id AND status = 'completed' AND amount >= :amount AND created_at >= :requested_at ORDER BY created_at ASC LIMIT 1",
             ['member_id' => $memberId, 'amount' => $amount, 'requested_at' => $requestedAt]

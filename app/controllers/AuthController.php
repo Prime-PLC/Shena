@@ -1331,6 +1331,7 @@ class AuthController extends BaseController
         $data = [
             'title' => 'Join Shena Companion - Public Registration',
             'tier_definitions' => MembershipPricingService::getTierDefinitions(),
+            'packages' => $membership_packages,
             'preselect_plan'    => $preselectPlan,
             'preselect_bracket' => $preselectBracket,
             'csrf_token' => $this->generateCsrfToken()
@@ -1564,22 +1565,22 @@ class AuthController extends BaseController
 
                 $memberId = $this->memberModel->create($memberData);
 
-                // Optional Platinum add-on selected on the registration form (billed separately from Basic).
+                // Optional Platinum package-group add-on; normal monthly payments cover Basic and Platinum together.
                 $platinumOptIn = ($_POST['platinum_opt_in'] ?? '') === '1';
                 if ($platinumOptIn && $age !== null) {
                     require_once __DIR__ . '/../models/PlatinumCoverage.php';
-                    global $platinum_config;
-                    $band = $age < 70 ? 'under_70' : ($age <= 80 ? '71_80' : ($age <= 90 ? '81_90' : ($age <= 100 ? '91_100' : null)));
-                    $platinumMonthly = $band ? (float) ($platinum_config['prices']['individual'][$band] ?? 0) : 0.0;
-                    if ($platinumMonthly > 0) {
-                        $maturityMonths = $age < 60 ? (int) ($platinum_config['maturity_months']['under_60'] ?? 4) : (int) ($platinum_config['maturity_months']['60_and_above'] ?? 7);
+                    require_once __DIR__ . '/../services/PlatinumPricingService.php';
+                    $quote = (new PlatinumPricingService())->quote($packageId, $dateOfBirth);
+                    if ($quote) {
                         $this->db->insert('platinum_coverages', [
                             'member_id' => $memberId,
                             'covered_person_type' => 'principal',
                             'covered_person_id' => null,
                             'status' => 'pending_payment',
-                            'monthly_contribution' => $platinumMonthly,
-                            'maturity_months' => $maturityMonths,
+                            'package_key' => $quote['package_key'],
+                            'package_name' => $quote['package_name'],
+                            'monthly_contribution' => $quote['amount'],
+                            'maturity_months' => $quote['maturity_months'],
                             'requested_at' => date('Y-m-d H:i:s'),
                         ]);
                     }

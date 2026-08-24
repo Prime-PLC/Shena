@@ -123,10 +123,10 @@ $assertContains($memberDetailsView, "if (relation === 'child')", 'Child dependan
 $assertContains($memberDetailsView, 'Children must be below 18 years old.', 'Child dependant DOB guidance should allow ages below 18.');
 $assertContains($memberDetailsView, 'Adult dependants must be 18 years or older.', 'Adult dependant DOB guidance should keep the 18+ constraint.');
 $assertBefore($memberDetailsView, 'Member Overview', 'id="adminMemberProfileForm"', 'Member overview should appear before the prefilled edit form.');
-$assertBefore($memberDetailsView, 'Payment History', 'Collect Payment', 'Payment actions should live with payment history.');
+$assertContains($memberDetailsView, 'member-quick-actions', 'Full profile should keep the most-used member actions visible at the top.');
+$assertContains($memberDetailsView, 'Collect Payment', 'Full profile should provide a top payment action.');
 $assertNotContains($memberDetailsView, 'Archive', 'Full profile view should not expose archive actions.');
 $assertNotContains($memberDetailsView, 'linear-gradient', 'Full profile view should not use gradient styling.');
-$assertNotContains($memberDetailsView, '<i class="fas', 'Full profile view should avoid old icon-heavy controls.');
 
 $beneficiariesView = file_get_contents($root . '/resources/views/member/beneficiaries.php');
 $assertContains($beneficiariesView, "'value' => 'child'", 'Beneficiary add form should submit canonical child relationship value.');

@@ -458,6 +458,51 @@ class Payment extends BaseModel
         return (int)($result['total'] ?? 0);
     }
 
+    /**
+     * Intent-separated Platinum ledger. Shows Platinum portions allocated from
+     * normal monthly payments together with exceptional Platinum-only payments.
+     */
+    public function getPlatinumAllocationsWithDetails($conditions = [], $limit = null, $offset = 0)
+    {
+        $conditions['payment_type'] = 'all';
+        [$where, $params] = $this->buildPaymentFilterClause($conditions);
+        $where[] = "p.payment_type IN ('monthly', 'platinum')";
+
+        $sql = "SELECT pa.id AS allocation_id, p.id, p.member_id, p.transaction_id, p.mpesa_receipt_number,
+                       p.payment_method, p.status, p.created_at, p.reconciliation_status, p.reconciliation_notes,
+                       pa.allocated_amount AS amount, pa.allocation_month, pc.id AS platinum_coverage_id,
+                       COALESCE(pc.package_name, pc.package_key, 'Platinum group') AS platinum_group,
+                       m.member_number, u.first_name, u.last_name, u.email, u.phone
+                FROM platinum_payment_allocations pa
+                JOIN {$this->table} p ON p.id = pa.payment_id
+                JOIN platinum_coverages pc ON pc.id = pa.platinum_coverage_id
+                JOIN members m ON m.id = p.member_id
+                JOIN users u ON u.id = m.user_id
+                WHERE " . implode(' AND ', $where) . " ORDER BY p.created_at DESC";
+        if ($limit !== null) {
+            $sql .= ' LIMIT :limit OFFSET :offset';
+            $params['limit'] = max(1, min((int) $limit, 200));
+            $params['offset'] = max(0, (int) $offset);
+        }
+        return $this->db->fetchAll($sql, $params);
+    }
+
+    public function getPlatinumAllocationsWithDetailsCount($conditions = [])
+    {
+        $conditions['payment_type'] = 'all';
+        [$where, $params] = $this->buildPaymentFilterClause($conditions);
+        $where[] = "p.payment_type IN ('monthly', 'platinum')";
+        $row = $this->db->fetch(
+            "SELECT COUNT(*) AS total FROM platinum_payment_allocations pa
+             JOIN {$this->table} p ON p.id = pa.payment_id
+             JOIN platinum_coverages pc ON pc.id = pa.platinum_coverage_id
+             JOIN members m ON m.id = p.member_id JOIN users u ON u.id = m.user_id
+             WHERE " . implode(' AND ', $where),
+            $params
+        );
+        return (int) ($row['total'] ?? 0);
+    }
+
     private function buildPaymentFilterClause($conditions = [])
     {
         $params = [];

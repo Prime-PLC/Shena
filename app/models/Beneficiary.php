@@ -15,6 +15,8 @@ class Beneficiary extends BaseModel
     {
         $beneficiaryData = [
             'member_id' => $data['member_id'],
+            'coverage_owner_type' => $data['coverage_owner_type'] ?? 'principal',
+            'coverage_owner_id' => !empty($data['coverage_owner_id']) ? (int) $data['coverage_owner_id'] : null,
             'full_name' => $data['full_name'],
             'relationship' => $data['relationship'],
             'date_of_birth' => $data['date_of_birth'] ?? null,

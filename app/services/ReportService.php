@@ -261,6 +261,8 @@ class ReportService
             'start_date' => $dateFrom,
             'end_date' => $dateTo . ' 23:59:59',
             'status' => $filters['status'] ?? 'all',
+            'payment_type' => $filters['payment_type'] ?? 'all',
+            'payment_method' => $filters['payment_method'] ?? 'all',
         ]);
         $rows = [];
         $completed = 0;

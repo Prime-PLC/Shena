@@ -3,6 +3,7 @@ $page = 'claims';
 include __DIR__ . '/../layouts/member-header.php';
 $requests = $requests ?? [];
 $coverages = $coverages ?? [];
+$eligiblePeopleByCoverage = $eligible_people_by_coverage ?? [];
 $csrf_token = $csrf_token ?? '';
 $activeCoverages = array_filter($coverages, fn($c) => $c['status'] === 'active');
 
@@ -85,18 +86,28 @@ main { padding: 0 !important; margin: 0 !important; }
 
 .empty-state { background: #fff; border-radius: 16px; padding: 40px; text-align: center; color: #6B7280; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
 .no-coverage-notice { background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%); border-left: 4px solid #F59E0B; padding: 18px 22px; border-radius: 12px; margin-bottom: 25px; color: #78350F; }
+
+.form-legend { font-size: 0.8rem; font-weight: 700; color: #7F20B0; text-transform: uppercase; letter-spacing: 0.6px; margin: 4px 0 14px 0; display: flex; align-items: center; gap: 8px; padding-bottom: 8px; border-bottom: 1px solid #F3E8FF; }
+.form-legend:not(:first-of-type) { margin-top: 12px; }
+.field-hint { display: block; font-size: 0.78rem; color: #9CA3AF; margin-top: 6px; line-height: 1.4; }
+.req { color: #EF4444; }
 </style>
 
 <div class="inpatient-container">
     <a href="/platinum" style="display:inline-flex;align-items:center;gap:8px;color:#7F20B0;font-weight:600;font-size:0.85rem;text-decoration:none;margin-bottom:14px"><i class="fas fa-arrow-left"></i> Back to Platinum</a>
     <h1 class="page-title">Inpatient Support</h1>
-    <p class="page-subtitle">Submit facility details for admin review. Approval reserves days from the covered person's calendar-year Platinum allowance.</p>
+    <p class="page-subtitle">Submit facility details for admin review. Approval reserves days from the selected Platinum package group's shared calendar-year allowance.</p>
 
-    <?php if (!empty($_SESSION['success'])): ?>
-        <div class="alert-banner alert-success"><?php echo htmlspecialchars($_SESSION['success']); unset($_SESSION['success']); ?></div>
+    <?php
+        $flashSuccess = $_SESSION['success'] ?? '';
+        $flashError = $_SESSION['error'] ?? '';
+        unset($_SESSION['success'], $_SESSION['error']);
+    ?>
+    <?php if ($flashSuccess !== ''): ?>
+        <div class="alert-banner alert-success"><i class="fas fa-check-circle"></i> <?php echo htmlspecialchars($flashSuccess); ?></div>
     <?php endif; ?>
-    <?php if (!empty($_SESSION['error'])): ?>
-        <div class="alert-banner alert-danger"><?php echo htmlspecialchars($_SESSION['error']); unset($_SESSION['error']); ?></div>
+    <?php if ($flashError !== ''): ?>
+        <div class="alert-banner alert-danger"><i class="fas fa-exclamation-circle"></i> <?php echo htmlspecialchars($flashError); ?></div>
     <?php endif; ?>
 
     <?php if (empty($activeCoverages)): ?>
@@ -107,53 +118,59 @@ main { padding: 0 !important; margin: 0 !important; }
     <div class="request-card">
         <h3>Submit Inpatient Request</h3>
         <p class="hint">Choose the Platinum-covered person and provide the admission facility details.</p>
-        <form method="post" action="/inpatient-requests">
+        <form method="post" action="/inpatient-requests" id="inpatientForm" onsubmit="return Inpatient.validate(this)">
             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+            <h4 class="form-legend"><i class="fas fa-user-injured"></i> Who was admitted</h4>
             <div class="form-grid">
                 <div class="form-group">
-                    <label>Covered person</label>
-                    <select name="platinum_coverage_id" id="platinumCoverage" required>
+                    <label for="platinumCoverage">Platinum package group <span class="req">*</span></label>
+                    <select name="platinum_coverage_id" id="platinumCoverage" required onchange="Inpatient.syncPatients()">
                         <?php foreach ($activeCoverages as $c): ?>
-                            <option value="<?php echo (int) $c['id']; ?>" data-person="<?php echo htmlspecialchars($c['covered_person_name'] ?? '', ENT_QUOTES); ?>"><?php echo htmlspecialchars($c['covered_person_name'] ?? $c['covered_person_type']); ?></option>
+                            <option value="<?php echo (int) $c['id']; ?>"><?php echo htmlspecialchars(($c['package_name'] ?? $c['covered_person_name'] ?? $c['covered_person_type']) . ' group'); ?></option>
                         <?php endforeach; ?>
                     </select>
+                    <small class="field-hint">Only active Platinum package groups are listed.</small>
                 </div>
                 <div class="form-group">
-                    <label>Registered patient (optional quick-fill)</label>
-                    <select id="registeredPatient" onchange="document.querySelector('[name=patient_name]').value=this.value">
-                        <option value="">Use registered covered person</option>
-                        <?php foreach ($activeCoverages as $c): ?>
-                            <option value="<?php echo htmlspecialchars($c['covered_person_name'] ?? '', ENT_QUOTES); ?>"><?php echo htmlspecialchars($c['covered_person_name'] ?? $c['covered_person_type']); ?></option>
-                        <?php endforeach; ?>
-                    </select>
+                    <label for="patientSelect">Patient covered by this group <span class="req">*</span></label>
+                    <select id="patientSelect" required onchange="Inpatient.syncPatientFields()"></select>
+                    <input type="hidden" name="patient_type" id="patientType">
+                    <input type="hidden" name="patient_id" id="patientId">
+                    <small class="field-hint">The group owner and its covered dependants share the same 20-day allowance.</small>
+                </div>
+            </div>
+
+            <h4 class="form-legend"><i class="fas fa-hospital"></i> Facility details</h4>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="facilityName">Facility name <span class="req">*</span></label>
+                    <input name="facility_name" id="facilityName" required placeholder="e.g. Nairobi West Hospital">
                 </div>
                 <div class="form-group">
-                    <label>Patient name</label>
-                    <input name="patient_name" required>
+                    <label for="facilityLocation">Facility location <span class="req">*</span></label>
+                    <input name="facility_location" id="facilityLocation" required placeholder="Town / county / ward">
                 </div>
                 <div class="form-group">
-                    <label>Facility name</label>
-                    <input name="facility_name" required>
+                    <label for="facilityContact">Facility phone contact <span class="req">*</span></label>
+                    <input name="facility_contact" id="facilityContact" required placeholder="Facility contact for SHENA SMS confirmation">
+                    <small class="field-hint">SHENA sends a submission confirmation here and may use it to verify admission details.</small>
                 </div>
                 <div class="form-group">
-                    <label>Facility location</label>
-                    <input name="facility_location" required>
+                    <label for="admissionReference">Admission / doctor reference</label>
+                    <input name="admission_reference" id="admissionReference" placeholder="Admission number or attending doctor">
+                </div>
+            </div>
+
+            <h4 class="form-legend"><i class="fas fa-calendar-check"></i> Admission &amp; days requested</h4>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="admissionDate">Admission date <span class="req">*</span></label>
+                    <input type="date" name="admission_date" id="admissionDate" required max="<?php echo date('Y-m-d'); ?>">
                 </div>
                 <div class="form-group">
-                    <label>Facility contact</label>
-                    <input name="facility_contact">
-                </div>
-                <div class="form-group">
-                    <label>Admission date</label>
-                    <input type="date" name="admission_date" required>
-                </div>
-                <div class="form-group">
-                    <label>Requested days (1-20)</label>
-                    <input type="number" name="requested_days" min="1" max="20" required>
-                </div>
-                <div class="form-group">
-                    <label>Admission/doctor reference</label>
-                    <input name="admission_reference">
+                    <label for="requestedDays">Inpatient bed-cover days requested <span class="req">*</span></label>
+                    <input type="number" name="requested_days" id="requestedDays" min="1" max="20" required>
+                    <small class="field-hint">Up to the group's remaining shared 20 days per calendar year. Days can be split across admissions.</small>
                 </div>
             </div>
             <button type="submit" class="submit-btn"><i class="fas fa-paper-plane"></i> Submit inpatient request</button>
@@ -174,13 +191,79 @@ main { padding: 0 !important; margin: 0 !important; }
         <div class="request-row">
             <div class="info">
                 <h4><?php echo htmlspecialchars($r['patient_name']); ?></h4>
-                <p><?php echo htmlspecialchars($r['facility_name']); ?></p>
+                <p>
+                    <?php echo htmlspecialchars($r['facility_name']); ?><?php echo !empty($r['facility_location']) ? ' &middot; ' . htmlspecialchars($r['facility_location']) : ''; ?>
+                    &middot; admitted <?php echo htmlspecialchars(date('d M Y', strtotime($r['admission_date']))); ?>
+                </p>
+                <?php if (!empty($r['admin_notes']) || !empty($r['rejection_reason'])): ?>
+                    <p style="margin-top:6px;color:#4B5563"><i class="fas fa-comment-dots"></i> <?php echo htmlspecialchars($r['rejection_reason'] ?: $r['admin_notes']); ?></p>
+                <?php endif; ?>
             </div>
             <div class="meta">
-                <span class="days"><?php echo (int) $r['requested_days']; ?>/<?php echo $r['approved_days'] === null ? '-' : (int) $r['approved_days']; ?> days</span>
+                <span class="days">
+                    <?php echo $r['approved_days'] === null ? 'Requested ' . (int) $r['requested_days'] : (int) $r['approved_days'] . ' of ' . (int) $r['requested_days']; ?> days
+                </span>
                 <span class="status-badge" style="background:<?php echo $style['bg']; ?>;color:<?php echo $style['color']; ?>"><?php echo $style['label']; ?></span>
             </div>
         </div>
         <?php endforeach; ?>
     <?php endif; ?>
 </div>
+
+<script>
+var inpatientPeopleByCoverage = <?php echo json_encode($eligiblePeopleByCoverage, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
+window.Inpatient = (function () {
+    function feedback(message, type) {
+        if (window.ShenaApp && typeof ShenaApp.alert === 'function') {
+            ShenaApp.alert(message, type);
+            return;
+        }
+        window.alert(message);
+    }
+
+    return {
+        feedback: feedback,
+
+        syncPatients: function () {
+            var select = document.getElementById('platinumCoverage');
+            var patientSelect = document.getElementById('patientSelect');
+            if (!select || !patientSelect) { return; }
+            var people = inpatientPeopleByCoverage[String(select.value)] || [];
+            patientSelect.innerHTML = '';
+            people.forEach(function (person) {
+                var option = document.createElement('option');
+                option.value = String(person.type) + ':' + String(person.id);
+                option.textContent = person.name;
+                option.dataset.type = person.type;
+                option.dataset.id = person.id;
+                patientSelect.appendChild(option);
+            });
+            Inpatient.syncPatientFields();
+        },
+
+        syncPatientFields: function () {
+            var select = document.getElementById('patientSelect');
+            var option = select && select.options[select.selectedIndex];
+            document.getElementById('patientType').value = option ? option.dataset.type : '';
+            document.getElementById('patientId').value = option ? option.dataset.id : '';
+        },
+
+        validate: function (form) {
+            var days = Number(form.requested_days.value);
+            if (isNaN(days) || days < 1 || days > 20) {
+                feedback('Request between 1 and 20 inpatient bed-cover days.', 'warning');
+                return false;
+            }
+            if (!String(form.facility_name.value || '').trim() || !String(form.facility_location.value || '').trim() || !String(form.facility_contact.value || '').trim()) {
+                feedback('Facility name, location, and a facility SMS contact are required.', 'warning');
+                return false;
+            }
+            return true;
+        }
+    };
+})();
+
+document.addEventListener('DOMContentLoaded', function () {
+    Inpatient.syncPatients();
+});
+</script>

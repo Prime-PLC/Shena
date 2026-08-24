@@ -30,3 +30,23 @@
 #3 C:\xampp\htdocs\Shena\app\core\Router.php(364): Router->executeRoute()
 #4 C:\xampp\htdocs\Shena\index.php(66): Router->dispatch()
 #5 {main}
+[24-Aug-2026 19:05:07 Africa/Nairobi] PHP Warning:  Undefined array key "tier" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 432
+[24-Aug-2026 19:48:40 Africa/Nairobi] SMS not sent: HostPinnacle credentials not configured
+[24-Aug-2026 19:57:57 Africa/Nairobi] PHP Warning:  Undefined array key "tier" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 432
+[24-Aug-2026 19:58:02 Africa/Nairobi] PHP Warning:  Undefined array key "tier" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 432
+[24-Aug-2026 21:59:16 Africa/Nairobi] PHP Warning:  Undefined array key "tier" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 434
+[24-Aug-2026 22:00:31 Africa/Nairobi] PHP Warning:  Undefined array key "tier" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 434
+[24-Aug-2026 22:16:46 Africa/Nairobi] PHP Warning:  Undefined array key "platinum_intent" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 434
+[24-Aug-2026 22:16:46 Africa/Nairobi] PHP Warning:  Undefined array key "tier" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 438
+[24-Aug-2026 22:17:09 Africa/Nairobi] PHP Warning:  Undefined array key "tier" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 438
+[24-Aug-2026 22:21:56 Africa/Nairobi] PHP Warning:  Undefined array key "tier" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 438
+[24-Aug-2026 22:22:06 Africa/Nairobi] PHP Warning:  Undefined array key "platinum_intent" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 434
+[24-Aug-2026 22:22:06 Africa/Nairobi] PHP Warning:  Undefined array key "tier" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 438
+[24-Aug-2026 22:22:13 Africa/Nairobi] PHP Warning:  Undefined array key "platinum_intent" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 434
+[24-Aug-2026 22:22:13 Africa/Nairobi] PHP Warning:  Undefined array key "tier" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 438
+[24-Aug-2026 22:22:20 Africa/Nairobi] PHP Warning:  Undefined array key "platinum_intent" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 434
+[24-Aug-2026 22:22:20 Africa/Nairobi] PHP Warning:  Undefined array key "tier" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 438
+[24-Aug-2026 22:34:11 Africa/Nairobi] PHP Warning:  Undefined array key "tier" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 436
+[24-Aug-2026 23:03:26 Africa/Nairobi] PHP Warning:  Undefined array key "tier" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 435
+[24-Aug-2026 23:23:34 Africa/Nairobi] PHP Warning:  Undefined array key "tier" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 435
+[24-Aug-2026 23:23:42 Africa/Nairobi] PHP Warning:  Undefined array key "tier" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 435

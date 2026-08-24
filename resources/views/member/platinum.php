@@ -138,7 +138,7 @@ main { padding: 0 !important; margin: 0 !important; }
 <div class="platinum-container">
     <a href="/claims" style="display:inline-flex;align-items:center;gap:8px;color:#7F20B0;font-weight:600;font-size:0.85rem;text-decoration:none;margin-bottom:14px"><i class="fas fa-arrow-left"></i> Back to Claims</a>
     <h1 class="page-title">SHENA Platinum</h1>
-    <p class="page-subtitle">Optional add-on to your Basic membership, providing up to 20 inpatient bed-cover days per covered person, per calendar year.</p>
+    <p class="page-subtitle">Optional add-on to a selected Basic package. Each Platinum package group shares 20 inpatient bed-cover days across everyone covered by that package, per calendar year.</p>
 
     <?php if (!empty($_SESSION['success'])): ?>
         <div class="alert-banner alert-success"><?php echo htmlspecialchars($_SESSION['success']); unset($_SESSION['success']); ?></div>
@@ -149,40 +149,34 @@ main { padding: 0 !important; margin: 0 !important; }
 
     <div class="platinum-hero">
         <h2><i class="fas fa-shield-alt" style="margin-right:10px"></i>Inpatient Support Cover</h2>
-        <p>Add Platinum cover for yourself, a dependant, or a corporate member. Once approved, each covered person gets up to 20 inpatient days annually, with maturity periods based on age.</p>
+        <p>Add Platinum to your principal package or to one corporate member package. The package owner and all of that package's covered dependants share one 20-day annual allowance.</p>
         <div class="hero-badges">
             <span class="hero-pill"><i class="fas fa-calendar-check"></i>&nbsp; 20 days / year</span>
             <span class="hero-pill"><i class="fas fa-hourglass-half"></i>&nbsp; Maturity: 4-7 months</span>
-            <span class="hero-pill"><i class="fas fa-users"></i>&nbsp; Per-person selection</span>
+            <span class="hero-pill"><i class="fas fa-users"></i>&nbsp; Shared by package group</span>
         </div>
     </div>
 
     <div class="request-card">
         <h3>Request Platinum Cover</h3>
-        <p class="hint">Select who you'd like to cover. Pricing is based on the covered person's age and applied to their monthly contribution once approved.</p>
+        <p class="hint">Select the Basic coverage group. Its existing Platinum package rate is charged once; dependants do not add separate Platinum charges.</p>
         <form method="post" action="/platinum/request">
             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
             <div class="form-row">
                 <div class="form-group">
-                    <label for="coveredPersonType">Covered person type</label>
-                    <select name="covered_person_type" id="coveredPersonType" required onchange="Platinum.togglePersonSelect(this.value)">
-                        <option value="principal">Myself (Principal member)</option>
-                        <option value="dependent">Dependant</option>
-                        <option value="corporate_member">Corporate member</option>
+                    <label for="coveredPersonType">Basic coverage group</label>
+                    <select name="coverage_owner_type" id="coveredPersonType" required onchange="Platinum.togglePersonSelect(this.value)">
+                        <option value="principal">Principal package and its covered dependants</option>
+                        <option value="corporate_member">Corporate member package and its covered dependants</option>
                     </select>
                 </div>
                 <div class="form-group" id="personSelectGroup" style="display:none">
-                    <label for="coveredPersonId">Select person</label>
-                    <select name="covered_person_id" id="coveredPersonId">
+                    <label for="coveredPersonId">Select corporate package</label>
+                    <select name="coverage_owner_id" id="coveredPersonId">
                         <option value="">-- choose --</option>
-                        <optgroup label="Dependants" class="opt-dependent">
-                            <?php foreach ($beneficiaries as $b): ?>
-                                <option value="<?php echo (int) $b['id']; ?>" data-type="dependent"><?php echo htmlspecialchars($b['full_name'] ?? 'Dependant'); ?></option>
-                            <?php endforeach; ?>
-                        </optgroup>
                         <optgroup label="Corporate members" class="opt-corporate_member">
                             <?php foreach ($corporateMembers as $c): ?>
-                                <option value="<?php echo (int) $c['id']; ?>" data-type="corporate_member"><?php echo htmlspecialchars($c['label'] ?? 'Corporate member'); ?></option>
+                                <option value="<?php echo (int) $c['id']; ?>" data-type="corporate_member"><?php echo htmlspecialchars($c['label'] ?? 'Corporate member'); ?> — <?php echo htmlspecialchars($c['package_name'] ?? $c['package_key'] ?? 'Package'); ?></option>
                             <?php endforeach; ?>
                         </optgroup>
                     </select>
@@ -205,7 +199,7 @@ main { padding: 0 !important; margin: 0 !important; }
         <div class="coverage-card">
             <div class="coverage-info">
                 <h4><?php echo htmlspecialchars($coverage['covered_person_name'] ?? ucfirst(str_replace('_', ' ', $coverage['covered_person_type']))); ?></h4>
-                <p><?php echo htmlspecialchars(ucfirst(str_replace('_', ' ', $coverage['covered_person_type']))); ?> cover<?php echo $coverage['status'] === 'rejected' ? ' — you may submit a new request above.' : ''; ?></p>
+                <p><?php echo htmlspecialchars($coverage['package_name'] ?? ucfirst(str_replace('_', ' ', $coverage['covered_person_type']))); ?> package group<?php echo $coverage['status'] === 'rejected' ? ' — you may submit a new request above.' : ''; ?></p>
             </div>
             <div class="coverage-meta">
                 <div class="meta-block">
@@ -216,9 +210,15 @@ main { padding: 0 !important; margin: 0 !important; }
                     <span>Maturity</span>
                     <strong><?php echo htmlspecialchars($coverage['maturity_date'] ?? 'Pending approval'); ?></strong>
                 </div>
+                <?php if ($coverage['status'] === 'active'): ?>
+                <div class="meta-block">
+                    <span>Shared allowance</span>
+                    <strong><?php echo (int)($coverage['remaining_days'] ?? 20); ?> of 20 days left</strong>
+                </div>
+                <?php endif; ?>
                 <span class="status-badge" style="background:<?php echo $style['bg']; ?>;color:<?php echo $style['color']; ?>"><?php echo $style['label']; ?></span>
                 <?php if ($coverage['status'] === 'pending_payment'): ?>
-                    <button type="button" class="inpatient-link" style="border:none" onclick="Platinum.payNow(<?php echo (int) $coverage['id']; ?>, <?php echo (float) $coverage['monthly_contribution']; ?>, this)"><i class="fas fa-mobile-alt"></i> Pay KES <?php echo number_format((float) $coverage['monthly_contribution'], 2); ?></button>
+                    <button type="button" class="inpatient-link" style="border:none" onclick="Platinum.payNow(<?php echo (int) $coverage['id']; ?>, <?php echo (float) $coverage['monthly_contribution']; ?>, this)"><i class="fas fa-mobile-alt"></i> Exceptional separate payment</button>
                 <?php endif; ?>
                 <?php if ($coverage['status'] === 'active'): ?>
                     <a href="/inpatient-requests" class="inpatient-link"><i class="fas fa-notes-medical"></i> Inpatient requests</a>

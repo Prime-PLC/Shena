@@ -307,14 +307,21 @@ foreach (($packages ?? []) as $packageKey => $package) {
                     <label class="form-label">Expected Monthly Contribution</label>
                     <div class="form-input corporate-total-preview" id="corporateTotalPreview" aria-live="polite">KES 0/month</div>
                 </div>
-                <div class="form-group full-width" style="background:linear-gradient(135deg,#7F20B0 0%,#5E2B7A 100%);border-radius:10px;padding:14px 16px;color:#fff">
-                    <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin:0">
-                        <input type="checkbox" name="platinum_opt_in" id="platinumOptIn" value="1" style="margin-top:4px">
-                        <span>
-                            <strong>Add SHENA Platinum &mdash; Hospital Cover</strong><br>
-                            <span style="font-size:0.85rem;opacity:0.9">Up to 20 inpatient bed-cover days a year, billed separately at <span id="platinumOptInPrice">--</span>/month once approved.</span>
-                        </span>
-                    </label>
+                <div class="form-group">
+                    <label class="form-label">Product Tier <span class="required">*</span></label>
+                    <select name="platinum_opt_in" class="form-select" id="platinumOptIn" required>
+                        <option value="0" <?php echo (($old['platinum_opt_in'] ?? '0') !== '1') ? 'selected' : ''; ?>>SHENA Basic &mdash; funeral &amp; last-respect cover</option>
+                        <option value="1" <?php echo (($old['platinum_opt_in'] ?? '') === '1') ? 'selected' : ''; ?>>SHENA Basic + Platinum &mdash; adds hospital inpatient cover</option>
+                    </select>
+                    <small class="form-hint" id="platinumTierHint">Platinum is an optional package-group add-on included in the combined monthly contribution.</small>
+                </div>
+                <div class="form-group full-width" id="platinumTierPanel" style="display:none;background:linear-gradient(135deg,#7F20B0 0%,#5E2B7A 100%);border-radius:10px;padding:14px 18px;color:#fff">
+                    <strong><i class="fas fa-gem"></i> SHENA Platinum add-on selected</strong>
+                    <div style="font-size:0.85rem;opacity:0.92;margin-top:6px;line-height:1.55">
+                        Adds up to <strong>20 inpatient bed-cover days per year</strong> for the principal member, on top of the Basic package above.
+                        Platinum add-on: <strong id="platinumOptInPrice">--</strong>/month, included in the combined monthly contribution and activated once confirmed and approved.
+                    </div>
+                    <div style="font-size:0.8rem;opacity:0.85;margin-top:8px">Maturity: 4 months (under 60) or 7 months (60 and above). Platinum is selected for the principal package or a corporate member package; covered dependants share that package allowance.</div>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Referred By (Agent Number)</label>
@@ -429,7 +436,23 @@ foreach (($packages ?? []) as $packageKey => $package) {
             const amountEl = row.querySelector('.corporate-amount');
             if (amountEl) amountEl.textContent = 'KES ' + amount.toLocaleString();
         });
-        corporateTotalPreview.textContent = 'KES ' + total.toLocaleString() + '/month';
+
+        // Platinum is billed on top of the Basic package, so show the combined figure.
+        const tierSelect = document.getElementById('platinumOptIn');
+        let platinumAmount = 0;
+        if (tierSelect && tierSelect.value === '1') {
+            const dobInput = document.querySelector('input[name="date_of_birth"]');
+            let age = null;
+            if (dobInput && dobInput.value) {
+                const dob = new Date(dobInput.value);
+                age = Math.floor((Date.now() - dob.getTime()) / (1000 * 60 * 60 * 24 * 365.25));
+            }
+            platinumAmount = platinumBandPrice(age) || 0;
+        }
+
+        corporateTotalPreview.textContent = platinumAmount > 0
+            ? 'KES ' + (total + platinumAmount).toLocaleString() + '/month (Basic ' + total.toLocaleString() + ' + Platinum ' + platinumAmount.toLocaleString() + ')'
+            : 'KES ' + total.toLocaleString() + '/month';
     }
 
     function platinumBandPrice(age) {
@@ -443,24 +466,33 @@ foreach (($packages ?? []) as $packageKey => $package) {
 
     function updatePlatinumOptInPrice() {
         const priceEl = document.getElementById('platinumOptInPrice');
+        const panel = document.getElementById('platinumTierPanel');
+        const tierSelect = document.getElementById('platinumOptIn');
         const dobInput = document.querySelector('input[name="date_of_birth"]');
+        const isPlatinum = tierSelect && tierSelect.value === '1';
+
+        if (panel) { panel.style.display = isPlatinum ? '' : 'none'; }
         if (!priceEl) return;
+
         let age = null;
         if (dobInput && dobInput.value) {
             const dob = new Date(dobInput.value);
             age = Math.floor((Date.now() - dob.getTime()) / (1000 * 60 * 60 * 24 * 365.25));
         }
         const price = platinumBandPrice(age);
-        priceEl.textContent = price ? ('KES ' + price.toLocaleString()) : 'a price based on age';
+        priceEl.textContent = price
+            ? ('KES ' + price.toLocaleString())
+            : (dobInput && dobInput.value ? 'not available for this age' : 'set once date of birth is entered');
+        updateContributionPreview();
     }
     document.querySelector('input[name="date_of_birth"]')?.addEventListener('change', updatePlatinumOptInPrice);
-    updatePlatinumOptInPrice();
+    document.getElementById('platinumOptIn')?.addEventListener('change', updatePlatinumOptInPrice);
 
     packageSelect?.addEventListener('change', updateContributionPreview);
     if (corporateLineItems) {
         corporateLineItems.innerHTML = '<div style="font-size:13px;color:#6b7280;padding:10px;border:1px dashed #d1d5db;border-radius:8px;">No corporate members attached.</div>';
     }
-    updateContributionPreview();
+    updatePlatinumOptInPrice();
 
     function showFlash(message, type) {
         if (!message) return;

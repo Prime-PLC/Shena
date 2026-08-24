@@ -10,6 +10,8 @@ $dependantRelationshipOptions = $dependant_relationship_options ?? [];
 $activationRestrictions = $activation_restrictions ?? [];
 $dependantRestrictions = $dependant_restrictions ?? [];
 $csrfToken = $csrf_token ?? ($_SESSION['csrf_token'] ?? '');
+$memberManagementUrl = $member_management_url ?? '/admin/members';
+$memberProfileUrl = $member_profile_url ?? '/admin/members/view/' . (int)($member['id'] ?? 0);
 $formatRelation = static function ($value) {
     return ucwords(str_replace('_', ' ', (string)$value));
 };
@@ -41,10 +43,6 @@ $formatRelation = static function ($value) {
 
     .page-header {
         margin-bottom: 20px;
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        gap: 16px;
     }
 
     .page-title {
@@ -66,6 +64,27 @@ $formatRelation = static function ($value) {
         display: flex;
         flex-wrap: wrap;
         gap: 10px;
+    }
+
+    .member-quick-actions {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+        padding: 14px 16px;
+        margin: 0 0 20px;
+        background: #FFFFFF;
+        border: 1px solid #E5E7EB;
+        border-radius: 10px;
+    }
+
+    .member-quick-actions-label {
+        margin-right: 4px;
+        color: #6B7280;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
     }
 
     .btn {
@@ -563,8 +582,14 @@ $formatRelation = static function ($value) {
 </style>
 
 <div class="member-details-container">
+    <?php
+        $platinumGroupSummaries = $platinum_group_summaries ?? [];
+        $platinumDue = array_sum(array_map(static fn($group) => (float)($group['current_month_deficit'] ?? 0), $platinumGroupSummaries));
+        $hasPlatinum = !empty($platinumGroupSummaries);
+        $lastPayment = !empty($payments[0]) ? $payments[0] : null;
+    ?>
     <div class="breadcrumb-row">
-        <a href="/admin/members">Member Management</a>
+        <a href="<?= htmlspecialchars($memberManagementUrl) ?>">Member Management</a>
         <span>/</span>
         <span><?= htmlspecialchars(($member['first_name'] ?? '') . ' ' . ($member['last_name'] ?? '')) ?></span>
     </div>
@@ -575,34 +600,42 @@ $formatRelation = static function ($value) {
             <h1 class="page-title">Manage Member Profile</h1>
             <p class="page-kicker"><?= htmlspecialchars($member['member_number'] ?? 'N/A') ?> · <?= htmlspecialchars(($member['first_name'] ?? '') . ' ' . ($member['last_name'] ?? '')) ?></p>
         </div>
-        <div class="header-actions">
-            <a href="/admin/members" class="btn btn-secondary">Back to Members</a>
-        </div>
     </div>
 
-    <!-- Statistics -->
+    <div class="member-quick-actions" aria-label="Member quick actions">
+        <span class="member-quick-actions-label">Quick actions</span>
+        <button type="button" class="btn btn-primary" onclick="switchProfileTab('overview'); togglePanel('memberEditPanel');">Edit Member</button>
+        <button type="button" class="btn btn-success" onclick="openAdminPayModal()">Collect Payment</button>
+        <button type="button" class="btn btn-secondary" onclick="switchProfileTab('dependants')">Manage Dependants</button>
+        <a href="<?= htmlspecialchars($memberManagementUrl) ?>" class="btn btn-secondary">Back to Members</a>
+    </div>
+
+    <!-- Immediate account position: the details needed before an admin takes action. -->
     <div class="stats-grid">
         <div class="stat-card">
-            <div class="stat-label">Total Contributions</div>
-            <div class="stat-value">KES <?= number_format($stats['total_contributions'] ?? 0, 2) ?></div>
+            <div class="stat-label">Account Status</div>
+            <div class="stat-value"><?= htmlspecialchars(ucwords(str_replace('_', ' ', $member['status'] ?? 'inactive'))) ?></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Monthly Account Amount</div>
+            <div class="stat-value">KES <?= number_format((float)($member['monthly_contribution'] ?? 0), 0) ?></div>
         </div>
         <div class="stat-card">
             <div class="stat-label">Last Payment</div>
-            <div class="stat-value"><?= !empty($stats['last_payment_date']) ? date('M j, Y', strtotime($stats['last_payment_date'])) : 'N/A' ?></div>
+            <div class="stat-value"><?= $lastPayment ? 'KES ' . number_format((float)($lastPayment['amount'] ?? 0), 0) : 'None' ?></div>
+            <div class="stat-label" style="margin-top:4px;"><?= $lastPayment && !empty($lastPayment['payment_date']) ? date('d M Y', strtotime($lastPayment['payment_date'])) : 'No payment recorded' ?></div>
         </div>
         <div class="stat-card">
-            <div class="stat-label">Membership Duration</div>
-            <div class="stat-value"><?= $stats['membership_months'] ?? 0 ?> mon</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">Beneficiaries</div>
-            <div class="stat-value"><?= count($beneficiaries) ?></div>
+            <div class="stat-label">Platinum Cover</div>
+            <div class="stat-value"><?= $hasPlatinum ? 'KES ' . number_format($platinumDue, 0) . ' due' : 'Not selected' ?></div>
+            <div class="stat-label" style="margin-top:4px;"><?= $hasPlatinum ? count($platinumGroupSummaries) . ' cover group(s)' : 'Add-on unavailable' ?></div>
         </div>
     </div>
 
     <div class="profile-tabs" role="tablist" aria-label="Member profile sections">
         <button type="button" class="profile-tab active" data-profile-tab="overview" onclick="switchProfileTab('overview')">Overview</button>
         <button type="button" class="profile-tab" data-profile-tab="dependants" onclick="switchProfileTab('dependants')">Dependants</button>
+        <button type="button" class="profile-tab" data-profile-tab="corporate" onclick="switchProfileTab('corporate')">Corporate Members</button>
         <button type="button" class="profile-tab" data-profile-tab="payments" onclick="switchProfileTab('payments')">Payments</button>
     </div>
 
@@ -702,7 +735,7 @@ $formatRelation = static function ($value) {
                         <?php endif; ?>
                         <form method="POST" action="/admin/members/activate/<?= $member['id'] ?>" id="activate-form">
                             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
-                            <input type="hidden" name="return_to" value="/admin/members/view/<?= (int)($member['id'] ?? 0) ?>">
+                            <input type="hidden" name="return_to" value="<?= htmlspecialchars($memberProfileUrl) ?>">
                             <input type="hidden" name="activation_override" id="activationOverride" value="0">
                             <button type="button" onclick="confirmActivate()" class="btn btn-primary" style="width: 100%;">Activate Member</button>
                         </form>
@@ -713,31 +746,13 @@ $formatRelation = static function ($value) {
 
         <div class="member-info-card">
             <div class="card-header">
-                <span class="card-title">Plan & Corporate Members</span>
-                <button type="button" class="btn btn-secondary" onclick="togglePanel('memberEditPanel')">Manage</button>
+                <span class="card-title">Membership Plan</span>
+                <button type="button" class="btn btn-secondary" onclick="togglePanel('memberEditPanel')">Edit</button>
             </div>
             <div class="card-body">
                 <div class="info-item">
                     <div class="info-label">Primary Package</div>
                     <div class="info-value"><?= htmlspecialchars($member['package'] ?? 'N/A') ?></div>
-                </div>
-                <div class="relation-grid">
-                    <?php if (empty($corporateMembers)): ?>
-                        <div class="corporate-card">No corporate members attached.</div>
-                    <?php else: ?>
-                        <?php foreach ($corporateMembers as $corporateIndex => $corporate): ?>
-                            <div class="corporate-card">
-                                <strong><?= htmlspecialchars($corporate['label'] ?? 'Corporate member') ?></strong>
-                                <div><?= htmlspecialchars($corporate['relationship'] ?? 'corporate') ?></div>
-                                <div><?= htmlspecialchars($corporate['package_name'] ?? ($corporate['package_key'] ?? 'N/A')) ?></div>
-                                <div>KES <?= number_format((float)($corporate['monthly_contribution'] ?? 0), 2) ?></div>
-                                <div class="card-actions">
-                                    <button type="button" class="btn btn-secondary btn-sm" onclick="editCorporateMember(<?= (int)$corporateIndex ?>)">Edit</button>
-                                    <button type="button" class="btn btn-danger btn-sm" onclick="deleteCorporateMember(<?= (int)($corporate['id'] ?? 0) ?>, '<?= htmlspecialchars($corporate['label'] ?? 'Corporate member', ENT_QUOTES) ?>')">Delete</button>
-                                </div>
-                            </div>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -767,14 +782,14 @@ $formatRelation = static function ($value) {
                         <label style="display:block;font-size:12px;font-weight:600;color:#6B7280;margin-bottom:4px">Covered person</label>
                         <select name="covered_person_type" id="platinumMigrateType" onchange="document.getElementById('platinumMigratePersonWrap').style.display = this.value === 'principal' ? 'none' : 'block'" style="padding:9px;border:1px solid #D1D5DB;border-radius:6px">
                             <option value="principal">Principal member</option>
-                            <option value="dependent">Dependant</option>
-                            <option value="corporate_member">Corporate member</option>
+                            <?php if (!empty($corporateMembers)): ?>
+                                <option value="corporate_member">Corporate member</option>
+                            <?php endif; ?>
                         </select>
                     </div>
                     <div id="platinumMigratePersonWrap" style="display:none">
                         <label style="display:block;font-size:12px;font-weight:600;color:#6B7280;margin-bottom:4px">Person</label>
                         <select name="covered_person_id" style="padding:9px;border:1px solid #D1D5DB;border-radius:6px">
-                            <?php foreach ($beneficiaries as $b): ?><option value="<?= (int)$b['id'] ?>"><?= htmlspecialchars($b['full_name'] ?? 'Dependant') ?></option><?php endforeach; ?>
                             <?php foreach ($corporateMembers as $c): ?><option value="<?= (int)$c['id'] ?>"><?= htmlspecialchars($c['label'] ?? 'Corporate member') ?></option><?php endforeach; ?>
                         </select>
                     </div>
@@ -829,7 +844,7 @@ $formatRelation = static function ($value) {
         <div class="management-body">
             <form method="POST" action="/admin/members/update/<?= (int)($member['id'] ?? 0) ?>" id="adminMemberProfileForm">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
-                <input type="hidden" name="return_to" value="/admin/members/view/<?= (int)($member['id'] ?? 0) ?>">
+                <input type="hidden" name="return_to" value="<?= htmlspecialchars($memberProfileUrl) ?>">
 
                 <div class="form-grid">
                     <div class="form-group">
@@ -916,42 +931,11 @@ $formatRelation = static function ($value) {
                     </div>
                 </div>
 
-                <div class="section-title-row">
-                    <h3>Corporate Members</h3>
-                    <button type="button" class="btn btn-secondary" onclick="addCorporateProfileRow()">
-                        Add Corporate Member
-                    </button>
-                </div>
-                <div id="corporateManagePanel">
-                <div id="profileCorporateRows">
-                    <?php foreach ($corporateMembers as $index => $corporate): ?>
-                        <div class="corporate-row">
-                            <input class="form-input corporate-label" name="corporate_members[<?= (int)$index ?>][label]" placeholder="Name / label" value="<?= htmlspecialchars($corporate['label'] ?? '') ?>">
-                            <input class="form-input" name="corporate_members[<?= (int)$index ?>][relationship]" placeholder="Relationship" value="<?= htmlspecialchars($corporate['relationship'] ?? 'corporate') ?>">
-                            <select class="form-select corporate-package" name="corporate_members[<?= (int)$index ?>][package_key]" onchange="updateProfileContributionPreview()">
-                                <?php foreach ($packages as $packageKey => $packageOption): ?>
-                                    <option value="<?= htmlspecialchars($packageKey) ?>" <?= (($corporate['package_key'] ?? '') === $packageKey) ? 'selected' : '' ?>>
-                                        <?= htmlspecialchars(($packageOption['name'] ?? $packageKey) . ' - KES ' . number_format((float)($packageOption['monthly_contribution'] ?? 0), 0)) ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                            <div class="corporate-amount">KES <?= number_format((float)($corporate['monthly_contribution'] ?? 0), 2) ?></div>
-                            <button type="button" class="btn btn-danger" onclick="this.closest('.corporate-row').remove(); updateProfileContributionPreview();" aria-label="Remove corporate member">
-                                Remove
-                            </button>
-                        </div>
-                    <?php endforeach; ?>
-                    <?php if (empty($corporateMembers)): ?>
-                        <div class="corporate-card" id="noCorporateMembers">No corporate members attached.</div>
-                    <?php endif; ?>
-                </div>
-                </div>
-
                 <div class="inline-actions">
                     <button type="submit" class="btn btn-primary">
                         Save Member Profile
                     </button>
-                    <a href="/admin/members" class="btn btn-secondary">
+                    <a href="<?= htmlspecialchars($memberManagementUrl) ?>" class="btn btn-secondary">
                         Back to Member Management
                     </a>
                 </div>
@@ -992,7 +976,7 @@ $formatRelation = static function ($value) {
 
             <form method="POST" action="/admin/members/<?= (int)($member['id'] ?? 0) ?>/dependants/add" id="dependantAddPanel" class="toggle-panel" style="display:none;margin-top:20px;" onsubmit="return confirmAddDependant(event);">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
-                <input type="hidden" name="return_to" value="/admin/members/view/<?= (int)($member['id'] ?? 0) ?>">
+                <input type="hidden" name="return_to" value="<?= htmlspecialchars($memberProfileUrl) ?>">
                 <input type="hidden" name="dependant_override" id="dependantOverride" value="0">
                 <div class="form-grid">
                     <div class="form-group">
@@ -1016,6 +1000,16 @@ $formatRelation = static function ($value) {
                         <input class="form-input" id="dependantIdNumber" name="id_number">
                     </div>
                     <div class="form-group">
+                        <label class="form-label" for="dependantCoverageOwner">Covered under</label>
+                        <select class="form-select" id="dependantCoverageOwner" name="coverage_owner_id">
+                            <option value="">Principal package</option>
+                            <?php foreach ($corporateMembers as $corporate): ?>
+                                <option value="<?= (int)($corporate['id'] ?? 0) ?>">Corporate: <?= htmlspecialchars($corporate['label'] ?? 'Member') ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <input type="hidden" name="coverage_owner_type" id="dependantCoverageOwnerType" value="principal">
+                    </div>
+                    <div class="form-group">
                         <label class="form-label" for="dependantDateOfBirth">Date of Birth</label>
                         <input class="form-input" id="dependantDateOfBirth" name="date_of_birth" type="date" max="<?= date('Y-m-d') ?>">
                     </div>
@@ -1028,6 +1022,43 @@ $formatRelation = static function ($value) {
                             Add Dependant
                         </button>
                     </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    </section>
+
+    <section class="profile-tab-panel" data-profile-panel="corporate">
+    <div class="data-table-card">
+        <div class="card-header">
+            <span class="card-title">Corporate Members</span>
+            <button type="button" class="btn btn-primary" onclick="addCorporateProfileRow()">Add Corporate Member</button>
+        </div>
+        <div class="management-body" id="corporateManagePanel">
+            <p style="margin:0 0 16px;color:#6B7280;">Each corporate member has their own selected package and can have dependants assigned under them from the Dependants tab.</p>
+            <form method="POST" action="/admin/members/<?= (int)($member['id'] ?? 0) ?>/corporate-members/update">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+                <input type="hidden" name="return_to" value="<?= htmlspecialchars($memberProfileUrl) ?>">
+                <div id="profileCorporateRows">
+                    <?php foreach ($corporateMembers as $index => $corporate): ?>
+                        <div class="corporate-row">
+                            <input class="form-input corporate-label" name="corporate_members[<?= (int)$index ?>][label]" placeholder="Full name" value="<?= htmlspecialchars($corporate['label'] ?? '') ?>" required>
+                            <input class="form-input" name="corporate_members[<?= (int)$index ?>][relationship]" placeholder="Relationship" value="<?= htmlspecialchars($corporate['relationship'] ?? 'corporate') ?>">
+                            <input class="form-input" type="date" name="corporate_members[<?= (int)$index ?>][date_of_birth]" value="<?= htmlspecialchars($corporate['date_of_birth'] ?? '') ?>" title="Needed when Platinum is selected">
+                            <select class="form-select corporate-package" name="corporate_members[<?= (int)$index ?>][package_key]" onchange="updateProfileContributionPreview()">
+                                <?php foreach ($packages as $packageKey => $packageOption): ?>
+                                    <option value="<?= htmlspecialchars($packageKey) ?>" <?= (($corporate['package_key'] ?? '') === $packageKey) ? 'selected' : '' ?>><?= htmlspecialchars(($packageOption['name'] ?? $packageKey) . ' - KES ' . number_format((float)($packageOption['monthly_contribution'] ?? 0), 0)) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="corporate-amount">KES <?= number_format((float)($corporate['monthly_contribution'] ?? 0), 2) ?></div>
+                            <button type="button" class="btn btn-danger" onclick="this.closest('.corporate-row').remove(); updateProfileContributionPreview();">Remove</button>
+                        </div>
+                    <?php endforeach; ?>
+                    <?php if (empty($corporateMembers)): ?><div class="corporate-card" id="noCorporateMembers">No corporate members added yet.</div><?php endif; ?>
+                </div>
+                <div class="inline-actions" style="margin-top:18px;">
+                    <button type="submit" class="btn btn-primary">Save Corporate Members</button>
+                    <button type="button" class="btn btn-secondary" onclick="switchProfileTab('dependants')">Manage Their Dependants</button>
                 </div>
             </form>
         </div>
@@ -1133,7 +1164,7 @@ $formatRelation = static function ($value) {
                 </div>
                 <div class="modal-body">
                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
-                    <input type="hidden" name="return_to" value="/admin/members/view/<?= (int)($member['id'] ?? 0) ?>">
+                    <input type="hidden" name="return_to" value="<?= htmlspecialchars($memberProfileUrl) ?>">
                     <input type="hidden" name="dependant_id" id="editDependantId">
                     <div class="form-group">
                         <label class="form-label" for="editDependantFullName">Full Name</label>
@@ -1173,13 +1204,13 @@ $formatRelation = static function ($value) {
 
 <form method="POST" action="/admin/members/<?= (int)($member['id'] ?? 0) ?>/dependants/delete" id="deleteDependantForm" style="display:none;">
     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
-    <input type="hidden" name="return_to" value="/admin/members/view/<?= (int)($member['id'] ?? 0) ?>">
+    <input type="hidden" name="return_to" value="<?= htmlspecialchars($memberProfileUrl) ?>">
     <input type="hidden" name="dependant_id" id="deleteDependantId">
 </form>
 
 <form method="POST" action="/admin/members/<?= (int)($member['id'] ?? 0) ?>/corporate-members/delete" id="deleteCorporateMemberForm" style="display:none;">
     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
-    <input type="hidden" name="return_to" value="/admin/members/view/<?= (int)($member['id'] ?? 0) ?>">
+    <input type="hidden" name="return_to" value="<?= htmlspecialchars($memberProfileUrl) ?>">
     <input type="hidden" name="corporate_member_id" id="deleteCorporateMemberId">
 </form>
 
@@ -1276,6 +1307,7 @@ function addCorporateProfileRow(item = {}) {
     row.innerHTML = `
         <input class="form-input corporate-label" name="corporate_members[${index}][label]" placeholder="Name / label" value="${String(item.label || '').replace(/"/g, '&quot;')}">
         <input class="form-input" name="corporate_members[${index}][relationship]" placeholder="Relationship" value="${String(item.relationship || 'corporate').replace(/"/g, '&quot;')}">
+        <input class="form-input" type="date" name="corporate_members[${index}][date_of_birth]" value="${String(item.date_of_birth || '')}">
         <select class="form-select corporate-package" name="corporate_members[${index}][package_key]" onchange="updateProfileContributionPreview()">
             ${profilePackageOptionsHtml(item.package_key || '')}
         </select>
@@ -1352,11 +1384,7 @@ function deleteDependant(dependantId, dependantName) {
 }
 
 function editCorporateMember(rowIndex) {
-    switchProfileTab('overview');
-    const panel = document.getElementById('memberEditPanel');
-    if (panel && panel.style.display === 'none') {
-        panel.style.display = 'block';
-    }
+    switchProfileTab('corporate');
 
     const row = document.querySelectorAll('#profileCorporateRows .corporate-row')[rowIndex];
     if (row) {
