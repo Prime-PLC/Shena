@@ -1321,12 +1321,12 @@ $buildMemberTierUrl = function (string $targetTier) use ($search, $status, $pack
                 <tr>
                     <th>MEMBER</th>
                     <th>MEMBER NO.</th>
-                    <th>BASIC PACKAGE</th>
                     <?php if ($tier === 'platinum'): ?>
-                        <th>PLATINUM COVER</th>
-                        <th>MONTHLY AMOUNT</th>
-                        <th>AMOUNT DUE</th>
+                        <th>COVERED PACKAGE</th>
+                        <th>MONTHLY CONTRIBUTION</th>
                         <th>DAY ALLOWANCE</th>
+                    <?php else: ?>
+                        <th>PACKAGE</th>
                     <?php endif; ?>
                     <th>STATUS</th>
                     <th>LAST PAYMENT</th>
@@ -1335,7 +1335,7 @@ $buildMemberTierUrl = function (string $targetTier) use ($search, $status, $pack
             </thead>
             <tbody>
                 <?php if (empty($members)): ?>
-                    <tr><td colspan="<?php echo $tier === 'platinum' ? 10 : 6; ?>" style="text-align:center;padding:40px;color:#6B7280;">No <?php echo strtolower(htmlspecialchars($listTitle)); ?> found.</td></tr>
+                    <tr><td colspan="<?php echo $tier === 'platinum' ? 8 : 6; ?>" style="text-align:center;padding:40px;color:#6B7280;">No <?php echo strtolower(htmlspecialchars($listTitle)); ?> found.</td></tr>
                 <?php else: ?>
                     <?php foreach ($members as $member): ?>
                         <?php
@@ -1348,12 +1348,12 @@ $buildMemberTierUrl = function (string $targetTier) use ($search, $status, $pack
                         <tr>
                             <td><a class="member-name" href="/admin/members/view/<?php echo (int)($member['id'] ?? 0); ?>?return_tier=<?php echo urlencode($tier); ?>"><?php echo htmlspecialchars($memberName); ?></a></td>
                             <td><?php echo htmlspecialchars($member['member_number'] ?? '—'); ?></td>
-                            <td><span class="package-badge"><?php echo htmlspecialchars($member['package'] ?? '—'); ?></span></td>
                             <?php if ($tier === 'platinum'): ?>
-                                <td><?php foreach ($platinumGroups as $group): ?><div><?php echo htmlspecialchars($group['group_name'] ?? 'Platinum cover'); ?><?php if (!empty($group['package_name'])): ?> <small>(<?php echo htmlspecialchars($group['package_name']); ?>)</small><?php endif; ?></div><?php endforeach; ?></td>
-                                <td><?php foreach ($platinumGroups as $group): ?><div>KES <?php echo number_format((float)($group['monthly_contribution'] ?? 0), 0); ?></div><?php endforeach; ?></td>
-                                <td><?php foreach ($platinumGroups as $group): ?><div>KES <?php echo number_format((float)($group['current_month_deficit'] ?? 0), 0); ?></div><?php endforeach; ?></td>
+                                <td><?php foreach ($platinumGroups as $group): ?><div><?php echo htmlspecialchars($group['package_name'] ?? $group['group_name'] ?? 'Platinum package'); ?></div><?php endforeach; ?></td>
+                                <td>KES <?php echo number_format((float)($member['account_monthly_amount'] ?? 0), 0); ?></td>
                                 <td><?php foreach ($platinumGroups as $group): ?><div><?php echo (int)($group['remaining_days'] ?? 20); ?> of 20 days</div><?php endforeach; ?></td>
+                            <?php else: ?>
+                                <td><span class="package-badge"><?php echo htmlspecialchars($member['package'] ?? '—'); ?></span></td>
                             <?php endif; ?>
                             <td><span class="status-badge <?php echo htmlspecialchars($member['status'] ?? 'inactive'); ?>"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $member['status'] ?? 'inactive'))); ?></span></td>
                             <td><?php echo htmlspecialchars($lastPaid); ?></td>

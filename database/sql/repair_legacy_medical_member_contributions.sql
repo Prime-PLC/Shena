@@ -51,13 +51,14 @@ COMMIT;
 -- Confirm no active legacy placeholder remains and review the new Basic
 -- baseline alongside each principal Platinum price.
 SELECT m.member_number,
-       CONCAT_WS(' ', m.first_name, m.last_name) AS member_name,
+       CONCAT_WS(' ', u.first_name, u.last_name) AS member_name,
        m.monthly_contribution AS basic_account_baseline,
        pc.monthly_contribution AS principal_platinum_rate,
        COALESCE(c.corporate_basic_total, 0) AS genuine_corporate_basic_total,
        COALESCE(c.corporate_current_total, 0) AS current_corporate_payable,
        (COALESCE(c.corporate_current_total, 0) + pc.monthly_contribution) AS current_monthly_payable
 FROM members m
+JOIN users u ON u.id = m.user_id
 JOIN platinum_coverages pc
   ON pc.member_id = m.id
  AND pc.covered_person_type = 'principal'

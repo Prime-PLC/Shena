@@ -25,10 +25,61 @@ class PlatinumBillingService
         $coverages = $this->coveragesForMember((int) $member['id']);
         $basicDue = $this->basicDueAfterPlatinumReplacement($member, $coverages);
         $platinumDue = $this->platinumDue($coverages);
+        $breakdown = $this->accountBreakdown($member, $coverages);
         return [
             'basic_due' => $basicDue,
             'platinum_due' => $platinumDue,
-            'total' => $basicDue + $platinumDue,
+            'total' => $breakdown['total'],
+            'breakdown' => $breakdown,
+        ];
+    }
+
+    /** One display-safe source for the principal/corporate monthly arithmetic. */
+    public function accountBreakdown(array $member, ?array $coverages = null): array
+    {
+        $memberId = (int)($member['id'] ?? 0);
+        $coverages = $coverages ?? $this->coveragesForMember($memberId);
+        $coverageByGroup = [];
+        foreach ($coverages as $coverage) {
+            $coverageByGroup[($coverage['covered_person_type'] ?? 'principal') . ':' . (int)($coverage['covered_person_id'] ?? 0)] = $coverage;
+        }
+
+        $packages = $GLOBALS['membership_packages'] ?? [];
+        $principalBasic = MembershipPricingService::resolveSelectedPackageAmount(
+            (string)($member['package_key'] ?? $member['package'] ?? ''),
+            $packages
+        );
+        $corporateGroups = $memberId > 0 ? $this->db->fetchAll(
+            "SELECT id, label, package_key, monthly_contribution FROM member_corporate_members WHERE member_id = :member_id AND status = 'active'",
+            ['member_id' => $memberId]
+        ) : [];
+        $corporateBasicTotal = array_sum(array_map(static fn($group) => (float)($group['monthly_contribution'] ?? 0), $corporateGroups));
+        if ($principalBasic <= 0) {
+            $principalBasic = max(0, (float)($member['monthly_contribution'] ?? 0) - $corporateBasicTotal);
+        }
+
+        $principalCoverage = $coverageByGroup['principal:0'] ?? null;
+        $principalAmount = $principalCoverage ? (float)$principalCoverage['monthly_contribution'] : $principalBasic;
+        $principalTier = $principalCoverage ? 'Platinum' : 'Basic';
+        $corporateAmount = 0.0;
+        $corporateTiers = [];
+        foreach ($corporateGroups as $corporate) {
+            $basicAmount = MembershipPricingService::resolveSelectedPackageAmount((string)($corporate['package_key'] ?? ''), $packages);
+            if ($basicAmount <= 0) {
+                $basicAmount = (float)($corporate['monthly_contribution'] ?? 0);
+            }
+            $coverage = $coverageByGroup['corporate_member:' . (int)$corporate['id']] ?? null;
+            $corporateAmount += $coverage ? (float)$coverage['monthly_contribution'] : $basicAmount;
+            $corporateTiers[] = $coverage ? 'Platinum' : 'Basic';
+        }
+
+        return [
+            'principal_amount' => $principalAmount,
+            'principal_tier' => $principalTier,
+            'corporate_amount' => $corporateAmount,
+            'corporate_count' => count($corporateGroups),
+            'corporate_tier_label' => count(array_unique($corporateTiers)) === 1 ? ($corporateTiers[0] ?? 'Basic') : 'mixed',
+            'total' => $principalAmount + $corporateAmount,
         ];
     }
 

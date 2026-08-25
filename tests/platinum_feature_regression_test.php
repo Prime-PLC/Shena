@@ -96,7 +96,8 @@ $checks = [
     ],
     'resources/views/admin/member-details.php' => [
         'account_monthly_amount',
-        'Monthly Account Amount',
+        'Monthly Contribution',
+        'account_contribution_breakdown',
         'Account monthly contribution after migration',
         'Covered under',
         'Edit Corporate Members',

@@ -529,6 +529,12 @@ class AdminController extends BaseController
         $offset = ($page - 1) * $perPage;
         $members = array_slice($members, $offset, $perPage);
         $members = $this->enrichMembersForManagement($members);
+        $billingService = new PlatinumBillingService();
+        foreach ($members as &$memberRow) {
+            $accountSummary = $billingService->accountSummary($memberRow);
+            $memberRow['account_monthly_amount'] = (float)$accountSummary['total'];
+        }
+        unset($memberRow);
 
         // Get pending approvals (members with pending status)
         $pendingMembers = $this->memberModel->getPendingMembers();
@@ -1228,7 +1234,9 @@ class AdminController extends BaseController
 
         $corporateMembers = $this->corporateMemberModel->getActiveForMember((int)$id) ?: [];
         $beneficiaries = $this->beneficiaryModel->getActiveBeneficiaries((int)$id) ?: [];
-        $accountMonthlyAmount = (new PlatinumBillingService())->monthlyAmount($member);
+        $billingService = new PlatinumBillingService();
+        $accountMonthlyAmount = $billingService->monthlyAmount($member);
+        $accountContributionBreakdown = $billingService->accountSummary($member)['breakdown'];
         $platinumCoverages = (new PlatinumCoverage())->forMember((int) $id);
         $platinumMigrationOptions = [];
         $pricingService = new PlatinumPricingService();
@@ -1315,6 +1323,7 @@ class AdminController extends BaseController
             'platinum_coverages' => $platinumCoverages,
             'platinum_group_summaries' => $platinumGroupSummaries,
             'account_monthly_amount' => $accountMonthlyAmount,
+            'account_contribution_breakdown' => $accountContributionBreakdown,
             'platinum_migration_options' => $platinumMigrationOptions,
             'csrf_token' => $this->generateCsrfToken(),
             'stats' => [

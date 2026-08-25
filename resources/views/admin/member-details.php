@@ -584,8 +584,11 @@ $formatRelation = static function ($value) {
 <div class="member-details-container">
     <?php
         $platinumGroupSummaries = $platinum_group_summaries ?? [];
-        $platinumDue = array_sum(array_map(static fn($group) => (float)($group['current_month_deficit'] ?? 0), $platinumGroupSummaries));
-        $hasPlatinum = !empty($platinumGroupSummaries);
+        $accountBreakdown = $account_contribution_breakdown ?? [];
+        $principalBreakdown = 'Principal ' . ($accountBreakdown['principal_tier'] ?? 'Basic') . ' KES ' . number_format((float)($accountBreakdown['principal_amount'] ?? 0), 0);
+        $corporateBreakdown = (int)($accountBreakdown['corporate_count'] ?? 0) > 0
+            ? 'Corporate ' . ucfirst((string)($accountBreakdown['corporate_tier_label'] ?? 'Basic')) . ' KES ' . number_format((float)($accountBreakdown['corporate_amount'] ?? 0), 0)
+            : '';
         $lastPayment = !empty($payments[0]) ? $payments[0] : null;
     ?>
     <div class="breadcrumb-row">
@@ -617,18 +620,14 @@ $formatRelation = static function ($value) {
             <div class="stat-value"><?= htmlspecialchars(ucwords(str_replace('_', ' ', $member['status'] ?? 'inactive'))) ?></div>
         </div>
         <div class="stat-card">
-            <div class="stat-label">Monthly Account Amount</div>
+            <div class="stat-label">Monthly Contribution</div>
             <div class="stat-value">KES <?= number_format((float)($account_monthly_amount ?? $member['monthly_contribution'] ?? 0), 0) ?></div>
+            <div class="stat-label" style="margin-top:4px;"><?= htmlspecialchars(trim($principalBreakdown . ($corporateBreakdown !== '' ? ' + ' . $corporateBreakdown : ''))) ?></div>
         </div>
         <div class="stat-card">
             <div class="stat-label">Last Payment</div>
             <div class="stat-value"><?= $lastPayment ? 'KES ' . number_format((float)($lastPayment['amount'] ?? 0), 0) : 'None' ?></div>
             <div class="stat-label" style="margin-top:4px;"><?= $lastPayment && !empty($lastPayment['payment_date']) ? date('d M Y', strtotime($lastPayment['payment_date'])) : 'No payment recorded' ?></div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">Platinum Cover</div>
-            <div class="stat-value"><?= $hasPlatinum ? 'KES ' . number_format($platinumDue, 0) . ' due' : 'Not selected' ?></div>
-            <div class="stat-label" style="margin-top:4px;"><?= $hasPlatinum ? count($platinumGroupSummaries) . ' cover group(s)' : 'Add-on unavailable' ?></div>
         </div>
     </div>
 
