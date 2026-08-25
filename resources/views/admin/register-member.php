@@ -12,8 +12,10 @@ foreach (($packages ?? []) as $packageKey => $package) {
     $membershipPlanData[$packageKey] = [
         'name' => $package['name'] ?? $packageKey,
         'monthly_contribution' => (float)($package['monthly_contribution'] ?? 0),
+        'coverage_type' => $package['coverage_type'] ?? 'principal_only',
     ];
 }
+$platinumPriceData = $GLOBALS['platinum_config']['prices'] ?? [];
 ?>
 
 <style>
@@ -301,7 +303,6 @@ foreach (($packages ?? []) as $packageKey => $package) {
                         </button>
                     </div>
                     <div id="registrationCorporateLineItems"></div>
-                    <small class="form-hint">Each corporate member uses their own selected package and amount.</small>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Expected Monthly Contribution</label>
@@ -313,15 +314,12 @@ foreach (($packages ?? []) as $packageKey => $package) {
                         <option value="0" <?php echo (($old['platinum_opt_in'] ?? '0') !== '1') ? 'selected' : ''; ?>>SHENA Basic &mdash; funeral &amp; last-respect cover</option>
                         <option value="1" <?php echo (($old['platinum_opt_in'] ?? '') === '1') ? 'selected' : ''; ?>>SHENA Platinum &mdash; inpatient and welfare cover</option>
                     </select>
-                    <small class="form-hint" id="platinumTierHint">Platinum replaces the Basic monthly contribution for the selected package group.</small>
                 </div>
                 <div class="form-group full-width" id="platinumTierPanel" style="display:none;background:linear-gradient(135deg,#7F20B0 0%,#5E2B7A 100%);border-radius:10px;padding:14px 18px;color:#fff">
-                    <strong><i class="fas fa-gem"></i> SHENA Platinum selected</strong>
+                    <strong><i class="fas fa-gem"></i> SHENA Platinum &mdash; <span id="platinumOptInPrice">--</span>/month</strong>
                     <div style="font-size:0.85rem;opacity:0.92;margin-top:6px;line-height:1.55">
-                        Includes up to <strong>20 inpatient bed-cover days per year</strong> for the selected package group.
-                        Platinum monthly contribution: <strong id="platinumOptInPrice">--</strong>/month. It replaces the Basic rate for that group once confirmed and approved.
+                        Includes up to <strong>20 inpatient bed-cover days per year</strong>.
                     </div>
-                    <div style="font-size:0.8rem;opacity:0.85;margin-top:8px">Maturity: 4 months (under 60) or 7 months (60 and above). Platinum is selected for the principal package or a corporate member package; covered dependants share that package allowance.</div>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Referred By (Agent Number)</label>
@@ -378,6 +376,7 @@ foreach (($packages ?? []) as $packageKey => $package) {
     const storageKey = 'shena_admin_member_registration_draft';
     if (!form || !window.localStorage) return;
     const membershipPlanData = <?php echo json_encode($membershipPlanData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
+    const platinumPriceData = <?php echo json_encode($platinumPriceData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
     const packageSelect = document.getElementById('packageSelect');
     const corporateLineItems = document.getElementById('registrationCorporateLineItems');
     const corporateTotalPreview = document.getElementById('corporateTotalPreview');
@@ -428,16 +427,17 @@ foreach (($packages ?? []) as $packageKey => $package) {
         if (!packageSelect || !corporateTotalPreview) return;
         const selectedOption = packageSelect.options[packageSelect.selectedIndex];
         const packageKey = packageSelect.value;
-        let total = Number(selectedOption?.dataset.monthlyContribution || membershipPlanData[packageKey]?.monthly_contribution || 0);
+        const baseAmount = Number(selectedOption?.dataset.monthlyContribution || membershipPlanData[packageKey]?.monthly_contribution || 0);
+        let corporateTotal = 0;
         document.querySelectorAll('#registrationCorporateLineItems .corporate-row').forEach(function (row) {
             const corporatePackageKey = row.querySelector('.corporate-package')?.value || '';
             const amount = Number(membershipPlanData[corporatePackageKey]?.monthly_contribution || 0);
-            total += amount;
+            corporateTotal += amount;
             const amountEl = row.querySelector('.corporate-amount');
             if (amountEl) amountEl.textContent = 'KES ' + amount.toLocaleString();
         });
 
-        // Platinum is billed on top of the Basic package, so show the combined figure.
+        const total = baseAmount + corporateTotal;
         const tierSelect = document.getElementById('platinumOptIn');
         let platinumAmount = 0;
         if (tierSelect && tierSelect.value === '1') {
@@ -447,21 +447,23 @@ foreach (($packages ?? []) as $packageKey => $package) {
                 const dob = new Date(dobInput.value);
                 age = Math.floor((Date.now() - dob.getTime()) / (1000 * 60 * 60 * 24 * 365.25));
             }
-            platinumAmount = platinumBandPrice(age) || 0;
+            platinumAmount = platinumPriceForPackage(packageKey, age) || 0;
         }
 
         corporateTotalPreview.textContent = platinumAmount > 0
-            ? 'KES ' + (corporateTotal + platinumAmount).toLocaleString() + '/month (Platinum replaces the principal Basic rate; other Basic groups remain unchanged)'
+            ? 'KES ' + (corporateTotal + platinumAmount).toLocaleString() + '/month'
             : 'KES ' + total.toLocaleString() + '/month';
     }
 
-    function platinumBandPrice(age) {
-        if (age === null || age === undefined || isNaN(age)) { return null; }
-        if (age < 70) { return 300; }
-        if (age <= 80) { return 550; }
-        if (age <= 90) { return 650; }
-        if (age <= 100) { return 850; }
-        return null;
+    function platinumPriceForPackage(packageKey, age) {
+        if (age === null || age === undefined || isNaN(age)) return null;
+        const coverageType = membershipPlanData[packageKey]?.coverage_type || 'principal_only';
+        const priceKey = coverageType === 'principal_only' ? 'individual' : coverageType;
+        const prices = platinumPriceData[priceKey] || {};
+        const band = priceKey === 'executive'
+            ? (age < 70 ? 'under_70' : (age <= 100 ? '70_and_above' : null))
+            : (age < 70 ? 'under_70' : (age <= 80 ? '71_80' : (age <= 90 ? '81_90' : (age <= 100 ? '91_100' : null))));
+        return band ? Number(prices[band] || 0) || null : null;
     }
 
     function updatePlatinumOptInPrice() {
@@ -479,7 +481,7 @@ foreach (($packages ?? []) as $packageKey => $package) {
             const dob = new Date(dobInput.value);
             age = Math.floor((Date.now() - dob.getTime()) / (1000 * 60 * 60 * 24 * 365.25));
         }
-        const price = platinumBandPrice(age);
+        const price = platinumPriceForPackage(packageSelect?.value || '', age);
         priceEl.textContent = price
             ? ('KES ' + price.toLocaleString())
             : (dobInput && dobInput.value ? 'not available for this age' : 'set once date of birth is entered');

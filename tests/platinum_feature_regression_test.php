@@ -35,7 +35,7 @@ $checks = [
         'agentPlatinumPanel',
         "agentPlatinumPanel');",
         "agentPlatinumOptIn')?.addEventListener('change', updateAgentPlatinumPrice)",
-        'Platinum replaces the principal Basic rate',
+        'agentPlatinumPriceForPackage(packageKey)',
     ],
     'app/controllers/AdminController.php' => [
         "\$tier = in_array(\$_GET['tier'] ?? 'all', ['all', 'basic', 'platinum'], true)",
@@ -72,6 +72,11 @@ $checks = [
         'basicDueAfterPlatinumReplacement',
         'Platinum replaces the Basic contribution for each selected coverage group.',
         'return $this->basicDueAfterPlatinumReplacement($member, $coverages)',
+    ],
+    'resources/views/admin/register-member.php' => [
+        'let corporateTotal = 0;',
+        'platinumPriceForPackage(packageKey, age)',
+        "document.getElementById('platinumOptIn')?.addEventListener('change', updatePlatinumOptInPrice)",
     ],
 ];
 
