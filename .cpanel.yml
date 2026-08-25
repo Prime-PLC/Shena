@@ -6,7 +6,6 @@ deployment:
     - /bin/cp -R ./config $DEPLOYPATH
     - /bin/cp -R ./database $DEPLOYPATH
     - /bin/cp -R ./scripts $DEPLOYPATH
-    - export SHENA_MIGRATION_DB_NAME=peepalmt_shena_welfare_db && /usr/local/bin/php /home3/peepalmt/shenacompanion.co.ke/scripts/deploy_migrations.php
     - /bin/cp -R ./public $DEPLOYPATH
     - /bin/cp -R ./resources $DEPLOYPATH
     - /bin/cp -R ./storage $DEPLOYPATH
