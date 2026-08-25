@@ -532,7 +532,7 @@ class AgentDashboardController extends BaseController
             $memberId = (int)$this->db->getConnection()->lastInsertId();
             $this->corporateMemberModel->replaceForMember($memberId, $accountContribution['line_items']);
 
-            // Optional Platinum package-group add-on, included in the normal monthly total.
+            // Platinum replaces the Basic contribution for the selected package group.
             $platinumMonthly = null;
             if (($_POST['platinum_opt_in'] ?? '') === '1' && !empty($_POST['date_of_birth'])) {
                 require_once __DIR__ . '/../services/PlatinumPricingService.php';
@@ -591,7 +591,7 @@ class AgentDashboardController extends BaseController
                         . "Set your account password here: {$inviteLink}  (valid 48 hrs). "
                         . "Monthly contribution: KES {$inviteAmount} via Paybill 4163987, Acct: {$inviteId}.";
                 if ($platinumMonthly) {
-                    $smsMsg .= " You also opted into SHENA Platinum (hospital cover): KES " . number_format($platinumMonthly, 2) . "/month, included in your combined monthly contribution once confirmed.";
+                    $smsMsg .= " You selected SHENA Platinum (hospital and welfare cover): KES " . number_format($platinumMonthly, 2) . "/month. It replaces the Basic contribution for the selected package group once confirmed.";
                 }
                 $smsService = new SmsService();
                 $smsService->sendSms($invitePhone, $smsMsg);

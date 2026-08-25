@@ -80,14 +80,14 @@
                     <div>
                         <span class="side-badge">QUICK SIGNUP</span>
                         <h2>Join SHENA in seconds</h2>
-                        <p>Choose Basic or Basic plus Platinum, then complete verification and activation from your dashboard.</p>
+                        <p>Choose Basic or Platinum, then complete verification and activation from your dashboard.</p>
                     </div>
                     <div style="margin-top:auto; padding-top:24px;">
                         <div style="background:rgba(255,255,255,0.15); border-radius:12px; padding:14px 16px; font-size:0.85rem; line-height:1.6;">
                             <div style="font-weight:700; margin-bottom:6px; color:rgba(255,255,255,0.9);">What happens after signup?</div>
                             <div>✔ OTP verification</div>
                             <div>✔ Create your password</div>
-                            <div>✔ Choose Basic or Basic + Platinum</div>
+                            <div>✔ Choose Basic or Platinum</div>
                             <div>✔ Pay KES 200 registration fee</div>
                         </div>
                     </div>
@@ -142,9 +142,9 @@
                             <label for="platinum_opt_in" class="form-label">Product tier <span class="required-star">*</span></label>
                             <select class="form-select" id="platinum_opt_in" name="platinum_opt_in" required>
                                 <option value="0" selected>SHENA Basic — funeral and last-respect cover</option>
-                                <option value="1">SHENA Basic + Platinum — adds hospital inpatient cover</option>
+                                <option value="1">SHENA Platinum — inpatient and welfare cover</option>
                             </select>
-                            <small class="text-muted">Platinum is an optional add-on for the principal member. It provides up to 20 inpatient bed-cover days each calendar year after approval and maturity.</small>
+                            <small class="text-muted">Platinum replaces the Basic monthly contribution for the selected package group. It provides up to 20 inpatient bed-cover days each calendar year after approval and maturity.</small>
                         </div>
                         <div class="product-summary" id="productSummary" aria-live="polite">Choose your date of birth and Basic package to see the monthly contribution.</div>
 
@@ -210,9 +210,9 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!basic) {
             productSummary.textContent = 'Choose a Basic package to see the monthly contribution.';
         } else if (wantsPlatinum && platinum === null) {
-            productSummary.textContent = 'Basic: KES ' + basic.toLocaleString() + '/month. Enter a valid date of birth to calculate the Platinum add-on.';
+            productSummary.textContent = 'Basic: KES ' + basic.toLocaleString() + '/month. Enter a valid date of birth to calculate the Platinum monthly contribution.';
         } else if (wantsPlatinum) {
-            productSummary.textContent = 'Estimated combined monthly contribution: KES ' + (basic + platinum).toLocaleString() + ' (Basic KES ' + basic.toLocaleString() + ' + Platinum KES ' + platinum.toLocaleString() + '). One monthly payment covers both; separate Platinum payment is optional.';
+            productSummary.textContent = 'Platinum monthly contribution: KES ' + platinum.toLocaleString() + '. This replaces the Basic rate of KES ' + basic.toLocaleString() + ' for this package group.';
         } else {
             productSummary.textContent = 'Basic monthly contribution: KES ' + basic.toLocaleString() + '.';
         }

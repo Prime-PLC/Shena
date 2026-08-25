@@ -9,6 +9,7 @@ require_once __DIR__ . '/../services/InAppNotificationService.php';
 require_once __DIR__ . '/../services/SmsService.php';
 require_once __DIR__ . '/../helpers/ReportDocumentTemplate.php';
 require_once __DIR__ . '/../models/PlatinumCoverage.php';
+require_once __DIR__ . '/../services/PlatinumPricingService.php';
 
 class AdminController extends BaseController
 {
@@ -785,7 +786,7 @@ class AdminController extends BaseController
 
             $this->corporateMemberModel->replaceForMember((int)$memberId, $corporateMembers);
 
-            // Optional Platinum package-group add-on, included in the normal monthly total.
+            // Platinum replaces the Basic contribution for the selected package group.
             $platinumMonthly = null;
             if (($_POST['platinum_opt_in'] ?? '') === '1' && !empty($dateOfBirth)) {
                 require_once __DIR__ . '/../services/PlatinumPricingService.php';
@@ -833,7 +834,7 @@ class AdminController extends BaseController
                         . "Set your account password here: {$inviteLink}  (valid 48 hrs). "
                         . "Monthly contribution: KES {$monthlyContribution} via Paybill 4163987, Acct: {$idNumber}.";
                 if ($platinumMonthly) {
-                    $smsMsg .= " You also opted into SHENA Platinum (hospital cover): KES " . number_format($platinumMonthly, 2) . "/month, included in your combined monthly contribution once confirmed.";
+                    $smsMsg .= " You selected SHENA Platinum (hospital and welfare cover): KES " . number_format($platinumMonthly, 2) . "/month. It replaces the Basic contribution for the selected package group once confirmed.";
                 }
                 $smsService = new SmsService();
                 $smsService->sendSms($phone, $smsMsg);
@@ -4194,6 +4195,7 @@ class AdminController extends BaseController
         }
 
         $dateOfBirth = $member['date_of_birth'] ?? null;
+        $packageKey = (string) ($member['package_key'] ?? $member['package'] ?? '');
         if ($type === 'corporate_member') {
             $corporate = $this->corporateMemberModel->find($personId);
             if (!$corporate || (int)($corporate['member_id'] ?? 0) !== (int)$id) {
@@ -4202,19 +4204,17 @@ class AdminController extends BaseController
                 return;
             }
             $dateOfBirth = $corporate['date_of_birth'] ?? null;
+            $packageKey = (string) ($corporate['package_key'] ?? '');
         }
 
-        global $platinum_config;
-        $age = $dateOfBirth ? (new DateTimeImmutable($dateOfBirth))->diff(new DateTimeImmutable('today'))->y : null;
-        $band = $age === null ? null : ($age < 70 ? 'under_70' : ($age <= 80 ? '71_80' : ($age <= 90 ? '81_90' : ($age <= 100 ? '91_100' : null))));
-        $monthlyContribution = $band ? (float) ($platinum_config['prices']['individual'][$band] ?? 0) : 0.0;
-        $maturityMonths = $age !== null && $age < 60 ? (int) ($platinum_config['maturity_months']['under_60'] ?? 4) : (int) ($platinum_config['maturity_months']['60_and_above'] ?? 7);
-
-        if ($monthlyContribution <= 0) {
-            $_SESSION['error'] = 'Unable to determine the Platinum price for the selected person (missing date of birth).';
+        $quote = (new PlatinumPricingService())->quote($packageKey, $dateOfBirth);
+        if (!$quote) {
+            $_SESSION['error'] = 'Unable to determine the Platinum price for the selected Basic package and date of birth.';
             $this->redirect('/admin/members/view/' . $id);
             return;
         }
+        $monthlyContribution = (float) $quote['amount'];
+        $maturityMonths = (int) $quote['maturity_months'];
 
         try {
             $coverageModel = new PlatinumCoverage();
@@ -4224,6 +4224,8 @@ class AdminController extends BaseController
                 'activation_method' => 'admin_direct',
                 'monthly_contribution' => $monthlyContribution,
                 'maturity_months' => $maturityMonths,
+                'package_key' => $quote['package_key'],
+                'package_name' => $quote['package_name'],
                 'requested_at' => date('Y-m-d H:i:s'),
                 'approved_at' => date('Y-m-d H:i:s'),
                 'approved_by' => (int) $_SESSION['user_id'],
@@ -4242,7 +4244,7 @@ class AdminController extends BaseController
             try {
                 $memberData = $this->memberModel->getMemberWithUser((int) $id);
                 if ($memberData) {
-                    (new SmsService())->sendSms($memberData['phone'], "Dear {$memberData['first_name']}, SHENA Platinum cover has been activated for you. Additional monthly contribution: KES " . number_format($monthlyContribution, 2) . ". - Shena Companion");
+                    (new SmsService())->sendSms($memberData['phone'], "Dear {$memberData['first_name']}, SHENA Platinum cover has been activated for your {$quote['package_name']} group. It is included in your combined monthly contribution: KES " . number_format($monthlyContribution, 2) . ". - Shena Companion");
                 }
             } catch (Throwable $e) {
                 error_log('Platinum migration SMS failed: ' . $e->getMessage());

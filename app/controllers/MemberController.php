@@ -384,7 +384,7 @@ class MemberController extends BaseController
             } else {
                 $this->db->insert('platinum_coverages', array_merge(['member_id' => $member['id'], 'covered_person_type' => $type, 'covered_person_id' => $personId], $fields));
             }
-            $_SESSION['success'] = 'Platinum request created for the ' . $quote['package_name'] . ' group. It will be included in your normal monthly contribution; the separate payment option remains available if needed.';
+            $_SESSION['success'] = 'Platinum request created for the ' . $quote['package_name'] . ' group. Its Platinum rate replaces the Basic contribution for that group; use your normal monthly payment.';
         } catch (Throwable $e) {
             $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Unable to submit your Platinum request.');
         }
@@ -783,7 +783,7 @@ class MemberController extends BaseController
                 'monthly_contribution' => $monthlyContribution,
             ]);
 
-            // Optional Platinum add-on selected alongside the Basic plan during onboarding.
+            // Platinum selected alongside the Basic package and charged as its replacement tier.
             $platinumInfo = null;
             if (($_POST['platinum_opt_in'] ?? '') === '1') {
                 $dobForAge = $member['date_of_birth'] ?? ($_POST['date_of_birth'] ?? null);

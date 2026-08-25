@@ -1565,7 +1565,7 @@ class AuthController extends BaseController
 
                 $memberId = $this->memberModel->create($memberData);
 
-                // Optional Platinum package-group add-on; normal monthly payments cover Basic and Platinum together.
+                // Platinum replaces the Basic contribution for the selected package group.
                 $platinumOptIn = ($_POST['platinum_opt_in'] ?? '') === '1';
                 if ($platinumOptIn && $age !== null) {
                     require_once __DIR__ . '/../models/PlatinumCoverage.php';

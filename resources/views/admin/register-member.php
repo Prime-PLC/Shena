@@ -311,15 +311,15 @@ foreach (($packages ?? []) as $packageKey => $package) {
                     <label class="form-label">Product Tier <span class="required">*</span></label>
                     <select name="platinum_opt_in" class="form-select" id="platinumOptIn" required>
                         <option value="0" <?php echo (($old['platinum_opt_in'] ?? '0') !== '1') ? 'selected' : ''; ?>>SHENA Basic &mdash; funeral &amp; last-respect cover</option>
-                        <option value="1" <?php echo (($old['platinum_opt_in'] ?? '') === '1') ? 'selected' : ''; ?>>SHENA Basic + Platinum &mdash; adds hospital inpatient cover</option>
+                        <option value="1" <?php echo (($old['platinum_opt_in'] ?? '') === '1') ? 'selected' : ''; ?>>SHENA Platinum &mdash; inpatient and welfare cover</option>
                     </select>
-                    <small class="form-hint" id="platinumTierHint">Platinum is an optional package-group add-on included in the combined monthly contribution.</small>
+                    <small class="form-hint" id="platinumTierHint">Platinum replaces the Basic monthly contribution for the selected package group.</small>
                 </div>
                 <div class="form-group full-width" id="platinumTierPanel" style="display:none;background:linear-gradient(135deg,#7F20B0 0%,#5E2B7A 100%);border-radius:10px;padding:14px 18px;color:#fff">
-                    <strong><i class="fas fa-gem"></i> SHENA Platinum add-on selected</strong>
+                    <strong><i class="fas fa-gem"></i> SHENA Platinum selected</strong>
                     <div style="font-size:0.85rem;opacity:0.92;margin-top:6px;line-height:1.55">
-                        Adds up to <strong>20 inpatient bed-cover days per year</strong> for the principal member, on top of the Basic package above.
-                        Platinum add-on: <strong id="platinumOptInPrice">--</strong>/month, included in the combined monthly contribution and activated once confirmed and approved.
+                        Includes up to <strong>20 inpatient bed-cover days per year</strong> for the selected package group.
+                        Platinum monthly contribution: <strong id="platinumOptInPrice">--</strong>/month. It replaces the Basic rate for that group once confirmed and approved.
                     </div>
                     <div style="font-size:0.8rem;opacity:0.85;margin-top:8px">Maturity: 4 months (under 60) or 7 months (60 and above). Platinum is selected for the principal package or a corporate member package; covered dependants share that package allowance.</div>
                 </div>
@@ -451,7 +451,7 @@ foreach (($packages ?? []) as $packageKey => $package) {
         }
 
         corporateTotalPreview.textContent = platinumAmount > 0
-            ? 'KES ' + (total + platinumAmount).toLocaleString() + '/month (Basic ' + total.toLocaleString() + ' + Platinum ' + platinumAmount.toLocaleString() + ')'
+            ? 'KES ' + (corporateTotal + platinumAmount).toLocaleString() + '/month (Platinum replaces the principal Basic rate; other Basic groups remain unchanged)'
             : 'KES ' + total.toLocaleString() + '/month';
     }
 
