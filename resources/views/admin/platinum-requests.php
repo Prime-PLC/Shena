@@ -131,8 +131,8 @@ $decisionStyles = [
         <div class="stat-card">
             <span class="stat-icon green"><i class="fas fa-check-circle"></i></span>
             <div>
-                <div class="stat-label">Payment verified</div>
-                <div class="stat-value"><?php echo count(array_filter($coverages, fn($c) => !empty($c['payment_verified']))); ?></div>
+                <div class="stat-label">Awaiting approval</div>
+                <div class="stat-value"><?php echo count($coverages); ?></div>
             </div>
         </div>
         <div class="stat-card">
@@ -158,13 +158,12 @@ $decisionStyles = [
                         <th>Covered person</th>
                         <th>Monthly</th>
                         <th>Requested</th>
-                        <th>Payment</th>
                         <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php if (empty($coverages)): ?>
-                        <tr><td colspan="6"><div class="empty-state"><i class="fas fa-inbox"></i><p>No Platinum coverage requests awaiting approval.</p></div></td></tr>
+                        <tr><td colspan="5"><div class="empty-state"><i class="fas fa-inbox"></i><p>No Platinum coverage requests awaiting approval.</p></div></td></tr>
                     <?php else: ?>
                         <?php foreach ($coverages as $c): ?>
                         <tr>
@@ -176,29 +175,15 @@ $decisionStyles = [
                             <td><strong>KES <?php echo number_format((float) $c['monthly_contribution'], 2); ?></strong></td>
                             <td><?php echo htmlspecialchars($c['requested_at'] ? date('d M Y', strtotime($c['requested_at'])) : '—'); ?></td>
                             <td>
-                                <?php if (!empty($c['payment_verified'])): ?>
-                                    <span class="status-badge verified"><i class="fas fa-check-circle"></i> Verified</span>
-                                <?php else: ?>
-                                    <span class="status-badge unverified"><i class="fas fa-exclamation-circle"></i> Unpaid</span>
-                                <?php endif; ?>
-                            </td>
-                            <td>
                                 <div class="action-group">
-                                    <?php if (!empty($c['payment_verified'])): ?>
-                                        <button type="button" class="btn btn-success"
-                                                onclick="PlatinumAdmin.confirmCoverage(<?php echo (int) $c['id']; ?>, 'approve', <?php echo htmlspecialchars(json_encode($c['covered_person_name']), ENT_QUOTES); ?>)">
-                                            <i class="fas fa-check"></i> Approve
-                                        </button>
-                                    <?php else: ?>
-                                        <button type="button" class="btn btn-success" disabled title="A completed Platinum contribution is required before activation"><i class="fas fa-check"></i> Approve</button>
-                                    <?php endif; ?>
+                                    <button type="button" class="btn btn-success"
+                                            onclick="PlatinumAdmin.confirmCoverage(<?php echo (int) $c['id']; ?>, 'approve', <?php echo htmlspecialchars(json_encode($c['covered_person_name']), ENT_QUOTES); ?>)">
+                                        <i class="fas fa-check"></i> Approve
+                                    </button>
                                     <button type="button" class="btn btn-danger"
                                             onclick="PlatinumAdmin.confirmCoverage(<?php echo (int) $c['id']; ?>, 'reject', <?php echo htmlspecialchars(json_encode($c['covered_person_name']), ENT_QUOTES); ?>)">
                                         <i class="fas fa-times"></i> Reject
                                     </button>
-                                    <?php if (empty($c['payment_verified'])): ?>
-                                        <button type="button" class="btn btn-secondary" onclick="PlatinumAdmin.openOverrideModal(<?php echo (int) $c['id']; ?>, <?php echo htmlspecialchars(json_encode($c['covered_person_name']), ENT_QUOTES); ?>)"><i class="fas fa-unlock"></i> Override</button>
-                                    <?php endif; ?>
                                 </div>
                             </td>
                         </tr>
@@ -433,7 +418,14 @@ window.PlatinumAdmin = (function () {
             ShenaApp.alert(message, type);
             return;
         }
-        window.alert(message);
+        var notice = document.createElement('div');
+        notice.className = 'modal-overlay';
+        notice.innerHTML = '<div class="modal-box" role="alert"><h3></h3><p style="margin:0 0 18px 0;color:#4B5563"></p><div class="modal-actions"><button type="button" class="btn btn-primary">OK</button></div></div>';
+        notice.querySelector('h3').textContent = type === 'success' ? 'Completed' : 'Please review';
+        notice.querySelector('p').textContent = String(message);
+        notice.querySelector('button').addEventListener('click', function () { notice.remove(); });
+        notice.addEventListener('click', function (event) { if (event.target === notice) notice.remove(); });
+        document.body.appendChild(notice);
     }
 
     function confirmThen(message, options, onConfirm) {
@@ -441,7 +433,17 @@ window.PlatinumAdmin = (function () {
             ShenaApp.confirmAction(message, onConfirm, null, options);
             return;
         }
-        if (window.confirm(message)) { onConfirm(); }
+        var modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.innerHTML = '<div class="modal-box" role="dialog" aria-modal="true"><h3></h3><p style="margin:0 0 18px 0;color:#4B5563"></p><div class="modal-actions"><button type="button" class="btn btn-secondary">Cancel</button><button type="button" class="btn btn-primary"></button></div></div>';
+        modal.querySelector('h3').textContent = options.title || 'Confirm action';
+        modal.querySelector('p').textContent = String(message);
+        var buttons = modal.querySelectorAll('button');
+        buttons[1].textContent = options.confirmText || 'Confirm';
+        buttons[0].addEventListener('click', function () { modal.remove(); });
+        buttons[1].addEventListener('click', function () { modal.remove(); onConfirm(); });
+        modal.addEventListener('click', function (event) { if (event.target === modal) modal.remove(); });
+        document.body.appendChild(modal);
     }
 
     function closeModal(id) {
@@ -499,8 +501,8 @@ window.PlatinumAdmin = (function () {
             var approving = action === 'approve';
             confirmThen(
                 approving
-                    ? 'Activate SHENA Platinum cover for <strong>' + escapeHtml(personName) + '</strong>? This starts the maturity clock and notifies the member by SMS.'
-                    : 'Reject the Platinum cover request for <strong>' + escapeHtml(personName) + '</strong>? The member will be notified by SMS and may re-apply.',
+                    ? 'Activate SHENA Platinum cover for ' + personName + '? This starts the maturity clock and notifies the member by SMS.'
+                    : 'Reject the Platinum cover request for ' + personName + '? The member will be notified by SMS and may re-apply.',
                 {
                     title: approving ? 'Approve Platinum cover' : 'Reject Platinum cover',
                     confirmText: approving ? 'Yes, approve' : 'Yes, reject',
@@ -563,40 +565,7 @@ window.PlatinumAdmin = (function () {
             return true;
         },
 
-        closeInpatientModal: function () { closeModal('inpatient-modal'); },
-
-        openOverrideModal: function (coverageId, personName) {
-            closeModal('override-modal');
-            var html = '' +
-                '<div id="override-modal" class="modal-overlay">' +
-                '  <div class="modal-box" role="dialog" aria-modal="true">' +
-                '    <h3><i class="fas fa-unlock" style="color:#EF4444"></i> Override approval: ' + escapeHtml(personName) + '</h3>' +
-                '    <p style="margin:0 0 18px 0;color:#6B7280;font-size:14px">This activates Platinum cover <strong>without</strong> a verified contribution payment. A reason is required for the audit trail.</p>' +
-                '    <form method="post" action="/admin/platinum-requests/' + coverageId + '/process" onsubmit="return PlatinumAdmin.validateOverride(this)">' +
-                '      <input type="hidden" name="csrf_token" value="' + escapeHtml(CSRF) + '">' +
-                '      <input type="hidden" name="action" value="approve">' +
-                '      <input type="hidden" name="override" value="1">' +
-                '      <label>Override reason</label>' +
-                '      <textarea name="override_reason" rows="3" placeholder="e.g. Payment confirmed via cash receipt #123, pending reconciliation" required></textarea>' +
-                '      <div class="modal-actions">' +
-                '        <button type="button" class="btn btn-secondary" onclick="PlatinumAdmin.closeOverrideModal()">Cancel</button>' +
-                '        <button type="submit" class="btn btn-danger"><i class="fas fa-unlock"></i> Approve with override</button>' +
-                '      </div>' +
-                '    </form>' +
-                '  </div>' +
-                '</div>';
-            document.body.insertAdjacentHTML('beforeend', html);
-        },
-
-        validateOverride: function (form) {
-            if (!String(form.override_reason.value || '').trim()) {
-                feedback('An override reason is required to approve without a verified payment.', 'warning');
-                return false;
-            }
-            return true;
-        },
-
-        closeOverrideModal: function () { closeModal('override-modal'); }
+        closeInpatientModal: function () { closeModal('inpatient-modal'); }
     };
 })();
 
@@ -612,7 +581,6 @@ document.addEventListener('DOMContentLoaded', function () {
 document.addEventListener('keydown', function (event) {
     if (event.key === 'Escape') {
         PlatinumAdmin.closeInpatientModal();
-        PlatinumAdmin.closeOverrideModal();
     }
 });
 document.addEventListener('click', function (event) {

@@ -8,6 +8,7 @@ require_once __DIR__ . '/../models/PlatinumCoverage.php';
 require_once __DIR__ . '/../services/PlatinumEligibilityService.php';
 require_once __DIR__ . '/../services/SmsService.php';
 require_once __DIR__ . '/../services/PlatinumPricingService.php';
+require_once __DIR__ . '/../services/PlatinumBillingService.php';
 
 class MemberController extends BaseController
 {
@@ -167,6 +168,7 @@ class MemberController extends BaseController
             $this->redirect('/login');
             return;
         }
+        $accountMonthlyAmount = (new PlatinumBillingService())->monthlyAmount($member);
         
         // Get recent payments
         $recentPayments = $this->paymentModel->getMemberPayments($member['id'], 5);
@@ -323,18 +325,31 @@ class MemberController extends BaseController
             $this->redirect('/dashboard');
         }
         $coverages = (new PlatinumCoverage())->forMember((int) $member['id']);
+        $heldGroups = [];
         $eligibility = new PlatinumEligibilityService();
         foreach ($coverages as &$coverage) {
+            if (in_array($coverage['status'] ?? '', ['pending_approval', 'active'], true)) {
+                $heldGroups[($coverage['covered_person_type'] ?? 'principal') . ':' . (int)($coverage['covered_person_id'] ?? 0)] = true;
+            }
             $coverage['remaining_days'] = $coverage['status'] === 'active'
                 ? $eligibility->remainingDays((int) $coverage['id'])
                 : null;
         }
         unset($coverage);
+        $corporateMembers = (new MemberCorporateMember())->getActiveForMember((int) $member['id']);
+        $requestableCorporateMembers = array_values(array_filter($corporateMembers, static function (array $corporate) use ($heldGroups): bool {
+            return !isset($heldGroups['corporate_member:' . (int)($corporate['id'] ?? 0)]);
+        }));
+        $canRequestPrincipal = !isset($heldGroups['principal:0']);
+        $accountMonthlyAmount = (new PlatinumBillingService())->monthlyAmount($member);
         $this->view('member.platinum', [
             'member' => $member,
+            'account_monthly_amount' => $accountMonthlyAmount,
             'coverages' => $coverages,
             'beneficiaries' => $this->beneficiaryModel->getActiveBeneficiaries((int) $member['id']),
-            'corporate_members' => (new MemberCorporateMember())->getActiveForMember((int) $member['id']),
+            'corporate_members' => $corporateMembers,
+            'requestable_principal' => $canRequestPrincipal,
+            'requestable_corporate_members' => $requestableCorporateMembers,
             'csrf_token' => $this->generateCsrfToken()
         ]);
     }
@@ -367,7 +382,7 @@ class MemberController extends BaseController
         }
         try {
             $fields = [
-                'status' => 'pending_payment',
+                'status' => 'pending_approval',
                 'monthly_contribution' => $quote['amount'],
                 'maturity_months' => $quote['maturity_months'],
                 'package_key' => $quote['package_key'],
@@ -384,7 +399,7 @@ class MemberController extends BaseController
             } else {
                 $this->db->insert('platinum_coverages', array_merge(['member_id' => $member['id'], 'covered_person_type' => $type, 'covered_person_id' => $personId], $fields));
             }
-            $_SESSION['success'] = 'Platinum request created for the ' . $quote['package_name'] . ' group. Its Platinum rate replaces the Basic contribution for that group; use your normal monthly payment.';
+            $_SESSION['success'] = 'Platinum request sent for admin approval for the ' . $quote['package_name'] . ' group.';
         } catch (Throwable $e) {
             $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Unable to submit your Platinum request.');
         }
@@ -401,13 +416,29 @@ class MemberController extends BaseController
         $coverage = new PlatinumCoverage();
         $coverages = $coverage->forMember((int) $member['id']);
         $eligiblePeopleByCoverage = [];
+        $claimableCoverages = [];
+        $nextMaturityDate = null;
         foreach ($coverages as $coverageRow) {
             if (($coverageRow['status'] ?? '') === 'active') {
                 $eligiblePeopleByCoverage[(int) $coverageRow['id']] = $this->eligiblePeopleForCoverage($member, $coverageRow);
+                $maturityDate = $coverageRow['maturity_date'] ?? null;
+                if ($maturityDate && $maturityDate <= date('Y-m-d')) {
+                    $claimableCoverages[] = $coverageRow;
+                } elseif ($maturityDate && ($nextMaturityDate === null || $maturityDate < $nextMaturityDate)) {
+                    $nextMaturityDate = $maturityDate;
+                }
             }
         }
         $requests = $this->db->fetchAll('SELECT * FROM inpatient_requests WHERE member_id = :id ORDER BY created_at DESC', ['id' => $member['id']]);
-        $this->view('member.inpatient-requests', ['coverages' => $coverages, 'eligible_people_by_coverage' => $eligiblePeopleByCoverage, 'requests' => $requests, 'csrf_token' => $this->generateCsrfToken()]);
+        $this->view('member.inpatient-requests', [
+            'coverages' => $coverages,
+            'claimable_coverages' => $claimableCoverages,
+            'maturity_blocked' => !empty($coverages) && empty($claimableCoverages) && $nextMaturityDate !== null,
+            'next_maturity_date' => $nextMaturityDate,
+            'eligible_people_by_coverage' => $eligiblePeopleByCoverage,
+            'requests' => $requests,
+            'csrf_token' => $this->generateCsrfToken(),
+        ]);
     }
 
     public function submitInpatientRequest()
@@ -797,7 +828,7 @@ class MemberController extends BaseController
                             'member_id' => $member['id'],
                             'covered_person_type' => 'principal',
                             'covered_person_id' => null,
-                            'status' => 'pending_payment',
+                            'status' => 'pending_approval',
                             'monthly_contribution' => $platinumMonthly,
                             'maturity_months' => $this->platinumMaturityMonths($age),
                             'requested_at' => date('Y-m-d H:i:s'),
@@ -956,6 +987,7 @@ class MemberController extends BaseController
             $this->redirect('/dashboard');
             return;
         }
+        $accountMonthlyAmount = (new PlatinumBillingService())->monthlyAmount($member);
         
         $payments = $this->paymentModel->getContributions($member['id']);
         $statusFilter = $this->sanitizeInput($_GET['status'] ?? '');
@@ -979,6 +1011,7 @@ class MemberController extends BaseController
         $data = [
             'title' => 'Payment History - Shena Companion Welfare Association',
             'member' => $member,
+            'account_monthly_amount' => $accountMonthlyAmount,
             'payments' => $payments,
             'total_paid' => $total_paid,
             'pending_count' => $pending_count,

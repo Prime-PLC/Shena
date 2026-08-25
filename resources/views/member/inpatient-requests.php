@@ -3,9 +3,12 @@ $page = 'claims';
 include __DIR__ . '/../layouts/member-header.php';
 $requests = $requests ?? [];
 $coverages = $coverages ?? [];
+$claimableCoverages = $claimable_coverages ?? [];
+$maturityBlocked = !empty($maturity_blocked);
+$nextMaturityDate = $next_maturity_date ?? null;
 $eligiblePeopleByCoverage = $eligible_people_by_coverage ?? [];
 $csrf_token = $csrf_token ?? '';
-$activeCoverages = array_filter($coverages, fn($c) => $c['status'] === 'active');
+$hasActiveCoverage = !empty(array_filter($coverages, fn($c) => $c['status'] === 'active'));
 
 $statusStyles = [
     'submitted' => ['bg' => '#FEF3C7', 'color' => '#D97706', 'label' => 'SUBMITTED'],
@@ -27,6 +30,8 @@ main { padding: 0 !important; margin: 0 !important; }
 .alert-danger { background: linear-gradient(135deg, #FEE2E2 0%, #FECACA 100%); border-left: 4px solid #EF4444; color: #991B1B; }
 
 .request-card { background: #fff; border-radius: 20px; padding: 30px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); margin-bottom: 30px; }
+.maturity-lock { position:absolute; inset:0; z-index:3; border-radius:20px; background:rgba(255,255,255,0.92); display:flex; align-items:center; justify-content:center; padding:24px; text-align:center; }
+.maturity-lock-box { max-width:430px; color:#78350F; }
 .request-card h3 { font-size: 1.25rem; font-weight: 700; color: #1F2937; margin: 0 0 6px 0; }
 .request-card .hint { color: #6B7280; font-size: 0.9rem; margin: 0 0 22px 0; }
 
@@ -110,12 +115,12 @@ main { padding: 0 !important; margin: 0 !important; }
         <div class="alert-banner alert-danger"><i class="fas fa-exclamation-circle"></i> <?php echo htmlspecialchars($flashError); ?></div>
     <?php endif; ?>
 
-    <?php if (empty($activeCoverages)): ?>
+    <?php if (!$hasActiveCoverage): ?>
         <div class="no-coverage-notice">
             <strong>No active Platinum coverage yet.</strong> Visit <a href="/platinum" style="color:#7F20B0;font-weight:600">SHENA Platinum</a> to request cover before submitting an inpatient request.
         </div>
     <?php else: ?>
-    <div class="request-card">
+    <div class="request-card" style="position:relative;">
         <h3>Submit Inpatient Request</h3>
         <p class="hint">Choose the Platinum-covered person and provide the admission facility details.</p>
         <form method="post" action="/inpatient-requests" id="inpatientForm" onsubmit="return Inpatient.validate(this)">
@@ -125,7 +130,7 @@ main { padding: 0 !important; margin: 0 !important; }
                 <div class="form-group">
                     <label for="platinumCoverage">Platinum package group <span class="req">*</span></label>
                     <select name="platinum_coverage_id" id="platinumCoverage" required onchange="Inpatient.syncPatients()">
-                        <?php foreach ($activeCoverages as $c): ?>
+                        <?php foreach ($claimableCoverages as $c): ?>
                             <option value="<?php echo (int) $c['id']; ?>"><?php echo htmlspecialchars(($c['package_name'] ?? $c['covered_person_name'] ?? $c['covered_person_type']) . ' group'); ?></option>
                         <?php endforeach; ?>
                     </select>
@@ -175,6 +180,15 @@ main { padding: 0 !important; margin: 0 !important; }
             </div>
             <button type="submit" class="submit-btn"><i class="fas fa-paper-plane"></i> Submit inpatient request</button>
         </form>
+        <?php if ($maturityBlocked): ?>
+            <div class="maturity-lock" aria-live="polite">
+                <div class="maturity-lock-box">
+                    <i class="fas fa-hourglass-half" style="font-size:30px;color:#D97706"></i>
+                    <h3 style="margin:12px 0 8px;color:#92400E">Platinum maturity period in progress</h3>
+                    <p style="margin:0;line-height:1.55">Your approved Platinum cover becomes available for inpatient requests on <strong><?= htmlspecialchars(date('d M Y', strtotime($nextMaturityDate))) ?></strong>. The form will unlock automatically on that date.</p>
+                </div>
+            </div>
+        <?php endif; ?>
     </div>
     <?php endif; ?>
 
@@ -218,7 +232,12 @@ window.Inpatient = (function () {
             ShenaApp.alert(message, type);
             return;
         }
-        window.alert(message);
+        var banner = document.createElement('div');
+        banner.className = 'alert-banner alert-danger';
+        banner.innerHTML = '<i class="fas fa-exclamation-circle"></i> <span></span>';
+        banner.querySelector('span').textContent = String(message);
+        var container = document.querySelector('.inpatient-container');
+        if (container) container.insertBefore(banner, container.querySelector('.request-card') || container.firstChild);
     }
 
     return {

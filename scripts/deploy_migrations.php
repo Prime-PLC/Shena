@@ -28,6 +28,7 @@ try {
         '021_platinum_overrides_and_admin_flows.sql',
         '022_platinum_group_coverage_and_cumulative_billing.sql',
         '023_legacy_medical_placeholder_audit.sql',
+        '024_platinum_admin_approval_only.sql',
     ];
     foreach ($allowed as $migration) {
         $applied = $pdo->prepare('SELECT 1 FROM schema_migrations WHERE migration = ?');
@@ -49,9 +50,13 @@ try {
             }
             $record = $pdo->prepare('INSERT INTO schema_migrations (migration) VALUES (?)');
             $record->execute([$migration]);
-            $pdo->commit();
+            if ($pdo->inTransaction()) {
+                $pdo->commit();
+            }
         } catch (Throwable $exception) {
-            $pdo->rollBack();
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             throw $exception;
         }
     }

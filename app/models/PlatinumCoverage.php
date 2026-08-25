@@ -52,7 +52,7 @@ class PlatinumCoverage extends BaseModel
      */
     public function membersWithPlatinum(bool $activeOnly = false): array
     {
-        $statusClause = $activeOnly ? 'AND pc.status = "active"' : 'AND pc.status IN ("pending_payment", "pending_approval", "active")';
+        $statusClause = $activeOnly ? 'AND pc.status = "active"' : 'AND pc.status IN ("pending_approval", "active")';
 
         $rows = $this->db->fetchAll(
             'SELECT pc.id AS coverage_id, pc.member_id, pc.covered_person_type, pc.covered_person_id,
@@ -105,7 +105,7 @@ class PlatinumCoverage extends BaseModel
                     MAX(status = "active") AS has_active,
                     COUNT(*) AS coverage_count
              FROM platinum_coverages
-             WHERE status IN ("pending_payment", "pending_approval", "active")
+             WHERE status IN ("pending_approval", "active")
              GROUP BY member_id'
         );
 
@@ -133,7 +133,7 @@ class PlatinumCoverage extends BaseModel
                 WHERE allocation_month = DATE_FORMAT(CURDATE(), '%Y-%m-01')
                 GROUP BY platinum_coverage_id
              ) a ON a.platinum_coverage_id = pc.id
-             WHERE pc.status IN ('pending_payment', 'pending_approval', 'active')
+             WHERE pc.status = 'active'
              ORDER BY pc.member_id, pc.id"
         );
         $summary = [];

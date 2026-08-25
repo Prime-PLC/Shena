@@ -979,7 +979,7 @@ main {
         <p>Contribution History Dashboard</p>
         <div style="margin-top: 14px; display: inline-flex; align-items: center; gap: 8px; background: #EEF2FF; color: #4338CA; border: 1px solid #C7D2FE; border-radius: 999px; padding: 8px 14px; font-weight: 700; font-size: 0.9rem;">
             <i class="fas fa-wallet"></i>
-            Your Monthly Contribution: KES <?php echo number_format((float)($member['monthly_contribution'] ?? 0), 2); ?>
+            Your Monthly Contribution: KES <?php echo number_format((float)($account_monthly_amount ?? $member['monthly_contribution'] ?? 0), 2); ?>
         </div>
     </div>
 
@@ -1200,7 +1200,7 @@ main {
                         <div class="mb-3">
                             <label class="form-label">Amount</label>
                             <input type="number" class="form-control" id="amount" 
-                                   value="<?php echo $member['monthly_contribution'] ?? 500; ?>" 
+                                   value="<?php echo $account_monthly_amount ?? $member['monthly_contribution'] ?? 0; ?>"
                                    min="1" step="0.01" required readonly>
                         </div>
                         
@@ -1252,7 +1252,7 @@ main {
                         </div>
                         <div class="paybill-detail">
                             <label>Amount to Pay</label>
-                            <div class="paybill-value amount-value">KES <?php echo number_format($member['monthly_contribution'] ?? 500, 2); ?></div>
+                            <div class="paybill-value amount-value">KES <?php echo number_format($account_monthly_amount ?? $member['monthly_contribution'] ?? 0, 2); ?></div>
                         </div>
                     </div>
                     
@@ -1264,7 +1264,7 @@ main {
                             <li>Select <strong>Pay Bill</strong></li>
                             <li>Enter Business Number: <strong class="highlight-blue">4163987</strong></li>
                             <li>Enter Account Number: <strong class="highlight-green"><?php echo htmlspecialchars($member['id_number'] ?? $member['national_id'] ?? ''); ?></strong></li>
-                            <li>Enter Amount: <strong class="highlight-orange">KES <?php echo number_format($member['monthly_contribution'] ?? 500, 2); ?></strong></li>
+                            <li>Enter Amount: <strong class="highlight-orange">KES <?php echo number_format($account_monthly_amount ?? $member['monthly_contribution'] ?? 0, 2); ?></strong></li>
                             <li>Enter your M-Pesa PIN and confirm</li>
                             <li>You will receive an SMS confirmation from M-Pesa</li>
                         </ol>
@@ -1415,7 +1415,7 @@ main {
 
 <script>
 const PAYMENT_AMOUNTS = {
-    monthly: <?php echo json_encode((float)($member['monthly_contribution'] ?? 0)); ?>,
+    monthly: <?php echo json_encode((float)($account_monthly_amount ?? $member['monthly_contribution'] ?? 0)); ?>,
     registration: <?php echo json_encode(defined('REGISTRATION_FEE') ? (float)REGISTRATION_FEE : 200.0); ?>,
     reactivation: <?php echo json_encode(defined('REACTIVATION_FEE') ? (float)REACTIVATION_FEE : 100.0); ?>
 };

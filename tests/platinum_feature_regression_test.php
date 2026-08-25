@@ -42,10 +42,17 @@ $checks = [
         "'Product Tier'",
         "(new PlatinumPricingService())->quote(\$packageKey, \$dateOfBirth)",
         "'package_key' => \$quote['package_key']",
+        'New account monthly contribution',
+        'platinumMigrationOptions',
+        'revertMemberPlatinumToBasic',
     ],
     'database/migrations/023_legacy_medical_placeholder_audit.sql' => [
         'legacy_medical_corporate_archive',
         'This migration deliberately does not move or delete member data.',
+    ],
+    'database/migrations/024_platinum_admin_approval_only.sql' => [
+        'pending_approval',
+        'pending_payment',
     ],
     'database/sql/legacy_medical_to_platinum.sql' => [
         'ONE-TIME LEGACY CONVERSION',
@@ -56,6 +63,11 @@ $checks = [
     'database/sql/legacy_medical_to_platinum_preview.sql' => [
         'READ-ONLY PREVIEW',
         'READY: converts to principal Platinum coverage',
+    ],
+    'database/sql/repair_legacy_medical_member_contributions.sql' => [
+        'ONE-TIME REPAIR FOR ACCOUNTS ALREADY CONVERTED',
+        'Converted from reviewed legacy medical corporate placeholder',
+        'current_monthly_payable',
     ],
     'resources/views/admin/payments.php' => [
         "'payment_type' => (\$paymentFilters['payment_type'] ?? '') !== 'all'",
@@ -69,14 +81,39 @@ $checks = [
         "'days_reserved'",
     ],
     'app/services/PlatinumBillingService.php' => [
+        'public function accountSummary',
         'basicDueAfterPlatinumReplacement',
+        'legacy "medical" line',
+        'MembershipPricingService::resolveSelectedPackageAmount',
         'Platinum replaces the Basic contribution for each selected coverage group.',
-        'return $this->basicDueAfterPlatinumReplacement($member, $coverages)',
+        "return \$this->accountSummary(\$member)['total'];",
+        "status = 'active' ORDER BY id ASC",
     ],
     'resources/views/admin/register-member.php' => [
         'let corporateTotal = 0;',
         'platinumPriceForPackage(packageKey, age)',
         "document.getElementById('platinumOptIn')?.addEventListener('change', updatePlatinumOptInPrice)",
+    ],
+    'resources/views/admin/member-details.php' => [
+        'account_monthly_amount',
+        'Monthly Account Amount',
+        'Account monthly contribution after migration',
+        'Covered under',
+        'Edit Corporate Members',
+        'Return to Basic',
+    ],
+    'resources/views/member/payments.php' => [
+        'account_monthly_amount',
+        'Your Monthly Contribution',
+    ],
+    'resources/views/member/inpatient-requests.php' => [
+        'maturity-lock',
+        'The form will unlock automatically',
+    ],
+    'resources/views/member/platinum.php' => [
+        'File hospital cover request',
+        'requestable_principal',
+        'If your cover is still maturing',
     ],
 ];
 

@@ -557,6 +557,10 @@ $missingFields = $missing_profile_fields ?? [];
                     <h2><?php echo $monthsCovered; ?>/12</h2>
                 </div>
                 <div class="contribution-item">
+                    <h4>MONTHLY PAYABLE</h4>
+                    <h2>KES <?php echo number_format((float)($account_monthly_amount ?? $member['monthly_contribution'] ?? 0), 2); ?></h2>
+                </div>
+                <div class="contribution-item">
                     <h4>CURRENT MONTH</h4>
                     <span class="status-indicator">
                         <i class="fas fa-check-circle"></i> <?php echo $currentMonthStatus; ?>

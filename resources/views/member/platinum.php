@@ -5,11 +5,13 @@ $member = $member ?? [];
 $coverages = $coverages ?? [];
 $beneficiaries = $beneficiaries ?? [];
 $corporateMembers = $corporate_members ?? [];
+$requestablePrincipal = !empty($requestable_principal);
+$requestableCorporateMembers = $requestable_corporate_members ?? [];
 $csrf_token = $csrf_token ?? '';
+$hasActiveCoverage = !empty(array_filter($coverages, static fn(array $coverage): bool => ($coverage['status'] ?? '') === 'active'));
 
 $statusStyles = [
     'active' => ['bg' => '#D1FAE5', 'color' => '#059669', 'label' => 'ACTIVE'],
-    'pending_payment' => ['bg' => '#DBEAFE', 'color' => '#1D4ED8', 'label' => 'AWAITING PAYMENT'],
     'pending_approval' => ['bg' => '#FEF3C7', 'color' => '#D97706', 'label' => 'PENDING APPROVAL'],
     'rejected' => ['bg' => '#FEE2E2', 'color' => '#DC2626', 'label' => 'REJECTED'],
 ];
@@ -132,13 +134,18 @@ main { padding: 0 !important; margin: 0 !important; }
 }
 .inpatient-link:hover { background: #E9D5FF; }
 
+.hospital-action-card { background:linear-gradient(135deg,#4A1468,#7F20B0); border-radius:18px; padding:22px 26px; margin:0 0 24px; color:#fff; display:flex; align-items:center; justify-content:space-between; gap:18px; flex-wrap:wrap; }
+.hospital-action-card h3 { margin:0 0 5px; font-size:1.15rem; }
+.hospital-action-card p { margin:0; color:rgba(255,255,255,.88); font-size:.9rem; }
+.hospital-action-card .hospital-action-button { background:#fff; color:#6B218D; text-decoration:none; padding:11px 17px; border-radius:10px; font-weight:700; white-space:nowrap; }
+
 .empty-state { background: #fff; border-radius: 16px; padding: 40px; text-align: center; color: #6B7280; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
 </style>
 
 <div class="platinum-container">
     <a href="/claims" style="display:inline-flex;align-items:center;gap:8px;color:#7F20B0;font-weight:600;font-size:0.85rem;text-decoration:none;margin-bottom:14px"><i class="fas fa-arrow-left"></i> Back to Claims</a>
     <h1 class="page-title">SHENA Platinum</h1>
-    <p class="page-subtitle">Optional add-on to a selected Basic package. Each Platinum package group shares 20 inpatient bed-cover days across everyone covered by that package, per calendar year.</p>
+    <p class="page-subtitle">Platinum cover for a selected package group. It replaces that group's Basic contribution and gives the group a shared 20-day annual inpatient allowance.</p>
 
     <?php if (!empty($_SESSION['success'])): ?>
         <div class="alert-banner alert-success"><?php echo htmlspecialchars($_SESSION['success']); unset($_SESSION['success']); ?></div>
@@ -149,7 +156,7 @@ main { padding: 0 !important; margin: 0 !important; }
 
     <div class="platinum-hero">
         <h2><i class="fas fa-shield-alt" style="margin-right:10px"></i>Inpatient Support Cover</h2>
-        <p>Add Platinum to your principal package or to one corporate member package. The package owner and all of that package's covered dependants share one 20-day annual allowance.</p>
+        <p>Choose your principal package or one corporate member package. The package owner and all covered dependants share one 20-day annual allowance.</p>
         <div class="hero-badges">
             <span class="hero-pill"><i class="fas fa-calendar-check"></i>&nbsp; 20 days / year</span>
             <span class="hero-pill"><i class="fas fa-hourglass-half"></i>&nbsp; Maturity: 4-7 months</span>
@@ -157,17 +164,28 @@ main { padding: 0 !important; margin: 0 !important; }
         </div>
     </div>
 
+    <?php if ($hasActiveCoverage): ?>
+        <div class="hospital-action-card">
+            <div>
+                <h3><i class="fas fa-hospital" style="margin-right:8px"></i>Hospital Cover</h3>
+                <p>File an inpatient bed-cover request. If your cover is still maturing, the request form will show its unlock date.</p>
+            </div>
+            <a href="/inpatient-requests" class="hospital-action-button"><i class="fas fa-notes-medical"></i> File hospital cover request</a>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($requestablePrincipal || !empty($requestableCorporateMembers)): ?>
     <div class="request-card">
-        <h3>Request Platinum Cover</h3>
-        <p class="hint">Select the Basic coverage group. Its existing Platinum package rate is charged once; dependants do not add separate Platinum charges.</p>
+        <h3><?= $hasActiveCoverage ? 'Add Platinum for another coverage group' : 'Request Platinum Cover' ?></h3>
+        <p class="hint">Select the package group to cover.</p>
         <form method="post" action="/platinum/request">
             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
             <div class="form-row">
                 <div class="form-group">
                     <label for="coveredPersonType">Basic coverage group</label>
                     <select name="coverage_owner_type" id="coveredPersonType" required onchange="Platinum.togglePersonSelect(this.value)">
-                        <option value="principal">Principal package and its covered dependants</option>
-                        <option value="corporate_member">Corporate member package and its covered dependants</option>
+                        <?php if ($requestablePrincipal): ?><option value="principal">Principal package and its covered dependants</option><?php endif; ?>
+                        <?php if (!empty($requestableCorporateMembers)): ?><option value="corporate_member">Corporate member package and its covered dependants</option><?php endif; ?>
                     </select>
                 </div>
                 <div class="form-group" id="personSelectGroup" style="display:none">
@@ -175,7 +193,7 @@ main { padding: 0 !important; margin: 0 !important; }
                     <select name="coverage_owner_id" id="coveredPersonId">
                         <option value="">-- choose --</option>
                         <optgroup label="Corporate members" class="opt-corporate_member">
-                            <?php foreach ($corporateMembers as $c): ?>
+                            <?php foreach ($requestableCorporateMembers as $c): ?>
                                 <option value="<?php echo (int) $c['id']; ?>" data-type="corporate_member"><?php echo htmlspecialchars($c['label'] ?? 'Corporate member'); ?> — <?php echo htmlspecialchars($c['package_name'] ?? $c['package_key'] ?? 'Package'); ?></option>
                             <?php endforeach; ?>
                         </optgroup>
@@ -185,6 +203,7 @@ main { padding: 0 !important; margin: 0 !important; }
             <button type="submit" class="submit-btn"><i class="fas fa-paper-plane"></i> Submit for admin approval</button>
         </form>
     </div>
+    <?php endif; ?>
 
     <h3 class="section-title">Your Platinum coverage</h3>
     <?php if (empty($coverages)): ?>
@@ -217,9 +236,6 @@ main { padding: 0 !important; margin: 0 !important; }
                 </div>
                 <?php endif; ?>
                 <span class="status-badge" style="background:<?php echo $style['bg']; ?>;color:<?php echo $style['color']; ?>"><?php echo $style['label']; ?></span>
-                <?php if ($coverage['status'] === 'pending_payment'): ?>
-                    <button type="button" class="inpatient-link" style="border:none" onclick="Platinum.payNow(<?php echo (int) $coverage['id']; ?>, <?php echo (float) $coverage['monthly_contribution']; ?>, this)"><i class="fas fa-mobile-alt"></i> Exceptional separate payment</button>
-                <?php endif; ?>
                 <?php if ($coverage['status'] === 'active'): ?>
                     <a href="/inpatient-requests" class="inpatient-link"><i class="fas fa-notes-medical"></i> Inpatient requests</a>
                 <?php endif; ?>
@@ -247,63 +263,7 @@ Platinum.togglePersonSelect = function (type) {
     });
 };
 document.addEventListener('DOMContentLoaded', function () {
-    Platinum.togglePersonSelect(document.getElementById('coveredPersonType').value);
+    var typeSelect = document.getElementById('coveredPersonType');
+    if (typeSelect) Platinum.togglePersonSelect(typeSelect.value);
 });
-
-Platinum.payNow = async function (coverageId, amount, btn) {
-    var phone = prompt('Enter the M-Pesa phone number to pay KES ' + amount.toFixed(2) + ' (e.g. 07XXXXXXXX):', '<?php echo htmlspecialchars($member['phone'] ?? ''); ?>');
-    if (!phone) { return; }
-    var originalHtml = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
-    try {
-        var res = await fetch('/payment/initiate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                member_id: <?php echo (int) ($member['id'] ?? 0); ?>,
-                phone_number: phone,
-                amount: amount,
-                payment_type: 'platinum',
-                platinum_coverage_id: coverageId
-            })
-        });
-        var data = await res.json();
-        if (data.success) {
-            alert(data.message || 'STK Push sent! Check your phone to complete payment.');
-            Platinum.pollPayment(data.checkout_request_id, btn, originalHtml);
-        } else {
-            alert(data.error || 'Unable to initiate payment.');
-            btn.disabled = false;
-            btn.innerHTML = originalHtml;
-        }
-    } catch (e) {
-        alert('Network error. Please try again.');
-        btn.disabled = false;
-        btn.innerHTML = originalHtml;
-    }
-};
-
-Platinum.pollPayment = function (checkoutRequestId, btn, originalHtml) {
-    if (!checkoutRequestId) { btn.disabled = false; btn.innerHTML = originalHtml; return; }
-    var attempts = 0;
-    var interval = setInterval(async function () {
-        attempts++;
-        if (attempts > 30) { clearInterval(interval); btn.disabled = false; btn.innerHTML = originalHtml; return; }
-        try {
-            var res = await fetch('/payment/status?checkout_request_id=' + encodeURIComponent(checkoutRequestId));
-            var data = await res.json();
-            if (data.success && data.status && data.status.ResultCode !== undefined) {
-                clearInterval(interval);
-                if (String(data.status.ResultCode) === '0') {
-                    location.reload();
-                } else {
-                    alert(data.status.ResultDesc || 'Payment failed. Please retry.');
-                    btn.disabled = false;
-                    btn.innerHTML = originalHtml;
-                }
-            }
-        } catch (e) { /* keep polling */ }
-    }, 1000);
-};
 </script>

@@ -867,11 +867,7 @@ main {
                     <?php if ($platinumPending): ?>
                         <div class="platinum-gate-pending">
                             <i class="fas fa-hourglass-half"></i>
-                            <?php if ($platinumPendingStatus === 'pending_payment'): ?>
-                                You have a Platinum request awaiting payment. Complete the contribution to send it for approval.
-                            <?php else: ?>
-                                Your Platinum request is with our team for approval. We&rsquo;ll notify you by SMS once it&rsquo;s active.
-                            <?php endif; ?>
+                            Your Platinum request is with our team for approval. We&rsquo;ll notify you by SMS once it&rsquo;s active.
                         </div>
                     <?php endif; ?>
                     <div class="platinum-gate-actions">

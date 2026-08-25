@@ -1457,10 +1457,17 @@ $buildMemberTierUrl = function (string $targetTier) use ($search, $status, $pack
 <?php if ($tier !== 'all'): ?>
     <div class="tier-context-note <?php echo $tier === 'platinum' ? 'is-platinum' : ''; ?>">
         <?php if ($tier === 'platinum'): ?>
-            <i class="fas fa-gem"></i> Showing only members who hold SHENA Platinum (the inpatient bed-cover add-on) on top of their Basic membership.
+            <i class="fas fa-gem"></i> Showing only members with SHENA Platinum. Platinum replaces the Basic contribution for each selected coverage group.
         <?php else: ?>
             <i class="fas fa-shield-alt"></i> Showing Basic-only members. These accounts have no Platinum add-on &mdash; open a member to add one.
         <?php endif; ?>
+    </div>
+<?php endif; ?>
+
+<?php if ($tier === 'platinum' && !empty($pending_platinum_approvals)): ?>
+    <div style="margin:0 0 16px;padding:13px 16px;border:1px solid #DDD6FE;border-left:4px solid #7F3D9E;border-radius:10px;background:#FAF5FF;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap">
+        <span style="color:#4C1D95;font-weight:600"><i class="fas fa-hourglass-half"></i> <?= count($pending_platinum_approvals) ?> Platinum request<?= count($pending_platinum_approvals) === 1 ? '' : 's' ?> awaiting approval<?= count($pending_platinum_approvals) > 1 ? ' — including ' . htmlspecialchars($pending_platinum_approvals[0]['covered_person_name'] ?? 'a member') : '' ?>.</span>
+        <a href="/admin/platinum-requests" class="btn btn-primary btn-sm"><i class="fas fa-check-circle"></i> Review requests</a>
     </div>
 <?php endif; ?>
 
@@ -1747,7 +1754,7 @@ $buildMemberTierUrl = function (string $targetTier) use ($search, $status, $pack
                                             <?php if (($member['platinum_status'] ?? '') === 'active'): ?>
                                                 <span class="tier-badge is-platinum" title="Holds active SHENA Platinum cover"><i class="fas fa-gem"></i> Platinum</span>
                                             <?php else: ?>
-                                                <span class="tier-badge is-pending" title="Platinum requested, awaiting payment or approval"><i class="fas fa-hourglass-half"></i> Platinum pending</span>
+                                                <span class="tier-badge is-pending" title="Platinum request awaiting admin approval"><i class="fas fa-hourglass-half"></i> Platinum pending</span>
                                             <?php endif; ?>
                                         <?php else: ?>
                                             <span class="tier-badge is-basic">Basic</span>

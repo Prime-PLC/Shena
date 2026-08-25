@@ -276,6 +276,7 @@ class Router
         $this->addRoute('POST', '/admin/inpatient-requests/{id}/process', 'AdminController@processInpatientRequest');
         $this->addRoute('POST', '/admin/inpatient-requests/create', 'AdminController@submitInpatientRequestForMember');
         $this->addRoute('POST', '/admin/members/{id}/platinum/migrate', 'AdminController@migrateMemberToPlatinum');
+        $this->addRoute('POST', '/admin/members/{id}/platinum/revert', 'AdminController@revertMemberPlatinumToBasic');
         $this->addRoute('POST', '/admin/payouts/{id}/process', 'AdminController@processPayoutRequest');
 
 

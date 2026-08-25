@@ -116,8 +116,8 @@ $assertContains($memberDetailsView, 'id="dependantOverride"', 'Admin dependant f
 $assertContains($memberDetailsView, 'dependantRestrictions', 'Admin dependant confirmation should know when restrictions require override.');
 $assertContains($memberDetailsView, 'openDependantEdit', 'Dependant cards should expose an edit action.');
 $assertContains($memberDetailsView, 'deleteDependant', 'Dependant cards should expose a delete action.');
-$assertContains($memberDetailsView, 'editCorporateMember', 'Corporate cards should expose an edit action.');
-$assertContains($memberDetailsView, 'deleteCorporateMember', 'Corporate cards should expose a delete action.');
+$assertContains($memberDetailsView, 'openCorporateEditor', 'Corporate management should use an intentional edit action.');
+$assertContains($memberDetailsView, 'Edit Corporate Members', 'Corporate members should be listed before editing.');
 $assertContains($memberDetailsView, 'updateDependantDobConstraints', 'Admin dependant date picker should react to relationship selection.');
 $assertContains($memberDetailsView, "if (relation === 'child')", 'Child dependant selection should loosen the adult-only DOB constraint.');
 $assertContains($memberDetailsView, 'Children must be below 18 years old.', 'Child dependant DOB guidance should allow ages below 18.');

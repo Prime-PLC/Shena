@@ -1576,7 +1576,7 @@ class AuthController extends BaseController
                             'member_id' => $memberId,
                             'covered_person_type' => 'principal',
                             'covered_person_id' => null,
-                            'status' => 'pending_payment',
+                            'status' => 'pending_approval',
                             'package_key' => $quote['package_key'],
                             'package_name' => $quote['package_name'],
                             'monthly_contribution' => $quote['amount'],

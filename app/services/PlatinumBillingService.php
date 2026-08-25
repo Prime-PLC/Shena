@@ -16,9 +16,20 @@ class PlatinumBillingService
 
     public function monthlyAmount(array $member): float
     {
+        return $this->accountSummary($member)['total'];
+    }
+
+    /** Return the account-wide payable amount without overwriting Basic history. */
+    public function accountSummary(array $member): array
+    {
         $coverages = $this->coveragesForMember((int) $member['id']);
-        return $this->basicDueAfterPlatinumReplacement($member, $coverages)
-            + $this->platinumDue($coverages);
+        $basicDue = $this->basicDueAfterPlatinumReplacement($member, $coverages);
+        $platinumDue = $this->platinumDue($coverages);
+        return [
+            'basic_due' => $basicDue,
+            'platinum_due' => $platinumDue,
+            'total' => $basicDue + $platinumDue,
+        ];
     }
 
     public function applyMonthlyPayment(int $paymentId, int $memberId, string $paidAt = ''): array
@@ -53,10 +64,6 @@ class PlatinumBillingService
                 ]);
             }
             $update = ['last_payment_at' => $date, 'payment_reference' => $payment['mpesa_receipt_number'] ?? null];
-            if ($coverage['status'] === 'pending_payment' && $amount >= $due) {
-                $update['status'] = 'pending_approval';
-                $update['requested_at'] = $date;
-            }
             $this->db->update('platinum_coverages', $update, 'id = :id', ['id' => $coverage['id']]);
             $allocated += $amount;
             $remaining -= $amount;
@@ -69,7 +76,7 @@ class PlatinumBillingService
     {
         return $this->db->fetchAll(
             "SELECT * FROM platinum_coverages WHERE member_id = :member_id
-             AND status IN ('pending_payment', 'pending_approval', 'active') ORDER BY id ASC",
+             AND status = 'active' ORDER BY id ASC",
             ['member_id' => $memberId]
         );
     }
@@ -80,17 +87,18 @@ class PlatinumBillingService
     }
 
     /**
-     * members.monthly_contribution remains the stored Basic account total. For
-     * every Platinum group, remove that group's Basic amount before adding its
-     * Platinum price. This keeps the Basic record/history intact while charging
-     * Platinum as a replacement tier, never as a second contribution.
+     * Calculate the current Basic amount from the selected principal and active
+     * corporate packages. This deliberately does not rely on the stored member
+     * total: older accounts can still contain deleted legacy "medical" line
+     * items in members.monthly_contribution. Every Platinum group replaces its
+     * own Basic price, never adds a second contribution.
      */
     private function basicDueAfterPlatinumReplacement(array $member, array $coverages): float
     {
         $memberId = (int) ($member['id'] ?? 0);
-        $accountBasicTotal = max(0, (float) ($member['monthly_contribution'] ?? 0));
-        if ($memberId < 1 || !$coverages) {
-            return $accountBasicTotal;
+        $storedAccountBasicTotal = max(0, (float) ($member['monthly_contribution'] ?? 0));
+        if ($memberId < 1) {
+            return $storedAccountBasicTotal;
         }
 
         $corporateGroups = $this->db->fetchAll(
@@ -98,14 +106,34 @@ class PlatinumBillingService
              WHERE member_id = :member_id AND status = 'active'",
             ['member_id' => $memberId]
         );
+        $membershipPackages = $GLOBALS['membership_packages'] ?? [];
+        $principalAmount = MembershipPricingService::resolveSelectedPackageAmount(
+            (string) ($member['package_key'] ?? $member['package'] ?? ''),
+            $membershipPackages
+        );
         $corporateAmounts = [];
         $corporateTotal = 0.0;
         foreach ($corporateGroups as $corporate) {
-            $amount = max(0, (float) ($corporate['monthly_contribution'] ?? 0));
+            $amount = MembershipPricingService::resolveSelectedPackageAmount(
+                (string) ($corporate['package_key'] ?? ''),
+                $membershipPackages
+            );
+            if ($amount <= 0) {
+                $amount = max(0, (float) ($corporate['monthly_contribution'] ?? 0));
+            }
             $corporateAmounts[(int) $corporate['id']] = $amount;
             $corporateTotal += $amount;
         }
-        $principalBasic = max(0, $accountBasicTotal - $corporateTotal);
+        // Old records without a package key retain their stored amount as a
+        // compatibility fallback. Current records always use the package rate.
+        if ($principalAmount <= 0) {
+            $principalAmount = max(0, $storedAccountBasicTotal - $corporateTotal);
+        }
+        $accountBasicTotal = $principalAmount + $corporateTotal;
+        if (!$coverages) {
+            return $accountBasicTotal;
+        }
+        $principalBasic = $principalAmount;
         $replacedBasic = 0.0;
         $principalReplaced = false;
         foreach ($coverages as $coverage) {
