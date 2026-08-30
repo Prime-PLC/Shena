@@ -800,13 +800,13 @@ class MemberController extends BaseController
 
             $package = $membership_packages[$packageId];
             $packageType = $this->memberModel->normalizePackageTier($packageId, $package);
-            $memberForCalc = [
-                'date_of_birth'         => $member['date_of_birth'],
-                'package'               => $packageId,
-                'package_key'           => $packageId,
-                'corporate_couple_count' => 0
-            ];
-            $monthlyContribution = $this->memberModel->calculateMonthlyContribution($memberForCalc, []);
+            $corporateMembers = (new MemberCorporateMember())->getActiveForMember((int)$member['id']);
+            $accountContribution = MembershipPricingService::calculateAccountMonthlyContribution(
+                $packageId,
+                $corporateMembers,
+                $membership_packages
+            );
+            $monthlyContribution = (float)$accountContribution['total_amount'];
 
             $this->memberModel->update($member['id'], [
                 'package'             => $packageType,
@@ -814,27 +814,40 @@ class MemberController extends BaseController
                 'monthly_contribution' => $monthlyContribution,
             ]);
 
-            // Platinum selected alongside the Basic package and charged as its replacement tier.
+            // Platinum is always quoted from this selected package and the
+            // principal owner's age; it replaces only this package group.
             $platinumInfo = null;
-            if (($_POST['platinum_opt_in'] ?? '') === '1') {
+            $coverage = new PlatinumCoverage();
+            $existing = $coverage->getCoverage((int) $member['id'], 'principal', null);
+            $hasCurrentPlatinum = $existing && in_array($existing['status'], ['pending_payment', 'pending_approval', 'active'], true);
+            if (($_POST['platinum_opt_in'] ?? '') === '1' || $hasCurrentPlatinum) {
                 $dobForAge = $member['date_of_birth'] ?? ($_POST['date_of_birth'] ?? null);
-                $age = $this->platinumAge($dobForAge);
-                $platinumMonthly = $this->platinumMonthlyContribution($age);
-                if ($platinumMonthly !== null) {
-                    $coverage = new PlatinumCoverage();
-                    $existing = $coverage->getCoverage((int) $member['id'], 'principal', null);
-                    if (!$existing || !in_array($existing['status'], ['pending_payment', 'pending_approval', 'active'], true)) {
+                $quote = (new PlatinumPricingService())->quote($packageId, $dobForAge);
+                if ($quote) {
+                    $coverageFields = [
+                        'monthly_contribution' => $quote['amount'],
+                        'maturity_months' => $quote['maturity_months'],
+                        'package_key' => $quote['package_key'],
+                        'package_name' => $quote['package_name'],
+                    ];
+                    if (!$hasCurrentPlatinum) {
                         $this->db->insert('platinum_coverages', [
                             'member_id' => $member['id'],
                             'covered_person_type' => 'principal',
                             'covered_person_id' => null,
                             'status' => 'pending_approval',
-                            'monthly_contribution' => $platinumMonthly,
-                            'maturity_months' => $this->platinumMaturityMonths($age),
+                            'monthly_contribution' => $quote['amount'],
+                            'maturity_months' => $quote['maturity_months'],
+                            'package_key' => $quote['package_key'],
+                            'package_name' => $quote['package_name'],
                             'requested_at' => date('Y-m-d H:i:s'),
                         ]);
+                    } else {
+                        // A package change reprices an existing request/cover,
+                        // without resetting maturity on an active cover.
+                        $this->db->update('platinum_coverages', $coverageFields, 'id = :id', ['id' => $existing['id']]);
                     }
-                    $platinumInfo = ['monthly_contribution' => $platinumMonthly];
+                    $platinumInfo = ['monthly_contribution' => $quote['amount']];
                 }
             }
 
@@ -1395,30 +1408,9 @@ class MemberController extends BaseController
             $beneficiaryId = $this->beneficiaryModel->addBeneficiary($beneficiaryData);
             error_log('Beneficiary added with ID: ' . $beneficiaryId);
 
-            // Recalculate member's monthly contribution now that a beneficiary (dependent) was added
-            try {
-                $oldMonthly = (int)($member['monthly_contribution'] ?? 0);
-                $beneficiaries = $this->beneficiaryModel->getActiveBeneficiaries($member['id']);
-                $dependents = $beneficiaries ?: [];
-                $memberForCalc = [
-                    'date_of_birth' => $member['date_of_birth'] ?? null,
-                    'package_key' => $member['package_key'] ?? null,
-                    'package' => $member['package'] ?? null
-                ];
-                $newMonthly = $this->memberModel->calculateMonthlyContribution($memberForCalc, $dependents);
-                $this->memberModel->update($member['id'], ['monthly_contribution' => $newMonthly]);
-                error_log('Member monthly contribution updated to: ' . $newMonthly);
-
-                if ($newMonthly > $oldMonthly) {
-                    $increase = $newMonthly - $oldMonthly;
-                    $_SESSION['success'] = 'Beneficiary added successfully. Monthly contribution increased by KES ' . number_format($increase) . ' (new total: KES ' . number_format($newMonthly) . ').';
-                } else {
-                    $_SESSION['success'] = 'Beneficiary added successfully.';
-                }
-            } catch (Exception $e) {
-                error_log('Failed to recalc monthly contribution after adding beneficiary: ' . $e->getMessage());
-                $_SESSION['success'] = 'Beneficiary added successfully.';
-            }
+            // Dependants inherit their owner's selected package. They never
+            // change the principal/corporate contribution or Platinum price.
+            $_SESSION['success'] = 'Beneficiary added successfully.';
             
         } catch (Exception $e) {
             error_log('Add beneficiary error: ' . $e->getMessage());

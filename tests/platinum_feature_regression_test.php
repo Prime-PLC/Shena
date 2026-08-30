@@ -46,6 +46,15 @@ $checks = [
         'platinumMigrationOptions',
         'revertMemberPlatinumToBasic',
     ],
+    'app/controllers/MemberController.php' => [
+        'MembershipPricingService::calculateAccountMonthlyContribution',
+        "(new PlatinumPricingService())->quote(\$packageId, \$dobForAge)",
+        'Dependants inherit their owner',
+    ],
+    'app/services/PaymentStatusService.php' => [
+        'liveMonthlyContribution',
+        'PlatinumBillingService',
+    ],
     'database/migrations/023_legacy_medical_placeholder_audit.sql' => [
         'legacy_medical_corporate_archive',
         'This migration deliberately does not move or delete member data.',

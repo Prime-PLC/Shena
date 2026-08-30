@@ -327,7 +327,8 @@ class PaymentService
                          // Enforce minimum arrears calculation if detailed logic needed
                          // For now, valid payment check:
                          $reactivationFee = defined('REACTIVATION_FEE') ? REACTIVATION_FEE : 100;
-                         $monthlyContribution = $member['monthly_contribution'];
+                         require_once __DIR__ . '/PlatinumBillingService.php';
+                         $monthlyContribution = (new PlatinumBillingService())->monthlyAmount($member);
                          
                          $arrearsAmount = $monthsMissed * $monthlyContribution;
                          $totalRequired = $arrearsAmount + $reactivationFee;

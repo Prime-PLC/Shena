@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/PlatinumBillingService.php';
 /**
  * PaymentStatusService
  *
@@ -12,6 +13,7 @@ class PaymentStatusService
 
     private $db;
     private $memberColumns = null;
+    private $liveContributionCache = [];
 
     public function __construct()
     {
@@ -122,7 +124,7 @@ class PaymentStatusService
     public function buildMonthlyPaymentSnapshot(array $member, array $payments, ?DateTime $asOf = null): array
     {
         $asOf = $asOf ?: new DateTime('today');
-        $monthlyContribution = max(0, (float)($member['monthly_contribution'] ?? 0));
+        $monthlyContribution = $this->liveMonthlyContribution($member);
         $monthStart = $asOf->format('Y-m-01 00:00:00');
         $monthEnd = $asOf->format('Y-m-t 23:59:59');
         $deadlinePassed = (int)$asOf->format('j') >= self::PAYMENT_DEADLINE_DAY;
@@ -293,7 +295,7 @@ class PaymentStatusService
 
     private function calculateContributionShortfall(array $member, array $payments, DateTime $asOf): array
     {
-        $monthlyContribution = max(0, (float)($member['monthly_contribution'] ?? 0));
+        $monthlyContribution = $this->liveMonthlyContribution($member);
         if ($monthlyContribution <= 0) {
             return ['missed_months' => 0, 'arrears_amount' => 0.0];
         }
@@ -342,7 +344,7 @@ class PaymentStatusService
     public function buildContributionCoverageSnapshot(array $member, array $payments, ?DateTime $asOf = null): array
     {
         $asOf = $asOf ?: new DateTime('today');
-        $monthlyContribution = max(0, (float)($member['monthly_contribution'] ?? 0));
+        $monthlyContribution = $this->liveMonthlyContribution($member);
         if ($monthlyContribution <= 0) {
             return ['coverage_balance_due' => 0.0, 'contribution_credit' => 0.0, 'covered_through' => null];
         }
@@ -392,6 +394,26 @@ class PaymentStatusService
         }
 
         return in_array($type, ['monthly', 'contribution', 'monthly_contribution'], true);
+    }
+
+    /** Use active Platinum replacement totals for payment status and reminders. */
+    private function liveMonthlyContribution(array $member): float
+    {
+        $memberId = (int)($member['id'] ?? 0);
+        if ($memberId > 0 && array_key_exists($memberId, $this->liveContributionCache)) {
+            return $this->liveContributionCache[$memberId];
+        }
+
+        $fallback = max(0, (float)($member['monthly_contribution'] ?? 0));
+        try {
+            $amount = max(0, (new PlatinumBillingService())->monthlyAmount($member));
+        } catch (Throwable $e) {
+            $amount = $fallback;
+        }
+        if ($memberId > 0) {
+            $this->liveContributionCache[$memberId] = $amount;
+        }
+        return $amount;
     }
 
     private function emptySummary(): array

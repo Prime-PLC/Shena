@@ -1594,17 +1594,6 @@ class AdminController extends BaseController
                 'percentage' => 0,
             ]);
 
-            $previousMonthlyContribution = (float) ($member['monthly_contribution'] ?? 0);
-            $updatedDependants = $this->beneficiaryModel->getActiveBeneficiaries((int) $id) ?: [];
-            $newMonthlyContribution = (float) $this->memberModel->calculateMonthlyContribution($member, $updatedDependants);
-            if (abs($newMonthlyContribution - $previousMonthlyContribution) >= 0.01) {
-                $this->memberModel->update((int) $id, ['monthly_contribution' => $newMonthlyContribution]);
-                $memberWithUser = $this->memberModel->getMemberWithUser((int) $id);
-                if ($memberWithUser) {
-                    $this->notifyContributionChange($memberWithUser, $previousMonthlyContribution, $newMonthlyContribution);
-                }
-            }
-
             $_SESSION['success_message'] = 'Dependant added successfully.';
         } catch (Throwable $e) {
             error_log('Failed to add dependant: ' . $e->getMessage());

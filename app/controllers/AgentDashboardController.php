@@ -1040,24 +1040,8 @@ class AgentDashboardController extends BaseController
         $dependentData['relationship'] = (string)($policy['relationship'] ?? $dependentData['relationship']);
 
         try {
-            $oldMonthly = (int)($member['monthly_contribution'] ?? 0);
             $this->beneficiaryModel->addBeneficiary($dependentData);
-
-            $dependents = $this->beneficiaryModel->getActiveBeneficiaries($memberId);
-            $memberForCalc = [
-                'date_of_birth' => $member['date_of_birth'] ?? null,
-                'package_key' => $member['package_key'] ?? null,
-                'package' => $member['package'] ?? null
-            ];
-            $newMonthly = $this->memberModel->calculateMonthlyContribution($memberForCalc, $dependents ?: []);
-            $this->memberModel->update($memberId, ['monthly_contribution' => $newMonthly]);
-
-            if ($newMonthly > $oldMonthly) {
-                $increase = $newMonthly - $oldMonthly;
-                $_SESSION['success'] = 'Dependent added successfully. Monthly contribution increased by KES ' . number_format($increase) . ' (new total: KES ' . number_format($newMonthly) . ').';
-            } else {
-                $_SESSION['success'] = 'Dependent added successfully.';
-            }
+            $_SESSION['success'] = 'Dependent added successfully.';
         } catch (Exception $e) {
             $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Failed to add dependent.');
         }
