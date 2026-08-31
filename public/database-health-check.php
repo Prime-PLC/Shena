@@ -5,7 +5,7 @@ declare(strict_types=1);
  * Read-only production schema check.
  *
  * Set DB_HEALTH_CHECK_TOKEN to a long, random value in the production .env,
- * then open /database-health-check.php?token=that-value while logged out of
+ * then open /public/database-health-check.php?token=that-value while logged out of
  * any shared screen. Delete this file after the verification is complete.
  */
 
@@ -66,13 +66,14 @@ try {
 
     $requiredSchema = [
         'member_corporate_members' => ['member_id', 'package_key', 'monthly_contribution', 'date_of_birth'],
-        'platinum_coverages' => ['member_id', 'covered_person_type', 'package_key', 'package_name', 'monthly_contribution', 'status', 'approved_at'],
+        'platinum_coverages' => ['member_id', 'covered_person_type', 'package_key', 'package_name', 'monthly_contribution', 'status', 'approved_at', 'payment_reference', 'last_payment_at', 'activation_method', 'override_reason', 'override_by', 'override_at'],
         'platinum_day_ledgers' => ['platinum_coverage_id', 'calendar_year', 'annual_limit'],
         'platinum_payment_allocations' => ['payment_id', 'platinum_coverage_id', 'allocated_amount', 'allocation_month'],
-        'inpatient_requests' => ['platinum_coverage_id', 'covered_person_type', 'covered_person_id'],
+        'inpatient_requests' => ['platinum_coverage_id', 'covered_person_type', 'covered_person_id', 'admin_created', 'created_by', 'eligibility_override_reason'],
         'legacy_medical_corporate_archive' => ['legacy_corporate_member_id'],
         'payments' => ['payment_type', 'platinum_coverage_id'],
         'beneficiaries' => ['coverage_owner_type', 'coverage_owner_id'],
+        'claims' => ['admin_created'],
         'bulk_messages' => ['status', 'total_recipients', 'submitted_count', 'delivered_count'],
         'bulk_message_recipients' => ['bulk_message_id', 'status', 'processing_token', 'provider_message_id', 'submitted_at', 'delivered_at'],
         'sms_queue' => ['status'],
@@ -90,12 +91,24 @@ try {
         }
     }
 
+    $pendingPaymentRequests = 0;
+    if (schemaTableExists($pdo, 'platinum_coverages') && schemaColumnExists($pdo, 'platinum_coverages', 'status')) {
+        $pendingPaymentRequests = (int) $pdo->query("SELECT COUNT(*) FROM platinum_coverages WHERE status = 'pending_payment'")->fetchColumn();
+    }
+    $schemaCurrent = empty($missingSchema) && $pendingPaymentRequests === 0;
+    $ledgerCurrent = $hasLedger && empty($missingTrackedMigrations);
+    $ledgerRepairSql = null;
+    if ($schemaCurrent && $hasLedger && !empty($missingTrackedMigrations)) {
+        $values = array_map(static fn(string $migration): string => "('" . str_replace("'", "''", $migration) . "')", $missingTrackedMigrations);
+        $ledgerRepairSql = 'INSERT IGNORE INTO schema_migrations (migration) VALUES ' . implode(', ', $values) . ';';
+    }
+
     $migrationFiles = glob(ROOT_PATH . '/database/migrations/*.{sql,php}', GLOB_BRACE) ?: [];
     $repositoryMigrations = array_map('basename', $migrationFiles);
     sort($repositoryMigrations);
     $untrackedRepositoryMigrations = array_values(array_diff($repositoryMigrations, $trackedManifest));
 
-    $ok = $hasLedger && empty($missingTrackedMigrations) && empty($missingSchema);
+    $ok = $schemaCurrent;
     http_response_code($ok ? 200 : 503);
     echo json_encode([
         'ok' => $ok,
@@ -103,17 +116,29 @@ try {
         'checked_at_utc' => gmdate('c'),
         'tracked_manifest' => [
             'ledger_present' => $hasLedger,
+            'ledger_current' => $ledgerCurrent,
             'required' => $trackedManifest,
             'missing_records' => $missingTrackedMigrations,
         ],
         'required_schema' => [
+            'current' => $schemaCurrent,
             'missing' => $missingSchema,
+        ],
+        'data_checks' => [
+            'pending_payment_platinum_requests' => $pendingPaymentRequests,
+        ],
+        'ledger_repair' => $ledgerRepairSql === null ? null : [
+            'required' => true,
+            'reason' => 'The schema and approval-only data state are current, but these migrations were applied without ledger records. Do not rerun their ALTER TABLE statements.',
+            'phpmyadmin_sql_after_backup' => $ledgerRepairSql,
         ],
         'repository_history_note' => 'Only migrations 018-024 are recorded by the supplied deployment runner. The following older files have no reliable application ledger and require schema-based/manual review; do not run them merely because they appear here.',
         'repository_migrations_not_ledger_verified' => $untrackedRepositoryMigrations,
-        'next_step' => $ok
-            ? 'Tracked Platinum/SMS schema requirements are present.'
-            : 'Do not deploy or run migrations from this page. Apply the reported migration/schema fix through a reviewed deployment, then run this check again.',
+        'next_step' => !$schemaCurrent
+            ? 'Do not deploy or run migrations from this page. Apply the reported schema/data fix through a reviewed deployment, then run this check again.'
+            : ($ledgerCurrent
+                ? 'Platinum/SMS schema and tracked migration ledger are current.'
+                : 'Schema is current. Back up the database, then use the displayed ledger-repair SQL in phpMyAdmin; do not rerun migrations 019-024.'),
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $exception) {
     http_response_code(503);
