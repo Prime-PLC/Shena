@@ -92,4 +92,14 @@ if (!file_exists($migrationPath)) {
 $lockMigration = file_get_contents($migrationPath);
 $assertContains($lockMigration, "'processing'", 'recipient status enum should include processing for send locks');
 
+$assertContains($service, 'resumePausedCampaign(int $bulkMessageId)', 'paused campaigns should have a non-sending resume path for scheduled/draft lifecycle state.');
+$assertContains($controller, 'Payment Breakdown campaigns must keep their original payment audience.', 'editing a Payment Breakdown draft must not permit an audience change.');
+$assertContains($controller, "status IN ('draft', 'scheduled', 'sending')", 'draft and scheduled campaigns should be pausable before sending.');
+$assertContains($router, '/admin/communications/resume-campaign', 'router should expose an explicit campaign resume route.');
+$assertContains($listView, 'createCampaignPanel', 'SMS campaign creation should be an inline page composer.');
+$assertContains($listView, 'openCreateCampaignForm', 'Create Campaign controls should open the inline composer.');
+$assertNotContains($listView, 'createCampaignModal', 'SMS campaign creation should not use the legacy modal.');
+$assertContains($listView, 'edit-payment-audience-lock', 'Payment Breakdown campaign edits should visibly lock their audience.');
+$assertContains($listView, '/admin/communications/resume-campaign', 'paused campaigns should use the explicit resume route.');
+$assertNotContains($service, "\$campaign['target_audience'] ?? 'all_members'", 'reused campaigns must fail closed instead of falling back to all members.');
 echo "SMS campaign scheduler regression checks passed.\n";

@@ -338,7 +338,7 @@ class BulkSmsController extends BaseController
         
         header('Content-Type: application/json');
         
-        $rawTargetAudience = $_GET['target_audience'] ?? 'all_members';
+        $rawTargetAudience = $_GET['target_audience'] ?? '';
         $targetAudience = $this->normalizeTargetAudience($rawTargetAudience);
         $customFilters = $this->extractCustomFilters($_GET);
 
@@ -1210,6 +1210,15 @@ class BulkSmsController extends BaseController
                 throw new Exception('Campaign ID, title, and message are required');
             }
 
+            $existingStatement = $this->db->getConnection()->prepare("SELECT target_audience, custom_filters FROM bulk_messages WHERE id = ? AND message_type = 'sms' LIMIT 1");
+            $existingStatement->execute([$campaignId]);
+            $existingCampaign = $existingStatement->fetch(PDO::FETCH_ASSOC);
+            if (!$existingCampaign) {
+                throw new Exception('Campaign not found');
+            }
+            $existingFilters = !empty($existingCampaign['custom_filters']) ? json_decode((string)$existingCampaign['custom_filters'], true) : [];
+            $existingFilters = is_array($existingFilters) ? $existingFilters : [];
+            $lockedPaymentGroup = trim((string)($existingFilters['payment_group'] ?? ''));
             if ($rawTargetAudience === '') {
                 // Never silently widen an edited campaign's audience to all_members;
                 // reject the edit instead so filtered/payment-breakdown campaigns can't
@@ -1217,7 +1226,17 @@ class BulkSmsController extends BaseController
                 throw new Exception('Target audience is required');
             }
 
+            if ($lockedPaymentGroup !== '') {
+                $expectedAudience = 'payment_' . $lockedPaymentGroup;
+                if ($targetAudience !== $expectedAudience) {
+                    throw new Exception('Payment Breakdown campaigns must keep their original payment audience.');
+                }
+            }
             $customFilters = $this->extractCustomFilters($input);
+            if ($lockedPaymentGroup !== '') {
+                $customFilters['payment_group'] = $lockedPaymentGroup;
+                $customFilters['recipient_mode'] = $existingFilters['recipient_mode'] ?? 'refresh recipients';
+            }
 
             $setClauses = [
                 'title = ?',
@@ -1325,7 +1344,7 @@ class BulkSmsController extends BaseController
             }
 
             $sql = "UPDATE bulk_messages SET " . implode(', ', $setClauses) . "
-                    WHERE id = ? AND status = 'sending'";
+                    WHERE id = ? AND status IN ('draft', 'scheduled', 'sending')";
             $stmt = $this->db->getConnection()->prepare($sql);
             $stmt->execute([$campaignId]);
             
@@ -1341,6 +1360,27 @@ class BulkSmsController extends BaseController
         }
     }
     
+    /** Resume a paused campaign without widening its audience or rebuilding its recipient queue. */
+    public function resumeCampaign()
+    {
+        $this->requireRole(['admin', 'super_admin', 'manager']);
+        header('Content-Type: application/json');
+
+        try {
+            $input = json_decode(file_get_contents('php://input'), true) ?: [];
+            $campaignId = (int)($input['campaign_id'] ?? 0);
+            if ($campaignId <= 0) {
+                throw new Exception('Campaign ID is required');
+            }
+            if (!$this->bulkSmsService->resumePausedCampaign($campaignId)) {
+                throw new Exception('Campaign not found or is not paused');
+            }
+            $this->json(['success' => true, 'message' => 'Campaign resumed']);
+        } catch (Throwable $e) {
+            error_log('Resume campaign error: ' . $e->getMessage());
+            $this->json(['success' => false, 'message' => $e->getMessage()], 400);
+        }
+    }
     /**
      * Reschedule campaign
      */

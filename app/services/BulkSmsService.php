@@ -610,6 +610,19 @@ class BulkSmsService
         return $stmt->rowCount() > 0;
     }
 
+    public function resumePausedCampaign(int $bulkMessageId): bool
+    {
+        $stmt = $this->db->prepare("UPDATE bulk_messages
+            SET status = CASE
+                WHEN started_at IS NOT NULL THEN 'sending'
+                WHEN scheduled_at IS NOT NULL THEN 'scheduled'
+                ELSE 'draft'
+            END
+            WHERE id = ? AND status = 'paused'");
+        $stmt->execute([$bulkMessageId]);
+
+        return $stmt->rowCount() > 0;
+    }
     public function resumePausedCampaignForManualSend(int $bulkMessageId): bool
     {
         $stmt = $this->db->prepare("UPDATE bulk_messages SET status = 'sending' WHERE id = ? AND status = 'paused'");
@@ -1271,7 +1284,7 @@ class BulkSmsService
         $newCampaignId = $this->createCampaign([
             'title' => 'Copy of ' . ($campaign['title'] ?? 'SMS Campaign'),
             'message' => $campaign['message'] ?? '',
-            'target_audience' => $campaign['target_audience'] ?? 'all_members',
+            'target_audience' => $campaign['target_audience'] ?? '',
             'custom_filters' => $filters + ['recipient_mode' => 'refresh recipients'],
             'scheduled_at' => null,
         ], $createdBy);
@@ -1280,7 +1293,7 @@ class BulkSmsService
             return false;
         }
 
-        $recipients = $this->getRecipients($campaign['target_audience'] ?? 'all_members', $filters);
+        $recipients = $this->getRecipients($campaign['target_audience'] ?? '', $filters);
         if (!empty($recipients)) {
             $this->queueRecipients($newCampaignId, $recipients);
         }

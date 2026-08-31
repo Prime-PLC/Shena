@@ -188,6 +188,7 @@ class Router
         $this->addRoute('POST', '/admin/communications/send-now', 'BulkSmsController@sendNow');
         $this->addRoute('POST', '/admin/communications/edit-campaign', 'BulkSmsController@editCampaign');
         $this->addRoute('POST', '/admin/communications/pause-campaign', 'BulkSmsController@pauseCampaign');
+        $this->addRoute('POST', '/admin/communications/resume-campaign', 'BulkSmsController@resumeCampaign');
         $this->addRoute('POST', '/admin/communications/reschedule', 'BulkSmsController@reschedule');
         $this->addRoute('POST', '/admin/communications/send-queue-item', 'BulkSmsController@sendQueueItem');
         $this->addRoute('POST', '/admin/communications/retry-queue-item', 'BulkSmsController@retryQueueItem');
