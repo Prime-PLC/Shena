@@ -19,6 +19,11 @@ foreach ($quotes as [$packageKey, $dateOfBirth, $expectedAmount]) {
         $failed = true;
     }
 }
+$invalidPackageAge = $pricing->quote('individual_71_80', '1990-01-01');
+if ($invalidPackageAge !== null) {
+    fwrite(STDERR, "A Platinum conversion must reject a member outside the selected Basic package age range.\n");
+    $failed = true;
+}
 
 $checks = [
     'app/controllers/AuthController.php' => [
@@ -29,7 +34,7 @@ $checks = [
         'name="package_id"',
         'name="platinum_opt_in"',
         'id="productSummary"',
-        'function platinumPrice(age)',
+        'function platinumPrice(age, coverageType)',
     ],
     'resources/views/agent/register-member.php' => [
         'agentPlatinumPanel',

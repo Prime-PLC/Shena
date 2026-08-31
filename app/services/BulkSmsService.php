@@ -1366,7 +1366,8 @@ class BulkSmsService
         $sql = "UPDATE bulk_messages SET status = 'cancelled' WHERE id = ?
                 AND status IN ('draft', 'scheduled', 'paused')";
         $stmt = $this->db->prepare($sql);
-        return $stmt->execute([$campaignId]);
+        $stmt->execute([$campaignId]);
+        return $stmt->rowCount() > 0;
     }
 
     public function updateScheduledAt($campaignId, $scheduledAt)

@@ -125,10 +125,11 @@ class PaymentStatusService
     {
         $asOf = $asOf ?: new DateTime('today');
         $monthlyContribution = $this->liveMonthlyContribution($member);
-        $monthStart = $asOf->format('Y-m-01 00:00:00');
-        $monthEnd = $asOf->format('Y-m-t 23:59:59');
         $deadlinePassed = (int)$asOf->format('j') >= self::PAYMENT_DEADLINE_DAY;
-        $paidThisMonth = 0.0;
+        $allocation = $this->buildContributionAllocationSnapshot($member, $payments, $asOf);
+        $currentMonth = $asOf->format('Y-m-01');
+        $currentPeriod = $allocation['periods'][$currentMonth] ?? ['paid' => 0.0];
+        $paidThisMonth = (float)$currentPeriod['paid'];
         $lastPaymentDate = null;
         $lastPaymentAmount = 0.0;
 
@@ -143,9 +144,6 @@ class PaymentStatusService
             if ($lastPaymentDate === null || strtotime($paymentDate) > strtotime($lastPaymentDate)) {
                 $lastPaymentDate = $paymentDate;
                 $lastPaymentAmount = (float)($payment['amount'] ?? 0);
-            }
-            if ($paymentDate >= $monthStart && $paymentDate <= $monthEnd) {
-                $paidThisMonth += (float)($payment['amount'] ?? 0);
             }
         }
 
@@ -295,39 +293,19 @@ class PaymentStatusService
 
     private function calculateContributionShortfall(array $member, array $payments, DateTime $asOf): array
     {
-        $monthlyContribution = $this->liveMonthlyContribution($member);
-        if ($monthlyContribution <= 0) {
-            return ['missed_months' => 0, 'arrears_amount' => 0.0];
-        }
-
-        $createdAt = $member['created_at'] ?? $asOf->format('Y-m-d');
-        $start = new DateTime(date('Y-m-01', strtotime($createdAt)));
-        $cursor = clone $start;
+        $allocation = $this->buildContributionAllocationSnapshot($member, $payments, $asOf);
         $missed = 0;
         $arrearsAmount = 0.0;
 
-        while ($cursor <= $asOf) {
-            $periodEnd = (clone $cursor)->modify('last day of this month')->setTime(23, 59, 59);
-            $deadline = (clone $cursor)->setDate((int)$cursor->format('Y'), (int)$cursor->format('n'), self::PAYMENT_DEADLINE_DAY);
-            if ($deadline > $asOf) {
-                break;
+        foreach ($allocation['periods'] as $period) {
+            if (empty($period['deadline_passed'])) {
+                continue;
             }
-
-            $paid = 0.0;
-            foreach ($payments as $payment) {
-                if (($payment['status'] ?? '') !== 'completed' || !$this->isContributionPayment($payment)) {
-                    continue;
-                }
-                $paymentDate = $payment['payment_date'] ?? $payment['created_at'] ?? null;
-                if ($paymentDate && $paymentDate >= $cursor->format('Y-m-d 00:00:00') && $paymentDate <= $periodEnd->format('Y-m-d H:i:s')) {
-                    $paid += (float)($payment['amount'] ?? 0);
-                }
-            }
-            if ($paid < $monthlyContribution) {
+            $shortfall = max(0, (float)$period['required'] - (float)$period['paid']);
+            if ($shortfall > 0) {
                 $missed++;
-                $arrearsAmount += ($monthlyContribution - $paid);
+                $arrearsAmount += $shortfall;
             }
-            $cursor->modify('first day of next month');
         }
 
         return [
@@ -344,39 +322,35 @@ class PaymentStatusService
     public function buildContributionCoverageSnapshot(array $member, array $payments, ?DateTime $asOf = null): array
     {
         $asOf = $asOf ?: new DateTime('today');
-        $monthlyContribution = $this->liveMonthlyContribution($member);
-        if ($monthlyContribution <= 0) {
-            return ['coverage_balance_due' => 0.0, 'contribution_credit' => 0.0, 'covered_through' => null];
-        }
-
-        $createdAt = $member['created_at'] ?? $asOf->format('Y-m-d');
-        $start = new DateTime(date('Y-m-01', strtotime($createdAt)));
-        $current = new DateTime($asOf->format('Y-m-01'));
-        $monthsThroughCurrent = (((int)$current->format('Y') - (int)$start->format('Y')) * 12)
-            + ((int)$current->format('n') - (int)$start->format('n')) + 1;
-        $monthsThroughCurrent = max(1, $monthsThroughCurrent);
-        $totalPaid = 0.0;
-        $asOfEnd = (clone $asOf)->setTime(23, 59, 59)->getTimestamp();
-
-        foreach ($payments as $payment) {
-            if (($payment['status'] ?? '') !== 'completed' || !$this->isContributionPayment($payment)) {
-                continue;
-            }
-            $paymentDate = $payment['payment_date'] ?? $payment['created_at'] ?? null;
-            if ($paymentDate && strtotime($paymentDate) <= $asOfEnd) {
-                $totalPaid += max(0, (float)($payment['amount'] ?? 0));
-            }
-        }
-
-        $requiredThroughCurrent = $monthsThroughCurrent * $monthlyContribution;
-        $coverageBalance = max(0, $requiredThroughCurrent - $totalPaid);
-        $credit = max(0, $totalPaid - $requiredThroughCurrent);
-        $fullyCoveredMonths = (int)floor($totalPaid / $monthlyContribution);
+        $allocation = $this->buildContributionAllocationSnapshot($member, $payments, $asOf);
+        $coverageBalance = 0.0;
+        $credit = 0.0;
         $coveredThrough = null;
-        if ($fullyCoveredMonths > 0) {
-            $coveredMonth = clone $start;
-            $coveredMonth->modify('+' . ($fullyCoveredMonths - 1) . ' months');
-            $coveredThrough = $coveredMonth->format('Y-m-t');
+        $continuouslyCovered = true;
+        foreach ($allocation['periods'] as $period) {
+            $shortfall = max(0, (float)$period['required'] - (float)$period['paid']);
+            if (!empty($period['through_current'])) {
+                $coverageBalance += $shortfall;
+                if ($shortfall > 0) {
+                    $continuouslyCovered = false;
+                } elseif ($continuouslyCovered) {
+                    $coveredThrough = $period['month_end'];
+                }
+            } elseif ((float)$period['paid'] > 0) {
+                $credit += (float)$period['paid'];
+            }
+        }
+        // When every month due today is settled, expose the full advance horizon.
+        // If there is an arrears gap, retain only the last continuously settled
+        // past month so the label cannot imply that arrears were cleared.
+        if ($coverageBalance <= 0) {
+            foreach ($allocation['periods'] as $period) {
+                if ((float)$period['paid'] >= (float)$period['required']) {
+                    $coveredThrough = $period['month_end'];
+                } else {
+                    break;
+                }
+            }
         }
 
         return [
@@ -384,6 +358,72 @@ class PaymentStatusService
             'contribution_credit' => $credit,
             'covered_through' => $coveredThrough,
         ];
+    }
+
+    /**
+     * Allocate completed contributions by policy, without changing their M-Pesa
+     * receipt dates: the payment month is paid first; only excess is backdated
+     * to older unpaid months, then carried to future months as advance credit.
+     */
+    public function buildContributionAllocationSnapshot(array $member, array $payments, ?DateTime $asOf = null): array
+    {
+        $asOf = $asOf ?: new DateTime('today');
+        $monthlyContribution = $this->liveMonthlyContribution($member);
+        if ($monthlyContribution <= 0) {
+            return ['periods' => []];
+        }
+
+        $start = new DateTime(date('Y-m-01', strtotime($member['created_at'] ?? $asOf->format('Y-m-d'))));
+        $current = new DateTime($asOf->format('Y-m-01'));
+        $periods = [];
+        $addPeriod = static function (DateTime $month) use (&$periods, $monthlyContribution, $asOf): void {
+            $key = $month->format('Y-m-01');
+            if (isset($periods[$key])) return;
+            $deadline = (clone $month)->setDate((int)$month->format('Y'), (int)$month->format('n'), self::PAYMENT_DEADLINE_DAY);
+            $periods[$key] = [
+                'month' => $key,
+                'month_end' => $month->format('Y-m-t'),
+                'required' => $monthlyContribution,
+                'paid' => 0.0,
+                'deadline_passed' => $deadline <= $asOf,
+                'through_current' => $month <= new DateTime($asOf->format('Y-m-01')),
+            ];
+        };
+        for ($cursor = clone $start; $cursor <= $current; $cursor->modify('first day of next month')) {
+            $addPeriod($cursor);
+        }
+
+        $contributions = array_values(array_filter($payments, function (array $payment) use ($asOf): bool {
+            $date = $payment['payment_date'] ?? $payment['created_at'] ?? null;
+            return ($payment['status'] ?? '') === 'completed' && $this->isContributionPayment($payment)
+                && $date && strtotime($date) <= (clone $asOf)->setTime(23, 59, 59)->getTimestamp();
+        }));
+        usort($contributions, static fn(array $a, array $b): int => strcmp((string)($a['payment_date'] ?? $a['created_at'] ?? ''), (string)($b['payment_date'] ?? $b['created_at'] ?? '')));
+
+        foreach ($contributions as $payment) {
+            $remaining = max(0, (float)($payment['amount'] ?? 0));
+            $paymentMonth = new DateTime(date('Y-m-01', strtotime($payment['payment_date'] ?? $payment['created_at'])));
+            $addPeriod($paymentMonth);
+            $allocate = static function (string $key) use (&$periods, &$remaining): void {
+                if ($remaining <= 0 || !isset($periods[$key])) return;
+                $due = max(0, (float)$periods[$key]['required'] - (float)$periods[$key]['paid']);
+                $applied = min($remaining, $due);
+                $periods[$key]['paid'] += $applied;
+                $remaining -= $applied;
+            };
+            $paymentKey = $paymentMonth->format('Y-m-01');
+            $allocate($paymentKey);
+            foreach (array_keys($periods) as $key) {
+                if ($key >= $paymentKey) break;
+                $allocate($key);
+            }
+            for ($cursor = (clone $paymentMonth)->modify('first day of next month'); $remaining > 0; $cursor->modify('first day of next month')) {
+                $addPeriod($cursor);
+                $allocate($cursor->format('Y-m-01'));
+            }
+        }
+        ksort($periods);
+        return ['periods' => $periods];
     }
 
     private function isContributionPayment(array $payment): bool

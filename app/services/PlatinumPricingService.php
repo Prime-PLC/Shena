@@ -21,6 +21,11 @@ class PlatinumPricingService
         } catch (Throwable $exception) {
             return null;
         }
+        $minimumAge = isset($package['age_min']) ? (int)$package['age_min'] : null;
+        $maximumAge = isset($package['age_max']) ? (int)$package['age_max'] : null;
+        if (($minimumAge !== null && $age < $minimumAge) || ($maximumAge !== null && $age > $maximumAge)) {
+            return null;
+        }
 
         $coverageType = (string) ($package['coverage_type'] ?? 'principal_only');
         $priceKey = $coverageType === 'principal_only' ? 'individual' : $coverageType;

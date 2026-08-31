@@ -41,7 +41,7 @@ INSERT INTO platinum_coverages (
 )
 SELECT q.member_id, 'principal', NULL, q.package_key, q.package_name,
        'active', 'admin_direct', q.platinum_amount,
-       IF(q.age < 60, 4, 7), NOW(), NOW(), CURDATE(), CURDATE(),
+       IF(q.age < 60, 4, 7), NOW(), NOW(), CURDATE(), DATE_ADD(CURDATE(), INTERVAL IF(q.age < 60, 4, 7) MONTH),
        'Converted from reviewed legacy medical corporate placeholder', NOW()
 FROM (
     SELECT DISTINCT m.id AS member_id, m.package_key,

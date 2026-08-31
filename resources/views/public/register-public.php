@@ -130,7 +130,7 @@
                                 <select class="form-select" id="package_id" name="package_id" required>
                                     <option value="">Select a Basic package</option>
                                     <?php foreach (($packages ?? []) as $packageKey => $package): ?>
-                                        <option value="<?php echo e($packageKey); ?>" data-monthly="<?php echo (float) ($package['monthly_contribution'] ?? 0); ?>">
+                                        <option value="<?php echo e($packageKey); ?>" data-monthly="<?php echo (float) ($package['monthly_contribution'] ?? 0); ?>" data-coverage-type="<?php echo e($package['coverage_type'] ?? 'principal_only'); ?>">
                                             <?php echo e($package['name'] ?? $packageKey); ?> — KES <?php echo number_format((float) ($package['monthly_contribution'] ?? 0)); ?>/month
                                         </option>
                                     <?php endforeach; ?>
@@ -188,13 +188,17 @@ document.addEventListener('DOMContentLoaded', function () {
     const tierInput = document.getElementById('platinum_opt_in');
     const productSummary = document.getElementById('productSummary');
 
-    function platinumPrice(age) {
-        if (age === null || Number.isNaN(age)) return null;
-        if (age < 70) return 300;
-        if (age <= 80) return 550;
-        if (age <= 90) return 650;
-        if (age <= 100) return 850;
-        return null;
+    function platinumPrice(age, coverageType) {
+        if (age === null || Number.isNaN(age) || age > 100) return null;
+        const prices = {
+            principal_only: age < 70 ? 300 : (age <= 80 ? 550 : (age <= 90 ? 650 : 850)),
+            couple: age < 70 ? 350 : null,
+            couple_children: age < 70 ? 400 : null,
+            couple_children_parents: age < 70 ? 450 : (age <= 80 ? 550 : (age <= 90 ? 650 : 850)),
+            couple_children_parents_inlaws: age < 70 ? 500 : (age <= 80 ? 600 : (age <= 90 ? 750 : 850)),
+            executive: age < 70 ? 500 : 700
+        };
+        return Object.prototype.hasOwnProperty.call(prices, coverageType) ? prices[coverageType] : null;
     }
 
     function updateProductSummary() {
@@ -206,7 +210,7 @@ document.addEventListener('DOMContentLoaded', function () {
             age = Math.floor((Date.now() - dob.getTime()) / 31557600000);
         }
         const wantsPlatinum = tierInput.value === '1';
-        const platinum = wantsPlatinum ? platinumPrice(age) : 0;
+        const platinum = wantsPlatinum ? platinumPrice(age, option?.dataset.coverageType || 'principal_only') : 0;
         if (!basic) {
             productSummary.textContent = 'Choose a Basic package to see the monthly contribution.';
         } else if (wantsPlatinum && platinum === null) {

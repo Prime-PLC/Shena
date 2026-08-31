@@ -1711,8 +1711,8 @@ $buildMemberTierUrl = function (string $targetTier) use ($search, $status, $pack
                                 'next_of_kin' => $member['next_of_kin'] ?? '',
                                 'next_of_kin_relationship' => $member['next_of_kin_relationship'] ?? '',
                                 'next_of_kin_phone' => $member['next_of_kin_phone'] ?? '',
-                                'monthly_contribution_raw' => (float)($member['monthly_contribution'] ?? 0),
-                                'monthly_contribution' => 'KES ' . number_format((float)($member['monthly_contribution'] ?? 0), 2),
+                                'monthly_contribution_raw' => (float)($member['account_monthly_amount'] ?? $member['monthly_contribution'] ?? 0),
+                                'monthly_contribution' => 'KES ' . number_format((float)($member['account_monthly_amount'] ?? $member['monthly_contribution'] ?? 0), 2),
                                 'corporate_members' => array_map(function ($item) {
                                     return [
                                         'label' => $item['label'] ?? '',
