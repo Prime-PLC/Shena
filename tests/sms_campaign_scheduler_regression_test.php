@@ -37,6 +37,8 @@ $assertContains($service, "status IN ('draft', 'scheduled')", 'automatic campaig
 $assertContains($service, 'findRecentDuplicateCampaign', 'campaign creation should reuse a recent identical campaign instead of creating a duplicate row');
 $assertContains($service, 'created_at >= DATE_SUB(NOW(), INTERVAL 2 MINUTE)', 'duplicate campaign guard should be scoped to recent accidental resubmits');
 $assertContains($service, 'normalizeCampaignTargetAudience', 'campaign creation and refresh should normalize target audience safely');
+$assertContains($service, 'ensureCampaignAudienceIsPersisted', 'Fresh campaigns should verify their selected audience is stored before sending');
+$assertContains($service, 'Campaign audience could not be persisted', 'Campaign creation should fail closed if the database loses its audience');
 $assertContains($service, 'Campaign target audience is required', 'campaign creation should reject blank audiences instead of later sending to all members');
 $assertContains($service, 'Campaign target audience is missing; refusing to send', 'campaign sending should stop existing bad campaign rows with blank audiences');
 $assertContains($service, 'Campaign target audience is missing; refusing to refresh recipients', 'scheduled sending should fail closed when a campaign has a blank audience');
@@ -55,6 +57,7 @@ $assertContains($controller, 'downloadDeliveryReport', 'controller should expose
 $assertContains($controller, 'resendPendingFailed', 'controller should expose resend for pending/failed recipients');
 $assertContains($controller, "\$input['target_audience'] ?? ''", 'SMS campaign edit should not silently default missing audience to all members');
 $assertContains($controller, "\$existingCampaign['target_audience'] ?? ''", 'SMS campaign edit should retain its saved audience when a disabled select is omitted from submission');
+$assertContains($controller, 'Campaign audience could not be saved', 'Campaign edits should verify the selected audience persisted before reporting success');
 $assertContains($controller, 'sendCampaign($campaignId, 5)', 'Manual Send Immediately should submit a bounded first batch so the web request cannot monopolize PHP workers');
 $assertNotContains($controller, 'sendCampaignUntilComplete($campaignId, 50, 10)', 'Manual send endpoints must not attempt ten 50-recipient batches in one web request');
 $assertContains($controller, "\$sendResult['error'] ?? 'Campaign was created, but immediate sending could not start'", 'Send Immediately failures should be returned to the UI instead of reported as successful drafts');

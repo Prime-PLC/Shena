@@ -70,10 +70,28 @@ class BulkSmsService
 
         $stmt = $this->db->prepare($sql);
         if ($stmt->execute($params)) {
-            return $this->db->lastInsertId();
+            $campaignId = (int) $this->db->lastInsertId();
+            $this->ensureCampaignAudienceIsPersisted($campaignId, $data['target_audience']);
+            return $campaignId;
         }
 
         return false;
+    }
+
+    private function ensureCampaignAudienceIsPersisted(int $campaignId, string $targetAudience): void
+    {
+        // Some production database setups have previously produced blank audience values
+        // despite a valid create request. Reapply and verify the authoritative value before
+        // any sender can read the campaign; never infer or default this to all_members.
+        $this->db->prepare('UPDATE bulk_messages SET target_audience = ? WHERE id = ?')
+            ->execute([$targetAudience, $campaignId]);
+
+        $statement = $this->db->prepare('SELECT target_audience FROM bulk_messages WHERE id = ? LIMIT 1');
+        $statement->execute([$campaignId]);
+        $persistedAudience = trim((string) $statement->fetchColumn());
+        if ($persistedAudience !== $targetAudience) {
+            throw new RuntimeException('Campaign audience could not be persisted; refusing to create a campaign that might send to the wrong recipients.');
+        }
     }
 
     private function normalizeCampaignTargetAudience($targetAudience): string

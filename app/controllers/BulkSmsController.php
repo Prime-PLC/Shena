@@ -1276,6 +1276,12 @@ class BulkSmsController extends BaseController
                 $campaignId
             ]);
 
+            $audienceCheck = $this->db->getConnection()->prepare("SELECT target_audience FROM bulk_messages WHERE id = ? AND message_type = 'sms' LIMIT 1");
+            $audienceCheck->execute([$campaignId]);
+            if (trim((string) $audienceCheck->fetchColumn()) !== $targetAudience) {
+                throw new Exception('Campaign audience could not be saved; refusing to leave a campaign that cannot be sent safely.');
+            }
+
             if ($stmt->rowCount() < 1) {
                 $check = $this->db->getConnection()->prepare("SELECT COUNT(*) FROM bulk_messages WHERE id = ? AND message_type = 'sms' AND status IN ('draft', 'scheduled', 'paused')");
                 $check->execute([$campaignId]);
