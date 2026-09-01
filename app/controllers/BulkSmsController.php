@@ -513,7 +513,15 @@ class BulkSmsController extends BaseController
             
             // If action is 'send', start sending immediately
             if ($action === 'send' && $sendTime === 'now') {
-                $this->bulkSmsService->sendCampaign($campaignId);
+                // createCampaign intentionally creates an unsent row first so recipient
+                // queueing and the atomic send claim happen in the same lifecycle. Do not
+                // report success while that second step failed: doing so leaves a draft in
+                // the list even though the user chose "Send Immediately".
+                $sendResult = $this->bulkSmsService->sendCampaignUntilComplete($campaignId, 50, 10);
+                if (empty($sendResult['success'])) {
+                    throw new Exception($sendResult['error'] ?? 'Campaign was created, but immediate sending could not start');
+                }
+
                 $successMsg = 'Campaign created and submitted for delivery tracking. (' . count($recipients) . ' recipients)';
             } elseif ($sendTime === 'scheduled') {
                 $successMsg = 'Campaign scheduled successfully for ' . date('M j, Y H:i', strtotime($scheduledAt));
@@ -1203,7 +1211,6 @@ class BulkSmsController extends BaseController
             $title = trim((string)($input['title'] ?? ''));
             $message = trim((string)($input['message'] ?? ''));
             $rawTargetAudience = trim((string)($input['target_audience'] ?? ''));
-            $targetAudience = $this->normalizeTargetAudience($rawTargetAudience);
             $scheduledAt = !empty($input['scheduled_at']) ? $input['scheduled_at'] : null;
 
             if ($campaignId <= 0 || $title === '' || $message === '') {
@@ -1220,9 +1227,13 @@ class BulkSmsController extends BaseController
             $existingFilters = is_array($existingFilters) ? $existingFilters : [];
             $lockedPaymentGroup = trim((string)($existingFilters['payment_group'] ?? ''));
             if ($rawTargetAudience === '') {
-                // Never silently widen an edited campaign's audience to all_members;
-                // reject the edit instead so filtered/payment-breakdown campaigns can't
-                // be blasted to every member due to a missing/unselected UI value.
+                // A disabled select is not included in normal form submission. Retain the
+                // campaign's already-saved audience in that case; importantly, never use
+                // all_members as a fallback.
+                $rawTargetAudience = trim((string)($existingCampaign['target_audience'] ?? ''));
+            }
+            $targetAudience = $this->normalizeTargetAudience($rawTargetAudience);
+            if ($targetAudience === '') {
                 throw new Exception('Target audience is required');
             }
 

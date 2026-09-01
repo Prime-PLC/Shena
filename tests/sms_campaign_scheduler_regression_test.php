@@ -54,6 +54,9 @@ $assertContains($controller, 'processScheduledCampaigns', 'controller should exp
 $assertContains($controller, 'downloadDeliveryReport', 'controller should expose downloadable delivery reports');
 $assertContains($controller, 'resendPendingFailed', 'controller should expose resend for pending/failed recipients');
 $assertContains($controller, "\$input['target_audience'] ?? ''", 'SMS campaign edit should not silently default missing audience to all members');
+$assertContains($controller, "\$existingCampaign['target_audience'] ?? ''", 'SMS campaign edit should retain its saved audience when a disabled select is omitted from submission');
+$assertContains($controller, 'sendCampaignUntilComplete($campaignId, 50, 10)', 'Send Immediately should use the complete sender instead of leaving a first batch as a draft');
+$assertContains($controller, "\$sendResult['error'] ?? 'Campaign was created, but immediate sending could not start'", 'Send Immediately failures should be returned to the UI instead of reported as successful drafts');
 $assertContains($controller, "status = 'paused'", 'controller should be able to pause actively sending campaigns');
 $assertContains($controller, 'resumePausedCampaignForManualSend', 'manual send endpoint should explicitly resume paused campaigns');
 $assertNotContains($controller, "UPDATE bulk_messages SET status = 'paused', updated_at = NOW()", 'pause should not hard-code optional updated_at column');
