@@ -517,12 +517,12 @@ class BulkSmsController extends BaseController
                 // queueing and the atomic send claim happen in the same lifecycle. Do not
                 // report success while that second step failed: doing so leaves a draft in
                 // the list even though the user chose "Send Immediately".
-                $sendResult = $this->bulkSmsService->sendCampaignUntilComplete($campaignId, 50, 10);
+                $sendResult = $this->bulkSmsService->sendCampaign($campaignId, 5);
                 if (empty($sendResult['success'])) {
                     throw new Exception($sendResult['error'] ?? 'Campaign was created, but immediate sending could not start');
                 }
 
-                $successMsg = 'Campaign created and submitted for delivery tracking. (' . count($recipients) . ' recipients)';
+                $successMsg = 'Campaign sending started. The first batch was submitted; remaining recipients will continue in the background. (' . count($recipients) . ' recipients)';
             } elseif ($sendTime === 'scheduled') {
                 $successMsg = 'Campaign scheduled successfully for ' . date('M j, Y H:i', strtotime($scheduledAt));
             } else {
@@ -611,12 +611,12 @@ class BulkSmsController extends BaseController
                 $this->bulkSmsService->resumePausedCampaignForManualSend((int)$campaignId);
             }
             
-            $result = $this->bulkSmsService->sendCampaignUntilComplete($campaignId, 50, 10);
+            $result = $this->bulkSmsService->sendCampaign($campaignId, 5);
             
             if ($result['success']) {
                 $this->json([
                     'success' => true,
-                    'message' => 'Campaign submitted. Delivery confirmation will update after sync.',
+                    'message' => 'Campaign sending started. The first batch was submitted; remaining recipients will continue in the background.',
                     'sent_count' => $result['sent_count'],
                     'failed_count' => $result['failed_count'],
                     'pending_count' => $result['pending_count'],
@@ -671,8 +671,8 @@ class BulkSmsController extends BaseController
         header('Content-Type: application/json');
         
         try {
-            $scheduledResult = $this->bulkSmsService->processDueCampaigns(50, 10, 3);
-            $queueResult = $this->bulkSmsService->processQueue(100);
+            $scheduledResult = $this->bulkSmsService->processDueCampaigns(5, 1, 1);
+            $queueResult = $this->bulkSmsService->processQueue(10);
             
             $this->json([
                 'success' => true,
@@ -726,7 +726,7 @@ class BulkSmsController extends BaseController
         header('Content-Type: application/json');
 
         try {
-            $result = $this->bulkSmsService->processDueCampaigns(50, 10, 3);
+            $result = $this->bulkSmsService->processDueCampaigns(5, 1, 1);
             $this->json([
                 'success' => true,
                 'message' => 'Scheduled campaign processor completed',
@@ -943,12 +943,12 @@ class BulkSmsController extends BaseController
             
             // Update scheduled_at to null and send
             $this->bulkSmsService->updateScheduledAt($campaignId, null);
-            $result = $this->bulkSmsService->sendCampaignUntilComplete($campaignId, 50, 10);
+            $result = $this->bulkSmsService->sendCampaign($campaignId, 5);
             
             if ($result['success']) {
                 $this->json([
                     'success' => true,
-                    'message' => 'Campaign submitted. Delivery confirmation will update after sync.',
+                    'message' => 'Campaign sending started. The first batch was submitted; remaining recipients will continue in the background.',
                     'sent_count' => $result['sent_count'],
                     'failed_count' => $result['failed_count'] ?? 0,
                     'pending_count' => $result['pending_count'] ?? 0,
@@ -1122,7 +1122,7 @@ class BulkSmsController extends BaseController
                 return;
             }
 
-            $result = $this->bulkSmsService->sendCampaignUntilComplete((int)$id, 50, 10);
+            $result = $this->bulkSmsService->sendCampaign((int)$id, 5);
             if (empty($result['success'])) {
                 throw new Exception($result['error'] ?? 'Failed to resend campaign recipients');
             }

@@ -58,7 +58,7 @@ class SmsService
                 'output' => 'json'
             ];
             
-            $request = $this->postForm($url, $data);
+            $request = $this->postForm($url, $data, 8);
             $response = $request['body'];
             $httpCode = $request['http_code'];
 

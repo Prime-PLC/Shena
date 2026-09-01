@@ -55,7 +55,8 @@ $assertContains($controller, 'downloadDeliveryReport', 'controller should expose
 $assertContains($controller, 'resendPendingFailed', 'controller should expose resend for pending/failed recipients');
 $assertContains($controller, "\$input['target_audience'] ?? ''", 'SMS campaign edit should not silently default missing audience to all members');
 $assertContains($controller, "\$existingCampaign['target_audience'] ?? ''", 'SMS campaign edit should retain its saved audience when a disabled select is omitted from submission');
-$assertContains($controller, 'sendCampaignUntilComplete($campaignId, 50, 10)', 'Send Immediately should use the complete sender instead of leaving a first batch as a draft');
+$assertContains($controller, 'sendCampaign($campaignId, 5)', 'Manual Send Immediately should submit a bounded first batch so the web request cannot monopolize PHP workers');
+$assertNotContains($controller, 'sendCampaignUntilComplete($campaignId, 50, 10)', 'Manual send endpoints must not attempt ten 50-recipient batches in one web request');
 $assertContains($controller, "\$sendResult['error'] ?? 'Campaign was created, but immediate sending could not start'", 'Send Immediately failures should be returned to the UI instead of reported as successful drafts');
 $assertContains($controller, "status = 'paused'", 'controller should be able to pause actively sending campaigns');
 $assertContains($controller, 'resumePausedCampaignForManualSend', 'manual send endpoint should explicitly resume paused campaigns');
