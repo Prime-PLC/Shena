@@ -783,7 +783,8 @@ $formatRelation = static function ($value) {
                         <?php endforeach; ?>
                     </div>
                 <?php endif; ?>
-                <form method="POST" action="/admin/members/<?= (int)($member['id'] ?? 0) ?>/platinum/migrate" style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+                <form method="POST" action="/admin/members/<?= (int)($member['id'] ?? 0) ?>/platinum/migrate" id="platinumMigrationForm" onsubmit="return validatePlatinumMigration(event)" style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+                    <input type="hidden" name="reviewed_quote" id="platinumReviewedQuote" value="">
                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
                     <div>
                         <label style="display:block;font-size:12px;font-weight:600;color:#6B7280;margin-bottom:4px">Coverage group</label>
@@ -804,11 +805,30 @@ $formatRelation = static function ($value) {
                         <label style="display:block;font-size:12px;font-weight:600;color:#6B7280;margin-bottom:4px">Reason (optional)</label>
                         <input type="text" name="reason" placeholder="e.g. Verbal request, cash payment collected" style="padding:9px;border:1px solid #D1D5DB;border-radius:6px;width:260px">
                     </div>
-                    <button type="submit" class="btn btn-primary btn-sm" onclick="return confirm('Activate Platinum immediately for this person, bypassing the normal payment/approval steps?')"><i class="fas fa-bolt"></i> Migrate to Platinum now</button>
-                    <div id="platinumMigrationPreview" style="flex-basis:100%;font-size:13px;font-weight:600;color:#374151"></div>
+                    <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-bolt"></i> Activate Platinum now</button>
+                    <div id="platinumMigrationPreview" role="alert" aria-live="assertive" tabindex="-1" style="flex-basis:100%;font-size:13px;font-weight:600;color:#374151"></div>
                 </form>
             </div>
         </div>
+
+        <?php if (!empty($_SESSION['account_sms_pending'][(int)$member['id']])): ?>
+        <?php if (!empty($account_sms_preview)): ?>
+            <?php
+            $smsComposerId = 'account-update-sms';
+            $smsTitle = 'Notify the member';
+            $smsPhone = $account_sms_preview['phone'];
+            $smsMessage = $_SESSION['account_sms_edits'][(int)$member['id']] ?? $account_sms_preview['message'];
+            unset($_SESSION['account_sms_edits'][(int)$member['id']]);
+            $smsAction = '/admin/members/' . (int)$member['id'] . '/account-update-sms';
+            $smsHidden = ['reviewed_token' => $account_sms_preview['token']];
+            $smsAllowSave = false;
+            include __DIR__ . '/../partials/sms-composer.php';
+            ?>
+        <?php else: ?>
+            <div class="member-info-card" id="account-update-sms" tabindex="-1"><p><?= htmlspecialchars($account_sms_error ?? 'Review the member details to prepare an SMS.', ENT_QUOTES) ?></p></div>
+        <?php endif; ?>
+
+        <?php endif; ?>
 
         <div class="member-info-card">
             <div class="card-header">
@@ -904,11 +924,11 @@ $formatRelation = static function ($value) {
                     <div class="form-group">
                         <label class="form-label" for="memberPackage">Package</label>
                         <select class="form-select" id="memberPackage" name="package_key" required>
-                            <?php foreach ($packages as $packageKey => $packageOption): ?>
+                            <?php foreach ($packages as $packageKey => $packageOption): if (!empty($packageOption['legacy_alias'])) continue; ?>
                                 <option
                                     value="<?= htmlspecialchars($packageKey) ?>"
                                     data-monthly-contribution="<?= htmlspecialchars((string)($packageOption['monthly_contribution'] ?? 0)) ?>"
-                                    <?= (($member['package_key'] ?? '') === $packageKey) ? 'selected' : '' ?>
+                                    <?= (PlatinumPricingService::canonicalPackageKey((string)($member['package_key'] ?? '')) === $packageKey) ? 'selected' : '' ?>
                                 >
                                     <?= htmlspecialchars(($packageOption['name'] ?? $packageKey) . ' - KES ' . number_format((float)($packageOption['monthly_contribution'] ?? 0), 0)) ?>
                                 </option>
@@ -1091,8 +1111,8 @@ $formatRelation = static function ($value) {
                             <input class="form-input" name="corporate_members[<?= (int)$index ?>][relationship]" placeholder="Relationship" value="<?= htmlspecialchars($corporate['relationship'] ?? 'corporate') ?>">
                             <input class="form-input" type="date" name="corporate_members[<?= (int)$index ?>][date_of_birth]" value="<?= htmlspecialchars($corporate['date_of_birth'] ?? '') ?>" title="Needed when Platinum is selected">
                             <select class="form-select corporate-package" name="corporate_members[<?= (int)$index ?>][package_key]" onchange="updateProfileContributionPreview()">
-                                <?php foreach ($packages as $packageKey => $packageOption): ?>
-                                    <option value="<?= htmlspecialchars($packageKey) ?>" <?= (($corporate['package_key'] ?? '') === $packageKey) ? 'selected' : '' ?>><?= htmlspecialchars(($packageOption['name'] ?? $packageKey) . ' - KES ' . number_format((float)($packageOption['monthly_contribution'] ?? 0), 0)) ?></option>
+                                <?php foreach ($packages as $packageKey => $packageOption): if (!empty($packageOption['legacy_alias'])) continue; ?>
+                                    <option value="<?= htmlspecialchars($packageKey) ?>" <?= (PlatinumPricingService::canonicalPackageKey((string)($corporate['package_key'] ?? '')) === $packageKey) ? 'selected' : '' ?>><?= htmlspecialchars(($packageOption['name'] ?? $packageKey) . ' - KES ' . number_format((float)($packageOption['monthly_contribution'] ?? 0), 0)) ?></option>
                                 <?php endforeach; ?>
                             </select>
                             <div class="corporate-amount">KES <?= number_format((float)($corporate['monthly_contribution'] ?? 0), 2) ?></div>
@@ -1297,16 +1317,31 @@ function money(amount) {
     return 'KES ' + Number(amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function platinumMigrationOption() {
+    const type = document.getElementById('platinumMigrateType')?.value || 'principal';
+    const personId = document.getElementById('platinumMigratePerson')?.value || '';
+    const optionKey = type === 'corporate_member' ? `corporate_${personId}` : 'principal';
+    return platinumMigrationOptions[optionKey];
+}
+
+function platinumMigrationFailureMessage() {
+    return 'Platinum was not activated. The selected coverage group needs a valid date of birth and a Basic package with Platinum pricing. Review the assigned Basic package and the coverage owner date of birth, then try again. No Platinum cover was activated and no SMS was sent.';
+}
+
 function updatePlatinumMigrationPreview() {
     const type = document.getElementById('platinumMigrateType')?.value || 'principal';
     const personWrap = document.getElementById('platinumMigratePersonWrap');
     if (personWrap) personWrap.style.display = type === 'principal' ? 'none' : 'block';
-    const personId = document.getElementById('platinumMigratePerson')?.value || '';
-    const optionKey = type === 'corporate_member' ? `corporate_${personId}` : 'principal';
-    const option = platinumMigrationOptions[optionKey];
+    const option = platinumMigrationOption();
     const preview = document.getElementById('platinumMigrationPreview');
+    const token = document.getElementById('platinumReviewedQuote');
+    if (token) token.value = option?.token || '';
+    if (option?.active) {
+        preview.textContent = 'Platinum is already active for this cover. Saving again will not change its price or waiting period.';
+        return;
+    }
     if (!preview || !option || !Number(option.quote || 0)) {
-        if (preview) preview.textContent = 'Select a coverage group with a valid package and date of birth.';
+        if (preview) preview.textContent = 'Cannot activate Platinum: add a valid date of birth and confirm the selected Basic package supports Platinum pricing.';
         return;
     }
     const currentCharge = Number(option.current_charge || option.basic_amount || 0);
@@ -1314,17 +1349,46 @@ function updatePlatinumMigrationPreview() {
     preview.textContent = `Account monthly contribution after migration: ${money(newTotal)}.`;
 }
 
+function validatePlatinumMigration(event) {
+    const option = platinumMigrationOption();
+    if (option && Number(option.quote || 0)) {
+        event.preventDefault();
+        if (event.target.dataset.submitting) return false;
+        ShenaApp.confirmAction(document.getElementById('platinumMigrationPreview').textContent + ' No SMS will be sent.', function() {
+            event.target.dataset.submitting = '1';
+            event.target.querySelector('button[type=submit]').disabled = true;
+            event.target.submit();
+        }, null, { textOnly: true, title: 'Save Platinum cover', confirmText: 'Save cover' });
+        return false;
+    }
+
+    event.preventDefault();
+    const message = platinumMigrationFailureMessage();
+    const preview = document.getElementById('platinumMigrationPreview');
+    if (preview) {
+        preview.textContent = message;
+        preview.focus();
+    }
+    if (window.ShenaApp && typeof ShenaApp.alert === 'function') {
+        ShenaApp.alert(message, 'error', 'Platinum activation not completed');
+    } else if (window.ShenaApp && typeof ShenaApp.showNotification === 'function') {
+        ShenaApp.showNotification(message, 'error', 8000);
+    }
+    return false;
+}
+
 function confirmPlatinumRevert(coverageId, groupName) {
     const submit = function () { document.getElementById('platinumRevertForm' + coverageId)?.submit(); };
-    const message = 'Return the ' + groupName + ' Platinum coverage to Basic? The member will receive an SMS with the new account monthly contribution.';
+    const message = 'Return the ' + groupName + ' Platinum coverage to Basic? No SMS will be sent. You can review and send one final account update after saving.';
     if (window.ShenaApp && typeof ShenaApp.confirmAction === 'function') {
-        ShenaApp.confirmAction(message, submit, null, { title: 'Return to Basic', confirmText: 'Return to Basic', type: 'warning' });
+        ShenaApp.confirmAction(message, submit, null, { textOnly: true, title: 'Return to Basic', confirmText: 'Return to Basic', type: 'warning' });
         return;
     }
     return;
 }
 
 function profilePackageOptionsHtml(selectedKey) {
+    if (selectedKey === 'couple_children_parents_70_80') selectedKey = 'couple_children_parents_71_80';
     return Object.entries(profileMembershipPlanData).map(([key, plan]) => {
         const selected = key === selectedKey ? 'selected' : '';
         const label = `${plan.name || key} - KES ${Number(plan.monthly_contribution || 0).toLocaleString()}`;

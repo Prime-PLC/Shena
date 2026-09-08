@@ -32,7 +32,8 @@ SET m.monthly_contribution =
         WHEN 'couple_below_70' THEN 150
         WHEN 'couple_children_below_70' THEN 200
         WHEN 'couple_children_parents_below_70' THEN 250
-        WHEN 'couple_children_parents_70_80' THEN 350
+        WHEN 'couple_children_parents_71_80' THEN 350
+        WHEN 'couple_children_parents_70_80' THEN 350 -- legacy stored-key compatibility
         WHEN 'couple_children_parents_81_90' THEN 450
         WHEN 'couple_children_parents_91_100' THEN 650
         WHEN 'couple_children_parents_inlaws_below_70' THEN 300

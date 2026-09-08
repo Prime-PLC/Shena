@@ -7,12 +7,14 @@ include_once __DIR__ . '/../layouts/admin-header.php';
 $oldValue = function ($field, $default = '') use ($old) {
     return htmlspecialchars((string)($old[$field] ?? $default), ENT_QUOTES);
 };
+require_once __DIR__ . '/../../../app/services/PlatinumPricingService.php';
 $membershipPlanData = [];
-foreach (($packages ?? []) as $packageKey => $package) {
+foreach (($packages ?? []) as $packageKey => $package) { if (!empty($package['legacy_alias'])) continue;
     $membershipPlanData[$packageKey] = [
         'name' => $package['name'] ?? $packageKey,
         'monthly_contribution' => (float)($package['monthly_contribution'] ?? 0),
         'coverage_type' => $package['coverage_type'] ?? 'principal_only',
+        'platinum_amount' => (new PlatinumPricingService())->packageAmount($packageKey),
     ];
 }
 $platinumPriceData = $GLOBALS['platinum_config']['prices'] ?? [];
@@ -288,7 +290,7 @@ $platinumPriceData = $GLOBALS['platinum_config']['prices'] ?? [];
                     <label class="form-label">Package <span class="required">*</span></label>
                     <select name="package" class="form-select" id="packageSelect" required>
                         <option value="">Select Package</option>
-                        <?php foreach (($packages ?? []) as $packageKey => $package): ?>
+                        <?php foreach (($packages ?? []) as $packageKey => $package): if (!empty($package['legacy_alias'])) continue; ?>
                             <option value="<?php echo htmlspecialchars($packageKey); ?>" data-monthly-contribution="<?php echo htmlspecialchars((string)($package['monthly_contribution'] ?? 0)); ?>" <?php echo (($old['package'] ?? '') === $packageKey) ? 'selected' : ''; ?>>
                                 <?php echo htmlspecialchars(($package['name'] ?? $packageKey) . ' - KES ' . number_format((float)($package['monthly_contribution'] ?? 0), 0) . '/month'); ?>
                             </option>
@@ -456,14 +458,7 @@ $platinumPriceData = $GLOBALS['platinum_config']['prices'] ?? [];
     }
 
     function platinumPriceForPackage(packageKey, age) {
-        if (age === null || age === undefined || isNaN(age)) return null;
-        const coverageType = membershipPlanData[packageKey]?.coverage_type || 'principal_only';
-        const priceKey = coverageType === 'principal_only' ? 'individual' : coverageType;
-        const prices = platinumPriceData[priceKey] || {};
-        const band = priceKey === 'executive'
-            ? (age < 70 ? 'under_70' : (age <= 100 ? '70_and_above' : null))
-            : (age < 70 ? 'under_70' : (age <= 80 ? '71_80' : (age <= 90 ? '81_90' : (age <= 100 ? '91_100' : null))));
-        return band ? Number(prices[band] || 0) || null : null;
+        return Number(membershipPlanData[packageKey]?.platinum_amount || 0) || null;
     }
 
     function updatePlatinumOptInPrice() {

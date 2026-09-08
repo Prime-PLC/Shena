@@ -10,12 +10,14 @@ $getOldValue = function($field) {
     $old = $_SESSION['form_data'][$field] ?? '';
     return htmlspecialchars($old);
 };
+require_once __DIR__ . '/../../../app/services/PlatinumPricingService.php';
 $membershipPlanData = [];
-foreach (($packages ?? []) as $packageKey => $package) {
+foreach (($packages ?? []) as $packageKey => $package) { if (!empty($package['legacy_alias'])) continue;
     $membershipPlanData[$packageKey] = [
         'name' => $package['name'] ?? $packageKey,
         'monthly_contribution' => (float)($package['monthly_contribution'] ?? 0),
         'coverage_type' => $package['coverage_type'] ?? 'principal_only',
+        'platinum_amount' => (new PlatinumPricingService())->packageAmount($packageKey),
     ];
 }
 $platinumPriceData = $GLOBALS['platinum_config']['prices'] ?? [];
@@ -589,7 +591,7 @@ $platinumPriceData = $GLOBALS['platinum_config']['prices'] ?? [];
                 </div>
                 
                 <div class="package-options">
-                    <?php foreach (($packages ?? []) as $packageKey => $package): ?>
+                    <?php foreach (($packages ?? []) as $packageKey => $package): if (!empty($package['legacy_alias'])) continue; ?>
                         <div class="package-option">
                             <input
                                 type="radio"
@@ -730,19 +732,8 @@ function updateMemberContributionPreview() {
 }
 
 function agentPlatinumPriceForPackage(packageKey) {
-    const dobInput = document.getElementById('date_of_birth');
-    if (!dobInput?.value) return 0;
-    const dob = new Date(dobInput.value + 'T00:00:00');
-    const age = Math.floor((Date.now() - dob.getTime()) / (1000 * 60 * 60 * 24 * 365.25));
-    if (Number.isNaN(age)) return 0;
-    const coverageType = membershipPlanData[packageKey]?.coverage_type || 'principal_only';
-    const priceKey = coverageType === 'principal_only' ? 'individual' : coverageType;
-    const prices = platinumPriceData[priceKey] || {};
-    const band = priceKey === 'executive'
-        ? (age < 70 ? 'under_70' : (age <= 100 ? '70_and_above' : null))
-        : (age < 70 ? 'under_70' : (age <= 80 ? '71_80' : (age <= 90 ? '81_90' : (age <= 100 ? '91_100' : null))));
-    return band ? Number(prices[band] || 0) : 0;
-}
+        return Number(membershipPlanData[packageKey]?.platinum_amount || 0) || null;
+    }
 
 function updateAgentPlatinumPrice() {
     const priceEl = document.getElementById('agentPlatinumPrice');
@@ -753,7 +744,7 @@ function updateAgentPlatinumPrice() {
     const selectedPackage = memberForm.querySelector('input[name="package"]:checked');
     const price = agentPlatinumPriceForPackage(selectedPackage?.value || '');
     if (panel) panel.style.display = tierInput?.value === '1' ? '' : 'none';
-    priceEl.textContent = price ? ('KES ' + price.toLocaleString()) : 'a price based on age';
+    priceEl.textContent = price ? ('KES ' + price.toLocaleString()) : 'choose a Basic package';
     updateMemberContributionPreview();
 }
 document.getElementById('date_of_birth')?.addEventListener('change', updateAgentPlatinumPrice);

@@ -13,6 +13,9 @@ class Router
     
     private function loadRoutes()
     {
+        $this->addRoute('GET', '/sms-review', 'SmsReviewController@index');
+        $this->addRoute('POST', '/sms-review/{id}', 'SmsReviewController@review');
+
         // Public Routes
         $this->addRoute('GET', '/', 'HomeController@index');
         $this->addRoute('GET', '/about', 'HomeController@about');
@@ -278,6 +281,7 @@ class Router
         $this->addRoute('POST', '/admin/inpatient-requests/create', 'AdminController@submitInpatientRequestForMember');
         $this->addRoute('POST', '/admin/members/{id}/platinum/migrate', 'AdminController@migrateMemberToPlatinum');
         $this->addRoute('POST', '/admin/members/{id}/platinum/revert', 'AdminController@revertMemberPlatinumToBasic');
+        $this->addRoute('POST', '/admin/members/{id}/account-update-sms', 'AdminController@notifyMemberAccountChange');
         $this->addRoute('POST', '/admin/payouts/{id}/process', 'AdminController@processPayoutRequest');
 
 

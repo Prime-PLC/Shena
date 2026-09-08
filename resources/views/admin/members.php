@@ -8,7 +8,7 @@ $search = $search ?? '';
 $status = $status ?? 'all';
 $package = $package ?? 'all';
 $membershipPlanData = [];
-foreach ($packages as $packageKey => $packageOption) {
+foreach ($packages as $packageKey => $packageOption) { if (!empty($packageOption['legacy_alias'])) continue;
     $membershipPlanData[$packageKey] = [
         'name' => $packageOption['name'] ?? $packageKey,
         'monthly_contribution' => (float)($packageOption['monthly_contribution'] ?? 0),
@@ -1540,7 +1540,7 @@ $buildMemberTierUrl = function (string $targetTier) use ($search, $status, $pack
             </select>
             <select class="filter-select" id="filter-package" name="package">
                 <option value="all">All Packages</option>
-                <?php foreach ($packages as $packageKey => $packageOption): ?>
+                <?php foreach ($packages as $packageKey => $packageOption): if (!empty($packageOption['legacy_alias'])) continue; ?>
                     <option value="<?php echo htmlspecialchars($packageKey); ?>" <?php echo (($package ?? 'all') === $packageKey) ? 'selected' : ''; ?>>
                         <?php echo htmlspecialchars($packageOption['name'] ?? $packageKey); ?>
                     </option>

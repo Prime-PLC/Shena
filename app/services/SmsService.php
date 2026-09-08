@@ -11,15 +11,29 @@ class SmsService
     public function __construct()
     {
         $this->config = [
-            'user_id' => HOSTPINNACLE_USER_ID,
-            'api_key' => HOSTPINNACLE_API_KEY,
-            'sender_id' => HOSTPINNACLE_SENDER_ID
+            'user_id' => defined('HOSTPINNACLE_USER_ID') ? HOSTPINNACLE_USER_ID : '',
+            'api_key' => defined('HOSTPINNACLE_API_KEY') ? HOSTPINNACLE_API_KEY : '',
+            'sender_id' => defined('HOSTPINNACLE_SENDER_ID') ? HOSTPINNACLE_SENDER_ID : ''
         ];
         $this->apiUrl = defined('HOSTPINNACLE_SMS_API_URL') ? HOSTPINNACLE_SMS_API_URL : 'https://smsportal.hostpinnacle.co.ke/SMSApi/send';
         $this->baseUrl = preg_replace('#/SMSApi/.*$#', '', $this->apiUrl) ?: 'https://smsportal.hostpinnacle.co.ke';
     }
     
-    public function sendSms($to, $message)
+    public function sendSms($to, $message, array $context = [])
+    {
+        require_once __DIR__ . '/SmsReviewService.php';
+        try {
+            $id = (new SmsReviewService())->create((string)$to, (string)$message, $context);
+            return ['success' => true, 'submitted' => false, 'status' => 'draft', 'requires_review' => true, 'draft_id' => $id];
+        } catch (Throwable $e) {
+            if (in_array($_SESSION['user_role'] ?? '', ['super_admin', 'manager', 'agent'], true)) $_SESSION['warning'] = 'The action may be saved, but its SMS draft could not be created. No SMS was sent. Please check the SMS review setup.';
+            error_log('SMS draft creation failed: ' . $e->getMessage());
+            return ['success' => false, 'submitted' => false, 'requires_review' => true, 'error' => 'SMS draft could not be saved; no SMS was sent.'];
+        }
+    }
+
+    /** Only authentication challenges and explicitly reviewed/scheduled sends use transport directly. */
+    public function sendApprovedSms($to, $message)
     {
         try {
             // Validate phone presence
@@ -66,11 +80,11 @@ class SmsService
                 $result = json_decode($response, true);
                 if (!is_array($result)) {
                     error_log('SMS sending failed: non-JSON response ' . $response);
-                    return ['success' => false, 'submitted' => false, 'error' => 'Provider returned an unreadable response', 'raw_response' => $response];
+                    return ['success' => false, 'submitted' => false, 'status' => 'unknown', 'error' => 'Provider returned an unreadable response', 'raw_response' => $response];
                 }
 
                 // HostPinnacle returns {"status":"success","transactionId":"..."} on success
-                // (older docs listed status:"200" — accept both for safety)
+                // (older docs listed status:"200" â€” accept both for safety)
                 $statusVal = strtolower((string)($result['status'] ?? ''));
                 if ($statusVal === 'success' || $statusVal === '200' || !empty($result['transactionId'])) {
                     return [
@@ -89,12 +103,12 @@ class SmsService
                 }
             } else {
                 error_log('SMS sending failed: HTTP Code ' . $httpCode . ', Response: ' . $response);
-                return ['success' => false, 'error' => 'HTTP Error ' . $httpCode];
+                return ['success' => false, 'status' => 'unknown', 'error' => 'HTTP Error ' . $httpCode];
             }
             
         } catch (Exception $e) {
             error_log('SMS sending error: ' . $e->getMessage());
-            return ['success' => false, 'error' => 'SMS delivery service is temporarily unavailable.'];
+            return ['success' => false, 'status' => 'unknown', 'error' => 'SMS delivery service is temporarily unavailable.'];
         }
     }
 
@@ -278,31 +292,31 @@ class SmsService
     public function sendWelcomeSms($phone, $data)
     {
         $message = "Welcome to Shena Companion Welfare Association! Your member number is {$data['member_number']}. Thank you for joining us.";
-        return $this->sendSms($phone, $message);
+        return $this->sendSms($phone, $message, ['source' => 'Membership welcome']);
     }
     
     public function sendActivationSms($phone, $data)
     {
-        $message = "Congratulations! Your Shena Companion account has been activated. Member No: {$data['member_number']}. You can now login to your dashboard.";
-        return $this->sendSms($phone, $message);
+        $message = "Your SHENA membership is now active. Member No: {$data['member_number']}. You can sign in to view your cover and payments.";
+        return $this->sendSms($phone, $message, ['source' => 'Membership activation']);
     }
     
     public function sendPaymentReminderSms($phone, $data)
     {
         $message = "Payment Reminder: Your monthly contribution of KES {$data['amount']} is due. Pay via M-Pesa Paybill 4163987. Member: {$data['member_number']}";
-        return $this->sendSms($phone, $message);
+        return $this->sendSms($phone, $message, ['source' => 'Payment reminder']);
     }
     
     public function sendPaymentConfirmationSms($phone, $data)
     {
         $message = "Payment confirmed! KES {$data['amount']} received. Transaction ID: {$data['transaction_id']}. Thank you. - Shena Companion";
-        return $this->sendSms($phone, $message);
+        return $this->sendSms($phone, $message, ['source' => 'Payment receipt']);
     }
     
     public function sendClaimStatusSms($phone, $data)
     {
         $status = ucfirst($data['status']);
-        $message = "Claim Update: Your claim has been {$status}. ";
+        $message = "Your SHENA claim update: {$status}. ";
         
         if ($data['status'] === 'approved' && isset($data['approved_amount'])) {
             $message .= "Approved amount: KES {$data['approved_amount']}. ";
@@ -310,19 +324,19 @@ class SmsService
         
         $message .= "Check your dashboard for details. - Shena Companion";
         
-        return $this->sendSms($phone, $message);
+        return $this->sendSms($phone, $message, ['source' => 'Claim update']);
     }
     
     public function sendGracePeriodWarning($phone, $data)
     {
-        $message = "Grace Period Warning: Your account will expire on {$data['expiry_date']}. Please make your payment to avoid deactivation. Member: {$data['member_number']}";
-        return $this->sendSms($phone, $message);
+        $message = "Please make your SHENA payment by {$data['expiry_date']}. This helps keep your membership active. Member: {$data['member_number']}";
+        return $this->sendSms($phone, $message, ['source' => 'Payment deadline']);
     }
     
     public function sendAccountDeactivationSms($phone, $data)
     {
         $message = "Account Deactivated: Your membership has been suspended due to non-payment. Pay KES " . REACTIVATION_FEE . " reactivation fee + dues to restore. Member: {$data['member_number']}";
-        return $this->sendSms($phone, $message);
+        return $this->sendSms($phone, $message, ['source' => 'Membership suspension']);
     }
     
     public function sendBulkSms($recipients, $message)
@@ -348,7 +362,7 @@ class SmsService
         
         $message .= " - Shena Companion";
         
-        return $this->sendSms($phone, $message);
+        return $this->sendSms($phone, $message, ['source' => 'Member message']);
     }
     
     public function formatPhoneNumber($phone)

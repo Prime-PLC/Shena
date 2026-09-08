@@ -2,13 +2,13 @@
 $member = $member ?? [];
 $packages = $packages ?? [];
 $membershipPlanData = [];
-foreach ($packages as $packageKey => $package) {
+foreach ($packages as $packageKey => $package) { if (!empty($package['legacy_alias'])) continue;
     $membershipPlanData[$packageKey] = [
         'name' => $package['name'] ?? $packageKey,
         'monthly_contribution' => (float)($package['monthly_contribution'] ?? 0),
     ];
 }
-$selectedPackageKey = $member['package_key'] ?? ($member['package'] ?? '');
+$selectedPackageKey = PlatinumPricingService::canonicalPackageKey((string)($member['package_key'] ?? ($member['package'] ?? '')));
 ?>
 <?php include_once __DIR__ . '/../layouts/admin-header.php'; ?>
 
@@ -381,7 +381,7 @@ $selectedPackageKey = $member['package_key'] ?? ($member['package'] ?? '');
                         </label>
                         <select name="package_key" class="form-select" id="memberPackageKey" required>
                             <option value="">Select Package</option>
-                            <?php foreach ($packages as $packageKey => $package): ?>
+                            <?php foreach ($packages as $packageKey => $package): if (!empty($package['legacy_alias'])) continue; ?>
                                 <option value="<?= htmlspecialchars($packageKey) ?>" data-monthly-contribution="<?= htmlspecialchars((string)($package['monthly_contribution'] ?? 0)) ?>" <?= $selectedPackageKey === $packageKey ? 'selected' : '' ?>>
                                     <?= htmlspecialchars(($package['name'] ?? $packageKey) . ' - KES ' . number_format((float)($package['monthly_contribution'] ?? 0), 0) . '/month') ?>
                                 </option>

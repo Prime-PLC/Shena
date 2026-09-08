@@ -30,7 +30,7 @@ class NotificationService
      * @param bool $enableFallback Whether to use email fallback (default true)
      * @return array ['success' => bool, 'method' => 'sms|email|failed', 'error' => string]
      */
-    public function send($recipient, $message, $emailSubject = null, $emailBody = null, $enableFallback = true)
+    public function send($recipient, $message, $emailSubject = null, $emailBody = null, $enableFallback = true, $approved = false)
     {
         $result = [
             'success' => false,
@@ -43,7 +43,10 @@ class NotificationService
         // Try SMS first if phone number provided
         if (!empty($recipient['phone'])) {
             $result['sms_attempted'] = true;
-            $smsResult = $this->smsService->sendSms($recipient['phone'], $message);
+            $smsResult = $approved ? $this->smsService->sendApprovedSms($recipient['phone'], $message) : $this->smsService->sendSms($recipient['phone'], $message);
+            if (!empty($smsResult['requires_review'])) {
+                return array_merge($result, $smsResult, ['method' => 'sms_draft', 'sms_attempted' => false]);
+            }
             
             if ($smsResult['success']) {
                 $result['success'] = true;

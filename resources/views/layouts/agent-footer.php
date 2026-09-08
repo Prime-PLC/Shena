@@ -1,5 +1,7 @@
+<?php include __DIR__ . '/../partials/sms-review-panel.php'; ?>
     </div>
     
+    <p class="text-center"><a href="/sms-review">Review pending SMS drafts</a></p>
     <!-- Footer -->
     <footer class="agent-footer">
         <div class="footer-container">
@@ -54,12 +56,12 @@
             </div>
             
             <div class="footer-bottom">
-                <p>© <?php echo date('Y'); ?> Shena Companion Welfare Association. All rights reserved.</p>
+                <p>Â© <?php echo date('Y'); ?> Shena Companion Welfare Association. All rights reserved.</p>
                 <div class="footer-bottom-links">
                     <a href="#">Privacy Policy</a>
-                    <span>•</span>
+                    <span>â€¢</span>
                     <a href="#">Terms of Service</a>
-                    <span>•</span>
+                    <span>â€¢</span>
                     <a href="#">Agent Agreement</a>
                 </div>
             </div>

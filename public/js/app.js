@@ -16,6 +16,33 @@ const ShenaApp = {
         this.setupEventListeners();
         this.initializeComponents();
         this.setupFormValidation();
+        this.initializeSmsComposers();
+        this.initializeSmsResponseFeedback();
+        if (window.location.hash.startsWith("#sms-review-") || window.location.hash === "#account-update-sms") this.focusSmsTarget(window.location.hash);
+    },
+
+    initializeSmsResponseFeedback: function() {
+        const showReview = data => {
+            if (!data || !data.sms_review) return;
+            const review = data.sms_review;
+            window.setTimeout(() => ShenaApp.feedback([{type: 'info', message: review.message, target: review.target}]), 0);
+        };
+        if (window.fetch) {
+            const originalFetch = window.fetch.bind(window);
+            window.fetch = async function(...args) {
+                const response = await originalFetch(...args);
+                if (response.url && new URL(response.url, window.location.href).origin === window.location.origin && (response.headers.get('content-type') || '').includes('application/json')) {
+                    const target = response.headers.get('X-Shena-Sms-Review');
+                    if (target) showReview({sms_review: {target, message: 'Your SMS draft is ready to edit and review. No SMS has been sent.'}});
+                    else response.clone().json().then(showReview).catch(() => {});
+                }
+                return response;
+            };
+        }
+        if (window.jQuery) window.jQuery(document).ajaxComplete((event, xhr) => {
+            const target = xhr.getResponseHeader('X-Shena-Sms-Review');
+            showReview(target ? {sms_review: {target, message: 'Your SMS draft is ready to edit and review. No SMS has been sent.'}} : xhr.responseJSON);
+        });
     },
 
     // Setup event listeners
@@ -53,17 +80,6 @@ const ShenaApp = {
                 return false;
             }
         });
-
-        // Auto-hide alerts
-        setTimeout(function() {
-            const alerts = document.querySelectorAll('.alert.alert-dismissible');
-            alerts.forEach(function(alert) {
-                if (alert.classList.contains('show')) {
-                    const bsAlert = new bootstrap.Alert(alert);
-                    bsAlert.close();
-                }
-            });
-        }, 5000);
 
         // Mobile navigation
         const navToggler = document.querySelector('.navbar-toggler');
@@ -335,6 +351,94 @@ const ShenaApp = {
         }
     },
 
+    focusSmsTarget: function(target) {
+        if (!target) return;
+        if (target.startsWith('/')) {
+            const url = new URL(target, window.location.origin);
+            if (url.origin !== window.location.origin) return;
+            if (url.pathname !== window.location.pathname || url.search !== window.location.search) { window.location.assign(url.href); return; }
+            target = url.hash;
+        }
+        if (!/^#(?:account-update-sms|sms-review-[a-z0-9-]+)$/.test(target)) return;
+        const element = document.getElementById(target.slice(1));
+        if (!element) return;
+        const focus = element.querySelector('textarea') || element;
+        focus.focus({preventScroll: true});
+        const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        element.scrollIntoView({behavior: reduced ? 'auto' : 'smooth', block: 'start'});
+    },
+
+    initializeSmsComposers: function() {
+        document.querySelectorAll('[data-sms-composer]').forEach(form => {
+            if (form.dataset.initialized) return;
+            form.dataset.initialized = '1';
+            const input = form.querySelector('[data-sms-message]');
+            const bubble = form.querySelector('[data-sms-bubble]');
+            const count = form.querySelector('[data-sms-count]');
+            const update = () => {
+                bubble.textContent = input.value;
+                const length = Array.from(input.value).length;
+                // Conservative estimate; provider encoding may use more segments.
+                const unicode = /[^\x20-\x7E\r\n]/.test(input.value);
+                const units = unicode ? input.value.length : input.value.length + (input.value.match(/[\^{}\\\[\]~|]/g) || []).length;
+                const single = unicode ? 70 : 160, multi = unicode ? 67 : 153;
+                const segments = units <= single ? (units ? 1 : 0) : Math.ceil(units / multi);
+                count.textContent = `${length}/${input.maxLength} characters - ${segments} SMS segment${segments === 1 ? '' : 's'}`;
+            };
+            input.addEventListener('input', update); update();
+            form.addEventListener('submit', event => {
+                if (form.dataset.submitting) { event.preventDefault(); return; }
+                const decision = event.submitter?.value || 'send';
+                if (decision === 'save') return;
+                event.preventDefault();
+                const message = decision === 'discard' ? 'Discard this unsent SMS? The saved action will remain.' : 'Send this message to the recipient shown above?\n\n' + input.value;
+                ShenaApp.confirmAction(message, () => {
+                    form.dataset.submitting = '1';
+                    const field = document.createElement('input'); field.type = 'hidden'; field.name = 'decision'; field.value = decision; form.append(field);
+                    form.querySelectorAll('button').forEach(button => button.disabled = true);
+                    form.submit();
+                }, null, {textOnly: true, title: decision === 'discard' ? 'Discard SMS' : 'Review SMS', confirmText: decision === 'discard' ? 'Discard' : 'Send SMS'});
+            });
+        });
+    },
+
+    // Persistent, text-only result dialog; native dialog provides keyboard focus containment.
+    feedback: function(messages) {
+        const target = [...messages].reverse().find(item => item.target)?.target || '';
+        let dialog = document.getElementById('shena-feedback-dialog');
+        if (dialog) {
+            if (target) dialog.dataset.feedbackTarget = target;
+            messages.forEach(item => {
+                const p = document.createElement('p'); p.textContent = item.message;
+                dialog.querySelector('[data-feedback-messages]').append(p);
+            });
+            return;
+        }
+        if (!document.getElementById('shena-feedback-style')) {
+            const style = document.createElement('style'); style.id = 'shena-feedback-style';
+            style.textContent = '#shena-feedback-dialog::backdrop{background:rgba(0,0,0,.5)} #shena-feedback-dialog button:focus-visible{outline:3px solid #7F3D9E;outline-offset:4px}';
+            document.head.append(style);
+        }
+        const previousFocus = document.activeElement;
+        dialog = document.createElement('dialog');
+        dialog.id = 'shena-feedback-dialog';
+        dialog.dataset.feedbackTarget = target;
+        dialog.setAttribute('aria-labelledby', 'shena-feedback-title');
+        dialog.style.cssText = 'position:fixed;inset:0;margin:auto;width:min(92vw,560px);max-height:85vh;overflow:auto;border:0;border-radius:12px;padding:24px;box-shadow:0 12px 60px #0005;';
+        const title = document.createElement('h2'); title.id = 'shena-feedback-title';
+        title.style.fontSize = '1.3rem';
+        title.textContent = messages.some(m => m.type === 'error') ? 'Please check this' : 'Update';
+        const body = document.createElement('div'); body.dataset.feedbackMessages = '';
+        messages.forEach(item => { const p = document.createElement('p'); p.textContent = item.message; p.style.whiteSpace = 'pre-wrap'; body.append(p); });
+        const close = document.createElement('button'); close.type = 'button'; close.textContent = 'Got it';
+        close.className = 'btn btn-primary'; close.style.minHeight = '44px';
+        close.addEventListener('click', () => { if (typeof dialog.close === 'function') dialog.close(); else dialog.remove(); });
+        dialog.append(title, body, close); document.body.append(dialog);
+        dialog.addEventListener('close', () => { const destination = dialog.dataset.feedbackTarget; dialog.remove(); if (destination) ShenaApp.focusSmsTarget(destination); else if (previousFocus && previousFocus.isConnected) previousFocus.focus(); });
+        if (typeof dialog.showModal === 'function') { dialog.showModal(); close.focus(); }
+        else { dialog.setAttribute('open', ''); close.addEventListener('click', () => { if (target) ShenaApp.focusSmsTarget(target); else if (previousFocus && previousFocus.isConnected) previousFocus.focus(); }); }
+    },
+
     // Modern Modal System
     confirmAction: function(message, onConfirm, onCancel = null, options = {}) {
         const title = options.title || 'Confirm Action';
@@ -349,7 +453,8 @@ const ShenaApp = {
             cancelText: cancelText,
             type: type,
             onConfirm: onConfirm,
-            onCancel: onCancel
+            onCancel: onCancel,
+            textOnly: options.textOnly === true
         });
     },
 
@@ -414,12 +519,12 @@ const ShenaApp = {
                 <div class="modal-dialog modal-dialog-centered">
                     <div class="modal-content shadow-lg border-0">
                         <div class="modal-header border-0 pb-0">
-                            <h5 class="modal-title fw-bold">${title}</h5>
+                            <h5 class="modal-title fw-bold">${options.textOnly ? '' : title}</h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
                         <div class="modal-body text-center py-4">
                             ${icon ? `<div class="mb-3">${icon}</div>` : ''}
-                            <p class="mb-0 fs-6">${message}</p>
+                            <p class="mb-0 fs-6">${options.textOnly ? '' : message}</p>
                         </div>
                         <div class="modal-footer border-0 justify-content-center pt-0">
                             ${showCancel ? `<button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">${cancelText}</button>` : ''}
@@ -434,6 +539,10 @@ const ShenaApp = {
         document.body.insertAdjacentHTML('beforeend', modalHTML);
 
         const modalElement = document.getElementById('shena-custom-modal');
+        if (options.textOnly) {
+            modalElement.querySelector('.modal-title').textContent = title;
+            modalElement.querySelector('.modal-body p').textContent = message;
+        }
         const modal = new bootstrap.Modal(modalElement);
         const confirmBtn = document.getElementById('modal-confirm-btn');
 

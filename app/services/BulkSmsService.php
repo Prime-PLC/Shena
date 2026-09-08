@@ -501,6 +501,7 @@ class BulkSmsService
                         $message,
                         $campaign['title'],
                         null,
+                        true,
                         true
                     );
 
@@ -533,7 +534,7 @@ class BulkSmsService
                         );
                     }
                 } else {
-                    $result = $this->smsService->sendSms($recipient['recipient_value'], $message);
+                    $result = $this->smsService->sendApprovedSms($recipient['recipient_value'], $message);
 
                     if (!empty($result['success'])) {
                         $this->updateRecipientStatus(
@@ -1353,7 +1354,7 @@ class BulkSmsService
         }
 
         $this->updateRecipientStatus($recipientId, 'pending', null, null, null, null, null, null);
-        $result = $this->smsService->sendSms($phone, $message);
+        $result = $this->smsService->sendApprovedSms($phone, $message);
         if (!empty($result['success'])) {
             $this->updateRecipientStatus(
                 $recipientId,
@@ -1480,8 +1481,12 @@ class BulkSmsService
         $failedCount = 0;
 
         foreach ($items as $item) {
+            // One worker owns this send even when an admin and background worker overlap.
+            $claim = $this->db->prepare("UPDATE sms_queue SET status = 'processing', updated_at = NOW() WHERE id = ? AND status = 'pending'");
+            $claim->execute([(int)$item['id']]);
+            if ($claim->rowCount() !== 1) continue;
             try {
-                $result = $this->smsService->sendSms($item['phone_number'], $item['message']);
+                $result = $this->smsService->sendApprovedSms($item['phone_number'], $item['message']);
 
                 if (!empty($result['success'])) {
                     $this->updateQueueStatus(
@@ -1495,13 +1500,13 @@ class BulkSmsService
                     );
                     $sentCount++;
                 } else {
-                    $this->updateQueueStatus($item['id'], 'failed', $result['error'] ?? 'Unknown error', null, null, null, $result);
+                    $this->updateQueueStatus($item['id'], ($result['status'] ?? '') === 'unknown' ? 'unknown' : 'failed', $result['error'] ?? 'Unknown error', null, null, null, $result);
                     $failedCount++;
                 }
 
                 usleep(100000);
             } catch (Throwable $e) {
-                $this->updateQueueStatus($item['id'], 'failed', $e->getMessage());
+                $this->updateQueueStatus($item['id'], 'unknown', 'Submission outcome is uncertain. Check the provider before retrying.');
                 $failedCount++;
             }
         }
@@ -1530,9 +1535,13 @@ class BulkSmsService
         $processed = 0;
 
         foreach ($items as $item) {
+            // One worker owns this send even when an admin and background worker overlap.
+            $claim = $this->db->prepare("UPDATE sms_queue SET status = 'processing', updated_at = NOW() WHERE id = ? AND status = 'pending'");
+            $claim->execute([(int)$item['id']]);
+            if ($claim->rowCount() !== 1) continue;
             $processed++;
             try {
-                $result = $this->smsService->sendSms($item['phone_number'], $item['message']);
+                $result = $this->smsService->sendApprovedSms($item['phone_number'], $item['message']);
                 if (!empty($result['success'])) {
                     $this->updateQueueStatus(
                         $item['id'],
@@ -1545,11 +1554,11 @@ class BulkSmsService
                     );
                     $submitted++;
                 } else {
-                    $this->updateQueueStatus($item['id'], 'failed', $result['error'] ?? 'Unknown error', null, null, null, $result);
+                    $this->updateQueueStatus($item['id'], ($result['status'] ?? '') === 'unknown' ? 'unknown' : 'failed', $result['error'] ?? 'Unknown error', null, null, null, $result);
                     $failed++;
                 }
             } catch (Throwable $e) {
-                $this->updateQueueStatus($item['id'], 'failed', $e->getMessage());
+                $this->updateQueueStatus($item['id'], 'unknown', 'Submission outcome is uncertain. Check the provider before retrying.');
                 $failed++;
             }
         }

@@ -1,3 +1,4 @@
+<?php include __DIR__ . '/../partials/sms-review-panel.php'; ?>
     </div>
 
     <!-- Footer -->

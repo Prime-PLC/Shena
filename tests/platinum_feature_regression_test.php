@@ -8,6 +8,8 @@ $platinum_config = require $root . '/config/platinum.php';
 $pricing = new PlatinumPricingService();
 $quotes = [
     ['individual_71_80', '1950-01-01', 550.0],
+    ['individual_71_80', (new DateTimeImmutable('today'))->modify('-70 years')->format('Y-m-d'), 550.0],
+    ['couple_children_parents_inlaws_71_80', (new DateTimeImmutable('today'))->modify('-70 years')->format('Y-m-d'), 600.0],
     ['couple_children_below_70', '1990-01-01', 400.0],
     ['executive_above_70', '1950-01-01', 700.0],
 ];
@@ -20,8 +22,8 @@ foreach ($quotes as [$packageKey, $dateOfBirth, $expectedAmount]) {
     }
 }
 $invalidPackageAge = $pricing->quote('individual_71_80', '1990-01-01');
-if ($invalidPackageAge !== null) {
-    fwrite(STDERR, "A Platinum conversion must reject a member outside the selected Basic package age range.\n");
+if (!$invalidPackageAge || (float)$invalidPackageAge['amount'] !== 550.0) {
+    fwrite(STDERR, "A Platinum conversion must preserve the exact Basic package rate regardless of owner age band.\n");
     $failed = true;
 }
 
@@ -34,7 +36,7 @@ $checks = [
         'name="package_id"',
         'name="platinum_opt_in"',
         'id="productSummary"',
-        'function platinumPrice(age, coverageType)',
+        'function platinumPrice(packageKey)',
     ],
     'resources/views/agent/register-member.php' => [
         'agentPlatinumPanel',
@@ -47,7 +49,7 @@ $checks = [
         "'Product Tier'",
         "(new PlatinumPricingService())->quote(\$packageKey, \$dateOfBirth)",
         "'package_key' => \$quote['package_key']",
-        'New account monthly contribution',
+        'No SMS was sent',
         'platinumMigrationOptions',
         'revertMemberPlatinumToBasic',
     ],

@@ -4,13 +4,13 @@
  * Returned as an associative array keyed by package slug.
  */
 
-return [
+$packages = [
     'individual_below_70' => [
-        'name' => 'Individual Below 70 Years',
-        'description' => 'Individual coverage for members below 70 years',
+        'name' => 'Individual 70 Years and Below',
+        'description' => 'Individual coverage for members aged 70 or below',
         'monthly_contribution' => 100,
         'age_min' => 18,
-        'age_max' => 69,
+        'age_max' => 70,
         'category' => 'individual',
         'coverage_type' => 'principal_only',
         'services' => 'all'
@@ -46,32 +46,32 @@ return [
         'services' => 'all'
     ],
     'couple_below_70' => [
-        'name' => 'Couple Below 70 Years',
-        'description' => 'Coverage for couples below 70 years',
+        'name' => 'Couple 70 Years and Below',
+        'description' => 'Coverage for couples aged 70 or below',
         'monthly_contribution' => 150,
         'age_min' => 18,
-        'age_max' => 69,
+        'age_max' => 70,
         'category' => 'family',
         'coverage_type' => 'couple',
         'services' => 'all'
     ],
     'couple_children_below_70' => [
-        'name' => 'Couple & Children Below 70 Years',
+        'name' => 'Couple & Children 70 Years and Below',
         'description' => 'Coverage for couple and children below 18 years',
         'monthly_contribution' => 200,
         'age_min' => 18,
-        'age_max' => 69,
+        'age_max' => 70,
         'category' => 'family',
         'coverage_type' => 'couple_children',
         'max_children' => 10,
         'services' => 'all'
     ],
     'couple_children_parents_below_70' => [
-        'name' => 'Couple, Children & Parents Below 70 Years',
-        'description' => 'Coverage for couple, children and parents below 70 years',
+        'name' => 'Couple, Children & Parents 70 Years and Below',
+        'description' => 'Coverage for couple, children and parents aged 70 or below',
         'monthly_contribution' => 250,
         'age_min' => 18,
-        'age_max' => 69,
+        'age_max' => 70,
         'category' => 'extended_family_1',
         'coverage_type' => 'couple_children_parents',
         'max_children' => 10,
@@ -79,11 +79,11 @@ return [
         'services' => 'all'
     ],
     'couple_children_parents_inlaws_below_70' => [
-        'name' => 'Couple, Children, Parents & In-laws Below 70 Years',
-        'description' => 'Coverage for couple, children, parents and in-laws below 70 years',
+        'name' => 'Couple, Children, Parents & In-laws 70 Years and Below',
+        'description' => 'Coverage for couple, children, parents and in-laws aged 70 or below',
         'monthly_contribution' => 300,
         'age_min' => 18,
-        'age_max' => 69,
+        'age_max' => 70,
         'category' => 'extended_family_2',
         'coverage_type' => 'couple_children_parents_inlaws',
         'max_children' => 10,
@@ -91,11 +91,11 @@ return [
         'max_inlaws' => 4,
         'services' => 'all'
     ],
-    'couple_children_parents_70_80' => [
-        'name' => 'Couple, Children & Parents 70-80 Years',
-        'description' => 'Coverage for couple, children and parents aged 70-80 years',
+    'couple_children_parents_71_80' => [
+        'name' => 'Couple, Children & Parents 71-80 Years',
+        'description' => 'Coverage for couple, children and parents aged 71-80 years',
         'monthly_contribution' => 350,
-        'age_min' => 70,
+        'age_min' => 71,
         'age_max' => 80,
         'category' => 'extended_family_1',
         'coverage_type' => 'couple_children_parents',
@@ -167,11 +167,11 @@ return [
         'services' => 'all'
     ],
     'executive_below_70' => [
-        'name' => 'Executive Package Below 70 Years',
-        'description' => 'Premium executive coverage for individuals below 70 years with enhanced services',
+        'name' => 'Executive Package 70 Years and Below',
+        'description' => 'Premium executive coverage for individuals aged 70 or below with enhanced services',
         'monthly_contribution' => 300,
         'age_min' => 18,
-        'age_max' => 69,
+        'age_max' => 70,
         'category' => 'executive',
         'coverage_type' => 'executive',
         'premium_features' => true,
@@ -181,7 +181,7 @@ return [
         'name' => 'Executive Package Above 70 Years',
         'description' => 'Premium executive coverage for individuals above 70 years with enhanced services',
         'monthly_contribution' => 500,
-        'age_min' => 70,
+        'age_min' => 71,
         'age_max' => 100,
         'category' => 'executive',
         'coverage_type' => 'executive',
@@ -189,3 +189,8 @@ return [
         'services' => 'all_premium'
     ]
 ];
+
+// Read compatibility only: older stored records keep their key until deliberately edited.
+$packages['couple_children_parents_70_80'] = $packages['couple_children_parents_71_80'];
+$packages['couple_children_parents_70_80']['legacy_alias'] = true;
+return $packages;

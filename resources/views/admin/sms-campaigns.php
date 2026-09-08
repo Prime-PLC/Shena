@@ -32,6 +32,7 @@ $editCampaignToOpenJson = $editCampaignToOpen ? json_encode([
 ?>
 <?php include_once __DIR__ . '/../layouts/admin-header.php'; ?>
 
+<p><a class="btn btn-outline-primary" href="/sms-review">Review action SMS drafts</a></p>
 <style>
     .page-header {
         background: #7F3D9E;
@@ -606,65 +607,6 @@ $editCampaignToOpenJson = $editCampaignToOpen ? json_encode([
         grid-template-columns: minmax(240px, 320px) 1fr;
         gap: 22px;
         align-items: start;
-    }
-
-    .sms-phone-frame {
-        width: min(100%, 292px);
-        margin: 0 auto;
-        border: 10px solid #101820;
-        border-radius: 34px;
-        background: #fff;
-        box-shadow: 0 18px 45px rgba(17, 24, 39, 0.18);
-        overflow: hidden;
-    }
-
-    .sms-phone-screen {
-        min-height: 460px;
-        display: flex;
-        flex-direction: column;
-        background: #fff;
-    }
-
-    .sms-phone-top {
-        height: 54px;
-        display: grid;
-        grid-template-columns: 32px 1fr 32px;
-        align-items: center;
-        border-bottom: 1px solid #F3F4F6;
-        padding: 0 12px;
-        color: #111827;
-    }
-
-    .sms-phone-sender {
-        text-align: center;
-        font-weight: 800;
-        font-size: 12px;
-        letter-spacing: 0;
-    }
-
-    .sms-phone-body {
-        flex: 1;
-        padding: 30px 24px;
-    }
-
-    .sms-phone-meta {
-        text-align: center;
-        font-size: 10px;
-        color: #6B7280;
-        margin-bottom: 10px;
-        line-height: 1.35;
-    }
-
-    .sms-bubble {
-        background: #F4F4F5;
-        border: 1px solid #D4D4D8;
-        border-radius: 12px;
-        padding: 12px 14px;
-        color: #111827;
-        font-size: 13px;
-        line-height: 1.45;
-        white-space: pre-wrap;
-        word-break: break-word;
     }
 
     .sms-phone-compose {

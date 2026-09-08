@@ -1453,47 +1453,13 @@ class BulkSmsController extends BaseController
                 throw new Exception('Queue item ID is required');
             }
             
-            // Get queue item
-            $sql = "SELECT * FROM sms_queue WHERE id = ? AND status = 'pending'";
-            $stmt = $this->db->getConnection()->prepare($sql);
-            $stmt->execute([$itemId]);
-            $item = $stmt->fetch(PDO::FETCH_ASSOC);
-            
-            if (!$item) {
-                throw new Exception('Queue item not found or already processed');
-            }
-            
-            // Send SMS
-            $result = $this->smsService->sendSms($item['phone_number'], $item['message']);
-            
-            if ($result && $result['success']) {
-                $sql = "UPDATE sms_queue
-                        SET status = 'submitted',
-                            submitted_at = NOW(),
-                            provider_message_id = ?,
-                            provider_status = ?,
-                            provider_cause = ?,
-                            provider_response = ?
-                        WHERE id = ?";
-                $stmt = $this->db->getConnection()->prepare($sql);
-                $stmt->execute([
-                    $result['provider_message_id'] ?? $result['data']['transactionId'] ?? null,
-                    $result['provider_status'] ?? null,
-                    $result['provider_cause'] ?? null,
-                    json_encode($result),
-                    $itemId
-                ]);
-                
-                $this->json(['success' => true, 'message' => 'SMS submitted. Awaiting delivery confirmation.']);
-            } else {
-                $error = $result['error'] ?? 'Unknown error';
-                $sql = "UPDATE sms_queue SET status = 'failed', error_message = ?, retry_count = retry_count + 1 WHERE id = ?";
-                $stmt = $this->db->getConnection()->prepare($sql);
-                $stmt->execute([$error, $itemId]);
-                
-                throw new Exception('Failed to send SMS: ' . $error);
-            }
-            
+            // Use the same atomic claim as the background worker.
+            $result = $this->bulkSmsService->processQueueByIds([(int)$itemId]);
+            $submitted = (int)($result['submitted_count'] ?? 0);
+            $this->json(['success' => $submitted > 0, 'message' => $submitted > 0
+                ? 'SMS submitted. Delivery is not yet confirmed.'
+                : 'No new submission confirmed. This item may already be processing; check its status before retrying.']);
+
         } catch (Exception $e) {
             error_log('Send queue item error: ' . $e->getMessage());
             $this->json(['success' => false, 'message' => $e->getMessage()], 500);

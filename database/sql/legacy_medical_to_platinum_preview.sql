@@ -17,7 +17,7 @@ SELECT
         WHEN m.package_key NOT IN (
             'individual_below_70','individual_71_80','individual_81_90','individual_91_100',
             'couple_below_70','couple_children_below_70',
-            'couple_children_parents_below_70','couple_children_parents_70_80','couple_children_parents_81_90','couple_children_parents_91_100',
+            'couple_children_parents_below_70','couple_children_parents_70_80','couple_children_parents_71_80','couple_children_parents_81_90','couple_children_parents_91_100',
             'couple_children_parents_inlaws_below_70','couple_children_parents_inlaws_71_80','couple_children_parents_inlaws_81_90','couple_children_parents_inlaws_91_100',
             'executive_below_70','executive_above_70'
         ) THEN 'STOP: selected Basic package is not recognised'

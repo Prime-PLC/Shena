@@ -1,3 +1,8 @@
+<?php
+require_once __DIR__ . '/../../../app/services/PlatinumPricingService.php';
+$onboardingPlatinumPrices = [];
+foreach (($GLOBALS['membership_packages'] ?? []) as $key => $definition) $onboardingPlatinumPrices[$key] = (new PlatinumPricingService())->packageAmount($key);
+?>
 <?php 
 $page = 'dashboard';
 include __DIR__ . '/../layouts/member-header.php';
@@ -888,7 +893,7 @@ $missingFields = $missing_profile_fields ?? [];
         individual: {
             flat: false, hint: 'Your age',
             brackets: [
-                { key: 'individual_below_70', label: 'Below 70 years', price: 100 },
+                { key: 'individual_below_70', label: '70 years and below', price: 100 },
                 { key: 'individual_71_80',    label: '71–80 years',    price: 350 },
                 { key: 'individual_81_90',    label: '81–90 years',    price: 450 },
                 { key: 'individual_91_100',   label: '91–100 years',   price: 650 }
@@ -898,8 +903,8 @@ $missingFields = $missing_profile_fields ?? [];
         extended_family_1: {
             flat: false, hint: 'Age of the oldest parent you are covering',
             brackets: [
-                { key: 'couple_children_parents_below_70', label: 'Below 70 years', price: 250 },
-                { key: 'couple_children_parents_70_80',    label: '70–80 years',    price: 350 },
+                { key: 'couple_children_parents_below_70', label: '70 years and below', price: 250 },
+                { key: 'couple_children_parents_71_80',    label: '71–80 years',    price: 350 },
                 { key: 'couple_children_parents_81_90',    label: '81–90 years',    price: 450 },
                 { key: 'couple_children_parents_91_100',   label: '91–100 years',   price: 650 }
             ]
@@ -907,7 +912,7 @@ $missingFields = $missing_profile_fields ?? [];
         extended_family_2: {
             flat: false, hint: 'Age of the oldest parent or in-law you are covering',
             brackets: [
-                { key: 'couple_children_parents_inlaws_below_70', label: 'Below 70 years', price: 300 },
+                { key: 'couple_children_parents_inlaws_below_70', label: '70 years and below', price: 300 },
                 { key: 'couple_children_parents_inlaws_71_80',    label: '71–80 years',    price: 400 },
                 { key: 'couple_children_parents_inlaws_81_90',    label: '81–90 years',    price: 550 },
                 { key: 'couple_children_parents_inlaws_91_100',   label: '91–100 years',   price: 650 }
@@ -916,8 +921,8 @@ $missingFields = $missing_profile_fields ?? [];
         executive: {
             flat: false, hint: 'Your age',
             brackets: [
-                { key: 'executive_below_70', label: 'Below 70 years',  price: 300 },
-                { key: 'executive_above_70', label: '70 years & above', price: 500 }
+                { key: 'executive_below_70', label: '70 years and below',  price: 300 },
+                { key: 'executive_above_70', label: '71 years & above', price: 500 }
             ]
         }
     };
@@ -978,8 +983,8 @@ $missingFields = $missing_profile_fields ?? [];
 
         // Determine the individual bracket key based on age
         var bracketKey, bracketLabel, bracketPrice;
-        if (age < 70) {
-            bracketKey = 'individual_below_70'; bracketLabel = 'Below 70 years'; bracketPrice = 100;
+        if (age <= 70) {
+            bracketKey = 'individual_below_70'; bracketLabel = '70 years and below'; bracketPrice = 100;
         } else if (age <= 80) {
             bracketKey = 'individual_71_80'; bracketLabel = '71–80 years'; bracketPrice = 350;
         } else if (age <= 90) {
@@ -1046,13 +1051,9 @@ $missingFields = $missing_profile_fields ?? [];
         updatePlatinumPriceEstimate();
     }
 
-    function platinumBandPrice(age) {
-        if (age === null || age === undefined || isNaN(age)) { return null; }
-        if (age < 70) { return 300; }
-        if (age <= 80) { return 550; }
-        if (age <= 90) { return 650; }
-        if (age <= 100) { return 850; }
-        return null;
+    const onboardingPlatinumPrices = <?= json_encode($onboardingPlatinumPrices, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    function platinumBandPrice(packageKey) {
+        return Number(onboardingPlatinumPrices[packageKey] || 0) || null;
     }
 
     function updatePlatinumPriceEstimate() {
@@ -1065,8 +1066,8 @@ $missingFields = $missing_profile_fields ?? [];
             var diffMs = Date.now() - dob.getTime();
             age = Math.floor(diffMs / (1000 * 60 * 60 * 24 * 365.25));
         }
-        var price = platinumBandPrice(age);
-        priceEl.textContent = price ? ('KES ' + price.toLocaleString()) : 'a price based on age';
+        var price = platinumBandPrice(selectedPackageId);
+        priceEl.textContent = price ? ('KES ' + price.toLocaleString()) : 'choose a Basic package';
     }
 
     planSelect.addEventListener('change', function () {

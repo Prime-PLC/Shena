@@ -209,7 +209,7 @@ class AuthController extends BaseController
                 : '****';
 
             $smsService = new SmsService();
-            $smsResult  = $smsService->sendSms($phone, 'Your SHENA login code is ' . $otpCode . '. It expires in 5 minutes.');
+            $smsResult  = $smsService->sendApprovedSms($phone, 'Your SHENA login code is ' . $otpCode . '. It expires in 5 minutes.');
 
             if (empty($smsResult['success']) && $this->isLocalOrDebugEnvironment()) {
                 $this->json(['success' => true, 'otp_required' => true, 'masked_phone' => $maskedPhone,
@@ -308,7 +308,7 @@ class AuthController extends BaseController
             $_SESSION[$rateLimitKey]['last_sent'] = time();
 
             $smsService = new SmsService();
-            $smsResult = $smsService->sendSms($phone, $otpMessage);
+            $smsResult = $smsService->sendApprovedSms($phone, $otpMessage);
 
             if (empty($smsResult['success'])) {
                 if ($this->isLocalOrDebugEnvironment()) {
@@ -874,7 +874,7 @@ class AuthController extends BaseController
             $_SESSION[$rateLimitKey] = $rl;
 
             $smsService = new SmsService();
-            $smsResult = $smsService->sendSms($phone, 'Your SHENA password reset code is ' . $otpCode . '. Valid for 10 minutes. Ignore if you did not request this.');
+            $smsResult = $smsService->sendApprovedSms($phone, 'Your SHENA password reset code is ' . $otpCode . '. Valid for 10 minutes. Ignore if you did not request this.');
 
             if (empty($smsResult['success'])) {
                 if ($this->isLocalOrDebugEnvironment()) {
@@ -1324,6 +1324,7 @@ class AuthController extends BaseController
         }
         $allowedBrackets = ['below_70', '71_80', '81_90', '91_100', '70_80', '81_90', 'above_70'];
         $preselectBracket = $this->sanitizeInput($_GET['bracket'] ?? '');
+        if ($preselectBracket === '70_80') $preselectBracket = '71_80';
         if (!in_array($preselectBracket, $allowedBrackets, true)) {
             $preselectBracket = '';
         }
@@ -1646,7 +1647,7 @@ class AuthController extends BaseController
                 ];
 
                 $smsService = new SmsService();
-                $smsResult = $smsService->sendSms($phone, $otpMessage);
+                $smsResult = $smsService->sendApprovedSms($phone, $otpMessage);
 
                 $otpDeliveryMessage = 'Registration successful. Verify OTP sent to your phone, then create your password.';
                 if (empty($smsResult['success'])) {
@@ -1826,7 +1827,7 @@ class AuthController extends BaseController
             $otpMessage = 'Your SHENA registration verification code is ' . $otpCode . '. It expires in 10 minutes.';
 
             $smsService = new SmsService();
-            $smsResult = $smsService->sendSms($phone, $otpMessage);
+            $smsResult = $smsService->sendApprovedSms($phone, $otpMessage);
 
             $_SESSION['signup_otp']['code_hash'] = password_hash($otpCode, PASSWORD_DEFAULT);
             $_SESSION['signup_otp']['expires_at'] = time() + 600;

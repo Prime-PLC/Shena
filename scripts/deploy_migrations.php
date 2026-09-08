@@ -29,6 +29,7 @@ try {
         '022_platinum_group_coverage_and_cumulative_billing.sql',
         '023_legacy_medical_placeholder_audit.sql',
         '024_platinum_admin_approval_only.sql',
+        '025_sms_review_drafts.sql',
     ];
     foreach ($allowed as $migration) {
         $applied = $pdo->prepare('SELECT 1 FROM schema_migrations WHERE migration = ?');
@@ -61,7 +62,7 @@ try {
         }
     }
 
-    foreach (['platinum_coverages', 'platinum_day_ledgers', 'inpatient_requests', 'legacy_medical_corporate_archive'] as $table) {
+    foreach (['platinum_coverages', 'platinum_day_ledgers', 'inpatient_requests', 'legacy_medical_corporate_archive', 'sms_review_drafts'] as $table) {
         $check = $pdo->prepare('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ? AND table_name = ?');
         $check->execute([DB_NAME, $table]);
         if ((int) $check->fetchColumn() !== 1) {

@@ -26,6 +26,11 @@ abstract class BaseController
     
     protected function json($data, $code = 200)
     {
+        if (is_array($data) && !empty($_SESSION['sms_review_ids']) && in_array($_SESSION['user_role'] ?? '', ['super_admin', 'manager', 'agent'], true)) {
+            $draftId = (int)end($_SESSION['sms_review_ids']);
+            $data['sms_review'] = ['target' => '/sms-review?draft=' . $draftId . '#sms-review-' . $draftId,
+                'message' => 'Your action is saved. Review and edit the SMS before sending. No SMS has been sent.'];
+        }
         http_response_code($code);
         header('Content-Type: application/json');
         echo json_encode($data);

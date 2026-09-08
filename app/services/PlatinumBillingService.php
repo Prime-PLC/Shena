@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . "/PlatinumPricingService.php";
 
 /**
  * Platinum replaces the Basic contribution for each selected coverage group.
@@ -46,7 +47,7 @@ class PlatinumBillingService
 
         $packages = $GLOBALS['membership_packages'] ?? [];
         $principalBasic = MembershipPricingService::resolveSelectedPackageAmount(
-            (string)($member['package_key'] ?? $member['package'] ?? ''),
+            PlatinumPricingService::resolvePackageKey($member),
             $packages
         );
         $corporateGroups = $memberId > 0 ? $this->db->fetchAll(
@@ -153,13 +154,13 @@ class PlatinumBillingService
         }
 
         $corporateGroups = $this->db->fetchAll(
-            "SELECT id, monthly_contribution FROM member_corporate_members
+            "SELECT id, package_key, monthly_contribution FROM member_corporate_members
              WHERE member_id = :member_id AND status = 'active'",
             ['member_id' => $memberId]
         );
         $membershipPackages = $GLOBALS['membership_packages'] ?? [];
         $principalAmount = MembershipPricingService::resolveSelectedPackageAmount(
-            (string) ($member['package_key'] ?? $member['package'] ?? ''),
+            PlatinumPricingService::resolvePackageKey($member),
             $membershipPackages
         );
         $corporateAmounts = [];

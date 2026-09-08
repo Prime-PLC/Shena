@@ -90,14 +90,14 @@ class MemberController extends BaseController
         global $platinum_config;
         return $age !== null && $age < 60
             ? (int) ($platinum_config['maturity_months']['under_60'] ?? 4)
-            : (int) ($platinum_config['maturity_months']['61_and_above'] ?? 7);
+            : (int) ($platinum_config['maturity_months']['60_and_above'] ?? 7);
     }
 
     private function platinumMonthlyContribution(?int $age): ?float
     {
         global $platinum_config;
         if ($age === null) return null;
-        $band = $age < 70 ? 'under_70' : ($age <= 80 ? '71_80' : ($age <= 90 ? '81_90' : ($age <= 100 ? '91_100' : null)));
+        $band = $age <= 70 ? 'under_70' : ($age <= 80 ? '71_80' : ($age <= 90 ? '81_90' : ($age <= 100 ? '91_100' : null)));
         $price = $band === null ? null : ($platinum_config['prices']['individual'][$band] ?? null);
         return $price === null ? null : (float) $price;
     }
@@ -109,7 +109,7 @@ class MemberController extends BaseController
             return [
                 'type' => 'principal', 'id' => null,
                 'label' => trim(($member['first_name'] ?? '') . ' ' . ($member['last_name'] ?? '')) ?: 'Principal package',
-                'package_key' => (string) ($member['package_key'] ?? $member['package'] ?? ''),
+                'package_key' => PlatinumPricingService::resolvePackageKey($member),
                 'date_of_birth' => $member['date_of_birth'] ?? null,
             ];
         }
