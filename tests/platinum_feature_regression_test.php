@@ -144,4 +144,21 @@ foreach ($checks as $file => $needles) {
     }
 }
 
+require_once $root . '/app/services/MembershipPricingService.php';
+foreach ([69 => 'below_70', 70 => 'below_70', 71 => '71_80', 80 => '71_80', 81 => '81_90'] as $age => $band) {
+    if (MembershipPricingService::resolveAgeBand($age) !== $band) {
+        fwrite(STDERR, "Incorrect age band at {$age}.\n"); $failed = true;
+    }
+}
+foreach ($membership_packages as $key => $package) {
+    if (!empty($package['legacy_alias'])) continue;
+    if (str_ends_with($key, '_below_70') && (int)$package['age_max'] !== 70) $failed = true;
+    if (str_ends_with($key, '_71_80') && ((int)$package['age_min'] !== 71 || (int)$package['age_max'] !== 80)) $failed = true;
+}
+foreach (['resources/views/public/membership.php', 'resources/views/public/terms-and-conditions.php'] as $file) {
+    if (preg_match('/70\s*[-–—]\s*80|below (?:age )?70/i', file_get_contents($root . '/' . $file))) {
+        fwrite(STDERR, "Incorrect age-70 label in {$file}.\n"); $failed = true;
+    }
+}
+
 exit($failed ? 1 : 0);

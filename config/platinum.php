@@ -37,7 +37,7 @@ return [
         ],
         'executive' => [
             'under_70' => 500,
-            '70_and_above' => 700,
+            '71_and_above' => 700,
         ],
     ],
 ];

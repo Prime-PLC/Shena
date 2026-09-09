@@ -47,22 +47,22 @@ FROM (
     SELECT DISTINCT m.id AS member_id, CASE WHEN m.package_key = 'couple_children_parents_70_80' THEN 'couple_children_parents_71_80' ELSE m.package_key END AS package_key,
         TIMESTAMPDIFF(YEAR, m.date_of_birth, CURDATE()) AS age,
         CASE m.package_key
-            WHEN 'individual_below_70' THEN 'Individual Below 70 Years'
+            WHEN 'individual_below_70' THEN 'Individual 70 Years and Below'
             WHEN 'individual_71_80' THEN 'Individual 71-80 Years'
             WHEN 'individual_81_90' THEN 'Individual 81-90 Years'
             WHEN 'individual_91_100' THEN 'Individual 91-100 Years'
-            WHEN 'couple_below_70' THEN 'Couple Below 70 Years'
-            WHEN 'couple_children_below_70' THEN 'Couple & Children Below 70 Years'
-            WHEN 'couple_children_parents_below_70' THEN 'Couple, Children & Parents Below 70 Years'
+            WHEN 'couple_below_70' THEN 'Couple 70 Years and Below'
+            WHEN 'couple_children_below_70' THEN 'Couple & Children 70 Years and Below'
+            WHEN 'couple_children_parents_below_70' THEN 'Couple, Children & Parents 70 Years and Below'
             WHEN 'couple_children_parents_71_80' THEN 'Couple, Children & Parents 71-80 Years'
             WHEN 'couple_children_parents_70_80' THEN 'Couple, Children & Parents 71-80 Years' -- legacy stored-key compatibility
             WHEN 'couple_children_parents_81_90' THEN 'Couple, Children & Parents 81-90 Years'
             WHEN 'couple_children_parents_91_100' THEN 'Couple, Children & Parents 91-100 Years'
-            WHEN 'couple_children_parents_inlaws_below_70' THEN 'Couple, Children, Parents & In-laws Below 70 Years'
+            WHEN 'couple_children_parents_inlaws_below_70' THEN 'Couple, Children, Parents & In-laws 70 Years and Below'
             WHEN 'couple_children_parents_inlaws_71_80' THEN 'Couple, Children, Parents & In-laws 71-80 Years'
             WHEN 'couple_children_parents_inlaws_81_90' THEN 'Couple, Children, Parents & In-laws 81-90 Years'
             WHEN 'couple_children_parents_inlaws_91_100' THEN 'Couple, Children, Parents & In-laws 91-100 Years'
-            WHEN 'executive_below_70' THEN 'Executive Package Below 70 Years'
+            WHEN 'executive_below_70' THEN 'Executive Package 70 Years and Below'
             WHEN 'executive_above_70' THEN 'Executive Package Above 70 Years'
         END AS package_name,
         CASE m.package_key

@@ -71,7 +71,7 @@
                         <li>Monthly contributions are payable via <strong>M-Pesa Paybill 4163987</strong>, using your name or ID number as the account reference.</li>
                         <li>Contribution rates are determined by your selected package and the age brackets of covered individuals.</li>
                         <li><strong>SHENA Platinum</strong> is an optional inpatient add-on to a selected SHENA BASIC package. It pays daily bed charges for the package owner and covered dependants, who share one 20-day annual allowance.</li>
-                        <li>Current Platinum individual rates are KES 300 below age 70, KES 550 for ages 71–80, KES 650 for ages 81–90, and KES 850 for ages 91–100. Platinum family and Executive schedules are shown on the membership page.</li>
+                        <li>Current Platinum individual rates are KES 300 for ages 70 and below, KES 550 for ages 71–80, KES 650 for ages 81–90, and KES 850 for ages 91–100. Platinum family and Executive schedules are shown on the membership page.</li>
                         <li>A member is considered <strong>active</strong> only when all current and past contributions are fully settled.</li>
                         <li>Contributions that are <strong>3 or more months in arrears</strong> will result in suspension of benefit coverage.</li>
                         <li>Contributions that are <strong>6 or more months in arrears</strong> may result in termination of membership.</li>

@@ -96,7 +96,7 @@ try {
             // Family packages: pricing based on primary member's age
             // Note: This is simplified - actual package may vary by dependents included
             if ($age <= 70) {
-                $expectedAmount = 300.0; // Base for family below 70
+                $expectedAmount = 300.0; // Base for family 70 and below
                 $expectedPackageName = 'Family 70 and Below';
             } else {
                 $expectedAmount = 650.0; // Base for family above 70

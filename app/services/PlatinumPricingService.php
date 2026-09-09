@@ -32,7 +32,7 @@ class PlatinumPricingService
         $type = $package['coverage_type'] === 'principal_only' ? 'individual' : $package['coverage_type'];
         // The assigned package already identifies the price band. Never reselect it from owner DOB.
         $age = (int)$package['age_min'];
-        $band = $age <= 70 ? 'under_70' : ($type === 'executive' ? '70_and_above'
+        $band = $age <= 70 ? 'under_70' : ($type === 'executive' ? '71_and_above'
             : ($age <= 80 ? '71_80' : ($age <= 90 ? '81_90' : '91_100')));
         $amount = $platinum_config['prices'][$type][$band] ?? null;
         return $amount === null ? null : (float)$amount;
