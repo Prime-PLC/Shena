@@ -544,7 +544,7 @@ $platinumPriceData = $GLOBALS['platinum_config']['prices'] ?? [];
                         <small class="form-hint">Format: +254712345678</small>
                     </div>
                     <div class="form-group">
-                        <label for="email" class="form-label">Email Address <span class="required">*</span></label>
+                        <label for="email" class="form-label">Email Address <small class="text-muted">(optional)</small></label>
                         <input type="email" class="form-input" id="email" name="email" placeholder="member@example.com" value="<?php echo $getOldValue('email'); ?>">
                     </div>
                     <div class="form-group full-width">

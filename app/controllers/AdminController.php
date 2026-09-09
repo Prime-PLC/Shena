@@ -760,12 +760,7 @@ class AdminController extends BaseController
                 return;
             }
 
-            if (!empty($email) && $this->userModel->findByEmail($email)) {
-                $_SESSION['error'] = 'This email address is already registered. Use a different email or leave it blank if the member has no email.';
-                $_SESSION['error_step'] = 2;
-                $this->redirect('/admin/members/register');
-                return;
-            }
+            $email = $this->optionalMemberEmail($email);
 
             if (!empty($idNumber)) {
                 $existing = $this->memberModel->findByNationalId($idNumber);

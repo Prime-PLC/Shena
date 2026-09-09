@@ -120,4 +120,27 @@ foreach ($checks as $check) {
     }
 }
 
+require_once $root . '/app/core/BaseController.php';
+$emailDb = new class {
+    public int $calls = 0;
+    public bool $duplicate = false;
+    public bool $unavailable = false;
+    public function fetch($sql, $params) {
+        $this->calls++;
+        if ($this->unavailable) throw new RuntimeException('Synthetic lookup failure');
+        return $this->duplicate ? ['id'=>1] : null;
+    }
+};
+$controller = new class($emailDb) extends BaseController {
+    public function __construct($db) { $this->db = $db; }
+    public function email($value) { return $this->optionalMemberEmail($value); }
+};
+if ($controller->email('  ') !== null || $emailDb->calls !== 0) $failed = true;
+if ($controller->email('member@example.com') !== 'member@example.com') $failed = true;
+$emailDb->duplicate = true;
+if ($controller->email('member@example.com') !== null) $failed = true;
+$emailDb->duplicate = false; $emailDb->unavailable = true;
+if ($controller->email('member@example.com') !== null || empty($_SESSION['warning'])) $failed = true;
+echo "Optional member email checks completed: empty, valid, duplicate and failed lookup.\n";
+
 exit($failed ? 1 : 0);

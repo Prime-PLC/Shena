@@ -156,8 +156,8 @@
                     
                     <div class="row">
                         <div class="col-md-6 mb-4">
-                            <label for="email" class="form-label">Email Address</label>
-                            <input type="email" class="form-control" id="email" name="email" placeholder="name@example.com" required>
+                            <label for="email" class="form-label">Email Address (optional)</label>
+                            <input type="email" class="form-control" id="email" name="email" placeholder="name@example.com">
                         </div>
                         <div class="col-md-6 mb-4">
                             <label for="phone" class="form-label">M-Pesa Phone Number</label>

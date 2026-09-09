@@ -107,6 +107,20 @@ abstract class BaseController
         return htmlspecialchars(trim($data), ENT_QUOTES, 'UTF-8');
     }
     
+    /** Email is optional for member registration; never attach another account's email. */
+    protected function optionalMemberEmail($value): ?string
+    {
+        $email = trim((string)$value);
+        if ($email === '') return null;
+        try {
+            if (filter_var($email, FILTER_VALIDATE_EMAIL) && !$this->db->fetch('SELECT id FROM users WHERE email = :email', ['email' => $email])) return $email;
+        } catch (Throwable $e) {
+            error_log('Optional registration email lookup unavailable. Continuing without email.');
+        }
+        $_SESSION['warning'] = 'Registration can continue without email. The email entered could not be added; you can add a valid, unused email later.';
+        return null;
+    }
+
     protected function validateEmail($email)
     {
         return filter_var($email, FILTER_VALIDATE_EMAIL);

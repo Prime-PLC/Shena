@@ -418,17 +418,7 @@ class AgentDashboardController extends BaseController
                 'corporate_members' => $_POST['corporate_members'] ?? []
             ];
 
-            // Validate email if provided
-            $emailInput = $this->sanitizeInput($_POST['email'] ?? '');
-            if (!empty($emailInput)) {
-                $emailCheck = $this->db->fetch('SELECT id FROM users WHERE email = :email', ['email' => $emailInput]);
-                if ($emailCheck) {
-                    $_SESSION['error'] = 'This email address is already registered. Use a different email or leave it blank if the member has no email.';
-                    $_SESSION['error_step'] = 2;
-                    $this->redirect('/agent/register-member');
-                    return;
-                }
-            }
+            $emailInput = $this->optionalMemberEmail($_POST['email'] ?? '');
 
             // Normalize phone and validate uniqueness
             $phoneInput = formatKenyanPhone($this->sanitizeInput($_POST['phone'] ?? ''));
@@ -459,7 +449,7 @@ class AgentDashboardController extends BaseController
             // Create user record
             $firstName = $this->sanitizeInput($_POST['first_name']);
             $lastName = $this->sanitizeInput($_POST['last_name']);
-            $email = $this->sanitizeInput($_POST['email']);
+            $email = $emailInput;
             $phone = $this->sanitizeInput($_POST['phone']);
 
             $userStmt = $this->db->getConnection()->prepare(

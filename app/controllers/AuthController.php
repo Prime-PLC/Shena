@@ -480,16 +480,8 @@ class AuthController extends BaseController
                 return;
             }
             
-            // Check if email already exists (only if provided)
-            if (!empty($userData['email']) && $this->userModel->findByEmail($userData['email'])) {
-                $_SESSION['error'] = 'Email address already registered.';
-                $_SESSION['old_input'] = array_merge($userData, $memberData);
-                unset($_SESSION['old_input']['password'], $_SESSION['old_input']['confirm_password']);
-                $_SESSION['error_field'] = 'email';
-                $this->redirect('/register');
-                return;
-            }
-            
+            $userData['email'] = $this->optionalMemberEmail($userData['email'] ?? '');
+
             // Normalize phone and check uniqueness
             $userData['phone'] = formatKenyanPhone($userData['phone']);
             if ($this->userModel->findByPhone($userData['phone'])) {
@@ -1464,19 +1456,7 @@ class AuthController extends BaseController
                 return;
             }
             
-            // Check if email or national ID already exists
-            if (!empty($email)) {
-                $existingUser = $this->userModel->findByEmail($email);
-                if ($existingUser) {
-                    echo json_encode([
-                        'success' => false,
-                        'message' => 'Email address already registered',
-                        'field' => 'email',
-                        'old_values' => $_POST
-                    ]);
-                    return;
-                }
-            }
+            $email = $this->optionalMemberEmail($email);
 
             $existingPhone = $this->userModel->findByPhone($phone);
             if ($existingPhone) {
