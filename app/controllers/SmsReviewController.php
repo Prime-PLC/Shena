@@ -5,6 +5,14 @@ class SmsReviewController extends BaseController
     public function index()
     {
         $this->requireRole(['super_admin', 'manager', 'agent']);
+        $admin = in_array($_SESSION['user_role'], ['super_admin', 'manager'], true);
+        $ids = !empty($_GET['draft']) ? [(int)$_GET['draft']] : [];
+        if (!(new SmsReviewService())->pending((int)$_SESSION['user_id'], $admin, $ids, max(1,(int)($_GET['sms_review_page'] ?? 1)))) {
+            $return = $_SESSION['sms_review_return'] ?? ($admin ? '/admin/claims' : '/agent/dashboard');
+            if (!preg_match('#^/(admin|agent)/[a-zA-Z0-9/_-]+$#', $return)) $return = $admin ? '/admin/claims' : '/agent/dashboard';
+            $this->redirect($return);
+            return;
+        }
         $this->generateCsrfToken();
         $this->view('shared.sms-review', ['title' => 'Review SMS drafts']);
     }
@@ -37,6 +45,8 @@ class SmsReviewController extends BaseController
             $_SESSION['sms_feedback_target'] = '#sms-review-' . (int)$id;
             $this->redirect('/sms-review?draft=' . (int)$id);
         }
-        $this->redirect('/sms-review');
+        $return = $_SESSION['sms_review_return'] ?? ($admin ? '/admin/claims' : '/agent/dashboard');
+        if (!preg_match('#^/(admin|agent)/[a-zA-Z0-9/_-]+$#', $return)) $return = $admin ? '/admin/claims' : '/agent/dashboard';
+        $this->redirect($return);
     }
 }

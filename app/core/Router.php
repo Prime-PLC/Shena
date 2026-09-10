@@ -16,6 +16,10 @@ class Router
         $this->addRoute('GET', '/sms-review', 'SmsReviewController@index');
         $this->addRoute('POST', '/sms-review/{id}', 'SmsReviewController@review');
 
+        $this->addRoute('GET', '/admin/service-providers', 'AdminController@serviceProviders');
+        $this->addRoute('POST', '/admin/service-providers', 'AdminController@saveServiceProvider');
+        $this->addRoute('POST', '/admin/claims/provider', 'AdminController@claimProviderAction');
+
         // Public Routes
         $this->addRoute('GET', '/', 'HomeController@index');
         $this->addRoute('GET', '/about', 'HomeController@about');

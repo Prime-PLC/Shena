@@ -1562,7 +1562,7 @@ class MemberController extends BaseController
             error_log('Claim data prepared: ' . json_encode($claimData));
             
             // Validate required fields (no claim_amount required for service-based)
-            $required = ['beneficiary_id', 'deceased_name', 'deceased_id_number', 'date_of_death', 'place_of_death'];
+            $required = ['beneficiary_id', 'deceased_name', 'date_of_death', 'place_of_death'];
             foreach ($required as $field) {
                 if (empty($claimData[$field])) {
                     $_SESSION['error'] = 'Please fill in all required fields.';

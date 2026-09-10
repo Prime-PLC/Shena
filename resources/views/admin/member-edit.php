@@ -248,7 +248,7 @@ $selectedPackageKey = PlatinumPricingService::canonicalPackageKey((string)($memb
     </div>
 
     <!-- Edit Form -->
-    <form method="POST" action="/admin/members/update/<?= $member['id'] ?>" class="form-card">
+    <form method="POST" action="/admin/members/update/<?= $member['id'] ?>" class="form-card" data-confirm-message="Save these member changes? Package changes may update the monthly payment. No SMS will be sent automatically.">
         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
         <div class="card-header">
             <h2 class="card-title">

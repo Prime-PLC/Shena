@@ -908,7 +908,9 @@ class AdminController extends BaseController
             }
             error_log('Admin register error: ' . $e->getMessage());
             $message = $e->getMessage();
-            if (stripos($message, 'Duplicate entry') !== false || stripos($message, 'SQLSTATE[23000]') !== false) {
+            if (stripos($message, 'email') !== false && stripos($message, 'cannot be null') !== false) {
+                $_SESSION['error'] = 'The database still requires email. Apply migration 027_optional_member_email.sql to enable registration without email.';
+            } elseif (stripos($message, 'Duplicate entry') !== false || stripos($message, 'SQLSTATE[23000]') !== false) {
                 if (stripos($message, 'id_number') !== false) {
                     $_SESSION['error'] = 'This National ID is already registered. Search the members table before creating a new record.';
                     $_SESSION['error_step'] = 1;
@@ -2125,23 +2127,24 @@ class AdminController extends BaseController
             return;
         }
 
+        $_SESSION['claim_form'] = array_filter($_POST, fn($key) => $key !== 'csrf_token', ARRAY_FILTER_USE_KEY);
         try {
             $this->validateCsrf();
 
             $memberId = (int)($_POST['member_id'] ?? 0);
             $member = $this->memberModel->getMemberById($memberId);
             if (!$member) {
-                throw new Exception('Please select a valid member.');
+                throw new InvalidArgumentException('Please select a valid member.');
             }
 
             if (($member['status'] ?? '') !== 'active') {
-                throw new Exception('Claims can only be submitted for active members.');
+                throw new InvalidArgumentException('Claims can only be submitted for active members.');
             }
 
             $requestCashAlternative = isset($_POST['request_cash_alternative']) && $_POST['request_cash_alternative'] === '1';
             $cashAlternativeReason = $requestCashAlternative ? $this->sanitizeInput($_POST['cash_alternative_reason'] ?? '') : '';
             if ($requestCashAlternative && strlen($cashAlternativeReason) < 50) {
-                throw new Exception('Cash alternative reason must be at least 50 characters.');
+                throw new InvalidArgumentException('Cash alternative reason must be at least 50 characters.');
             }
 
             $claimData = [
@@ -2150,7 +2153,7 @@ class AdminController extends BaseController
                 'beneficiary_id' => (int)($_POST['beneficiary_id'] ?? 0),
                 'deceased_name' => $this->sanitizeInput($_POST['deceased_name'] ?? ''),
                 'deceased_id_number' => $this->sanitizeInput($_POST['deceased_id_number'] ?? ''),
-                'date_of_birth' => $_POST['date_of_birth'] ?? null,
+                'date_of_birth' => ($_POST['date_of_birth'] ?? '') ?: null,
                 'date_of_death' => $_POST['date_of_death'] ?? '',
                 'place_of_death' => $this->sanitizeInput($_POST['place_of_death'] ?? ''),
                 'cause_of_death' => $this->sanitizeInput($_POST['cause_of_death'] ?? ''),
@@ -2162,23 +2165,29 @@ class AdminController extends BaseController
                 'notes' => $this->sanitizeInput($_POST['notes'] ?? ''),
             ];
 
-            foreach (['beneficiary_id', 'deceased_name', 'deceased_id_number', 'date_of_death', 'place_of_death', 'cause_of_death', 'mortuary_name', 'mortuary_days_count'] as $field) {
+            foreach (['beneficiary_id', 'deceased_name', 'date_of_death', 'place_of_death', 'cause_of_death', 'mortuary_name'] as $field) {
                 if (empty($claimData[$field])) {
-                    throw new Exception('Please complete all required claim details.');
+                    throw new InvalidArgumentException('Please enter ' . str_replace('_', ' ', $field) . '.');
                 }
             }
 
-            if ($claimData['mortuary_days_count'] > 14) {
-                throw new Exception('Mortuary preservation is covered for a maximum of 14 days per policy.');
+            if (!preg_match('/^\d+$/', (string)($_POST['mortuary_days_count'] ?? '')) || $claimData['mortuary_days_count'] > 14) {
+                throw new InvalidArgumentException('Days in mortuary must be a whole number from 0 to 14.');
             }
 
+            $death = DateTimeImmutable::createFromFormat('!Y-m-d', $claimData['date_of_death']);
+            if (!$death || $death->format('Y-m-d') !== $claimData['date_of_death'] || $death > new DateTimeImmutable('today')) throw new InvalidArgumentException('Enter a valid date of death that is not in the future.');
+            if (!is_numeric($_POST['mortuary_bill_amount'] ?? '') || $claimData['mortuary_bill_amount'] < 0) throw new InvalidArgumentException('Mortuary bill amount must be zero or more.');
+            $beneficiary = $this->db->fetch('SELECT id FROM beneficiaries WHERE id=:id AND member_id=:member_id AND is_active=1', ['id'=>$claimData['beneficiary_id'], 'member_id'=>$memberId]);
+            if (!$beneficiary) throw new InvalidArgumentException('Select an active beneficiary belonging to this member.');
             $claimId = $this->claimModel->submitClaim($claimData);
+            unset($_SESSION['claim_form'], $_SESSION['claim_form_error']);
             $this->sendClaimAcknowledgementSms($member, $claimId, $claimData);
 
-            $_SESSION['success'] = 'Claim submitted for member successfully.';
+            $_SESSION['success'] = 'Claim CLM-' . date('Y') . '-' . str_pad((string)$claimId, 4, '0', STR_PAD_LEFT) . ' saved. It is now awaiting review.';
         } catch (Throwable $e) {
             error_log('Admin claim submission error: ' . $e->getMessage());
-            $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Failed to submit claim.');
+            $_SESSION['claim_form_error'] = $e instanceof InvalidArgumentException ? $e->getMessage() : 'The claim was not saved because of a system error. Your entries are retained. Please contact support if this continues.';
         }
 
         $this->redirect('/admin/claims');
@@ -2540,6 +2549,7 @@ class AdminController extends BaseController
         }
 
         $checklistModel = new ClaimServiceChecklist();
+        $this->generateCsrfToken();
         $checklist = $checklistModel->getClaimChecklist($claimId);
         $completionPercentage = $checklistModel->getCompletionPercentage($claimId);
 
@@ -4198,49 +4208,58 @@ class AdminController extends BaseController
     public function submitInpatientRequestForMember()
     {
         $this->requireAdmin();
-        $this->validateCsrf();
+        $_SESSION['inpatient_form'] = array_filter($_POST, fn($key) => $key !== 'csrf_token', ARRAY_FILTER_USE_KEY);
 
-        $memberId = (int) ($_POST['member_id'] ?? 0);
-        $coverageId = (int) ($_POST['platinum_coverage_id'] ?? 0);
-        $override = ($_POST['override_eligibility'] ?? '') === '1';
-        $overrideReason = trim((string) ($_POST['override_reason'] ?? ''));
+        try {
+            $this->validateCsrf();
+            $memberId = (int) ($_POST['member_id'] ?? 0);
+            $coverageId = (int) ($_POST['platinum_coverage_id'] ?? 0);
+            $override = ($_POST['override_eligibility'] ?? '') === '1';
+            $overrideReason = trim((string) ($_POST['override_reason'] ?? ''));
 
-        $coverage = $this->db->fetch('SELECT * FROM platinum_coverages WHERE id = :id AND member_id = :member_id', ['id' => $coverageId, 'member_id' => $memberId]);
-        if (!$coverage) {
-            $_SESSION['error'] = 'Select a valid member and Platinum coverage.';
-            $this->redirect('/admin/platinum-requests');
-            return;
-        }
-
-        $admissionDate = trim((string) ($_POST['admission_date'] ?? ''));
-        $requestedDays = filter_var($_POST['requested_days'] ?? null, FILTER_VALIDATE_INT);
-        $patientName = trim((string) ($_POST['patient_name'] ?? ''));
-        $facilityName = trim((string) ($_POST['facility_name'] ?? ''));
-        $facilityLocation = trim((string) ($_POST['facility_location'] ?? ''));
-
-        if ($patientName === '' || $facilityName === '' || $facilityLocation === '' || !$requestedDays || $requestedDays < 1 || $requestedDays > 20 || $admissionDate === '') {
-            $_SESSION['error'] = 'Patient name, facility details, admission date, and requested days (1-20) are required.';
-            $this->redirect('/admin/platinum-requests');
-            return;
-        }
-
-        if (!$override) {
-            $eligibility = (new PlatinumEligibilityService())->eligibility($coverageId, $admissionDate, $requestedDays);
-            if (empty($eligibility['eligible'])) {
-                $_SESSION['error'] = ($eligibility['reason'] ?? 'This request is not eligible.') . ' Use the admin override option if this is a genuine exception.';
+            $coverage = $this->db->fetch('SELECT * FROM platinum_coverages WHERE id = :id AND member_id = :member_id', ['id' => $coverageId, 'member_id' => $memberId]);
+            if (!$coverage) {
+                $_SESSION['inpatient_form_error'] = 'Select a valid member and Platinum coverage.';
                 $this->redirect('/admin/platinum-requests');
                 return;
             }
-        } elseif ($overrideReason === '') {
-            $_SESSION['error'] = 'An override reason is required when bypassing eligibility checks.';
-            $this->redirect('/admin/platinum-requests');
-            return;
-        }
 
-        try {
-            $this->db->insert('inpatient_requests', [
+            $admissionDate = trim((string) ($_POST['admission_date'] ?? ''));
+            $requestedDays = filter_var($_POST['requested_days'] ?? null, FILTER_VALIDATE_INT);
+            $patientName = trim((string) ($_POST['patient_name'] ?? ''));
+            $facilityName = trim((string) ($_POST['facility_name'] ?? ''));
+            $facilityLocation = trim((string) ($_POST['facility_location'] ?? ''));
+
+            $missing = [];
+            foreach (['patient_name'=>'Patient name', 'facility_name'=>'Hospital name', 'facility_location'=>'Hospital location', 'admission_date'=>'Admission date'] as $key=>$label) {
+                if (trim((string)($_POST[$key] ?? '')) === '') $missing[] = $label . ' is required.';
+            }
+            if (!$requestedDays || $requestedDays < 1 || $requestedDays > 20) $missing[] = 'Requested days must be a whole number from 1 to 20.';
+            $date = DateTimeImmutable::createFromFormat('!Y-m-d', $admissionDate);
+            if ($admissionDate !== '' && (!$date || $date->format('Y-m-d') !== $admissionDate)) $missing[] = 'Enter a valid admission date.';
+            if ($missing) {
+                $_SESSION['inpatient_form_error'] = implode(' ', $missing);
+                $this->redirect('/admin/platinum-requests');
+                return;
+            }
+
+            if (!$override) {
+                $eligibility = (new PlatinumEligibilityService())->eligibility($coverageId, $admissionDate, $requestedDays);
+                if (empty($eligibility['eligible'])) {
+                    $_SESSION['inpatient_form_error'] = ($eligibility['reason'] ?? 'This request is not eligible.') . ' Use the admin override option if this is a genuine exception.';
+                    $this->redirect('/admin/platinum-requests');
+                    return;
+                }
+            } elseif ($overrideReason === '') {
+                $_SESSION['inpatient_form_error'] = 'An override reason is required when bypassing eligibility checks.';
+                $this->redirect('/admin/platinum-requests');
+                return;
+            }
+
+            $requestId = $this->db->insert('inpatient_requests', [
                 'member_id' => $memberId,
                 'admin_created' => 1,
+                'status' => 'submitted',
                 'created_by' => (int) $_SESSION['user_id'],
                 'platinum_coverage_id' => $coverageId,
                 'covered_person_type' => $coverage['covered_person_type'],
@@ -4254,10 +4273,11 @@ class AdminController extends BaseController
                 'admission_reference' => trim((string) ($_POST['admission_reference'] ?? '')),
                 'eligibility_override_reason' => $override ? $overrideReason : null,
             ]);
-            $_SESSION['success'] = 'Inpatient request created on behalf of the member.' . ($override ? ' (Eligibility override applied.)' : '');
+            unset($_SESSION['inpatient_form'], $_SESSION['inpatient_form_error']);
+            $_SESSION['success'] = 'Hospital request #' . $requestId . ' saved for ' . $patientName . '. It is now awaiting review.';
         } catch (Throwable $e) {
             error_log('Admin-created inpatient request failed: ' . $e->getMessage());
-            $_SESSION['error'] = 'Unable to create the inpatient request. Please try again.';
+            $_SESSION['inpatient_form_error'] = 'The hospital request was not saved because of a system error. Your entries are retained. Please contact support if this continues.';
         }
         $this->redirect('/admin/platinum-requests');
     }
@@ -4827,5 +4847,77 @@ class AdminController extends BaseController
             return [];
         }
     }
+    public function serviceProviders()
+    {
+        $this->requireAdminAccess();
+        $this->generateCsrfToken();
+        require_once __DIR__ . '/../models/ServiceProvider.php';
+        $providers = []; $providerError = null;
+        try { $providers = (new ServiceProvider())->directory(); }
+        catch (Throwable $e) { $providerError = 'Service providers are unavailable. Apply migration 026 after migration 025.'; }
+        $this->view('admin.service-providers', ['providers'=>$providers, 'providerError'=>$providerError]);
+    }
+
+    public function saveServiceProvider()
+    {
+        $this->requireAdminAccess();
+        require_once __DIR__ . '/../models/ServiceProvider.php';
+        $connection = $this->db->getConnection();
+        try {
+            $this->validateCsrf();
+            $connection->beginTransaction();
+            $remove = ($_POST['decision'] ?? '') === 'remove';
+            (new ServiceProvider())->saveProvider((int)($_POST['provider_id'] ?? 0), $_POST, (int)$_SESSION['user_id'], $remove);
+            $connection->commit();
+            unset($_SESSION['provider_form']);
+            $_SESSION['success'] = $remove ? 'Provider removed from selection. Unsent messages for this provider were discarded.' : 'Service provider saved.';
+        } catch (Throwable $e) {
+            if ($connection->inTransaction()) $connection->rollBack();
+            $_SESSION['provider_form'] = $_POST;
+            $_SESSION['error'] = $e instanceof RuntimeException ? $e->getMessage() : 'The provider could not be saved. Check the details and try again.';
+        }
+        $this->redirect('/admin/service-providers');
+    }
+
+    public function claimProviderAction()
+    {
+        $this->requireAdminAccess();
+        require_once __DIR__ . '/../models/ServiceProvider.php';
+        $type = (string)($_POST['case_type'] ?? '');
+        $caseId = (int)($_POST['case_id'] ?? 0);
+        $stage = (string)($_POST['stage_key'] ?? '');
+        $connection = $this->db->getConnection();
+        $draftId = null;
+        $previousDraftIds = $_SESSION['sms_review_ids'] ?? [];
+        unset($_SESSION['error']);
+        try {
+            $this->validateCsrf();
+            $connection->beginTransaction();
+            $model = new ServiceProvider();
+            $decision = (string)($_POST['decision'] ?? '');
+            if ($decision === 'notify') {
+                $draftId = $model->contact($type, $caseId, $stage, (int)$_SESSION['user_id']);
+            } elseif (in_array($decision, ['assign', 'remove'], true)) {
+                $providerId = $decision === 'remove' ? 0 : (int)($_POST['provider_id'] ?? 0);
+                if ($decision === 'assign' && !$providerId) throw new RuntimeException('Select a provider first.');
+                $model->assign($type, $caseId, $stage, $providerId, (int)$_SESSION['user_id']);
+            } else throw new RuntimeException('Choose a provider action.');
+            $connection->commit();
+            $_SESSION['success'] = $draftId ? 'Provider SMS ready to edit and review. No SMS has been sent.' : ($decision === 'remove' ? 'Provider removed from this stage. Its unsent draft was discarded.' : 'Provider assigned to this stage. No SMS has been sent.');
+        } catch (Throwable $e) {
+            if ($connection->inTransaction()) $connection->rollBack();
+            unset($_SESSION['sms_feedback_target'], $_SESSION['info']);
+            $_SESSION['sms_review_ids'] = $previousDraftIds;
+            if (!headers_sent()) header_remove('X-Shena-Sms-Review');
+            $_SESSION['error'] = $e instanceof RuntimeException ? $e->getMessage() : 'The provider action could not be saved. Nothing new was sent.';
+        }
+        if ($draftId && !isset($_SESSION['error'])) {
+            $_SESSION['sms_feedback_target'] = '#sms-review-' . $draftId;
+            $_SESSION['sms_review_return'] = $type === 'funeral' ? '/admin/claims/track/' . $caseId : '/admin/platinum-requests';
+            $this->redirect('/sms-review?draft=' . $draftId);
+        }
+        $this->redirect($type === 'funeral' && $caseId > 0 ? '/admin/claims/track/' . $caseId : '/admin/platinum-requests');
+    }
+
 }
 ?>

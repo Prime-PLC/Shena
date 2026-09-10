@@ -1207,7 +1207,7 @@ main {
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">ID/Birth Certificate Number <span class="text-danger">*</span></label>
-                            <input type="text" name="deceased_id_number" class="form-control" placeholder="Enter ID number" value="<?php echo getOldValue('deceased_id_number'); ?>" required>
+                            <input type="text" name="deceased_id_number" class="form-control" placeholder="ID number (optional)" value="<?php echo getOldValue('deceased_id_number'); ?>">
                         </div>
                     </div>
                     <div class="row">

@@ -436,6 +436,6 @@
             }
         });
     </script>
-    <script src="/public/js/app.js"></script>
+    <script src="/public/js/app.js?v=<?= (int)filemtime(__DIR__ . '/../../../public/js/app.js') ?>"></script>
 </body>
 </html>

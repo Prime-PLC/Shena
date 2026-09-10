@@ -284,3 +284,9 @@
 .sms-review-composer{margin:20px 0;padding:20px;background:var(--bs-white);border:1px solid var(--bs-gray-200);border-radius:12px;scroll-margin-top:100px;color:var(--bs-body-color)}.sms-review-composer h3{font-size:1.2rem}.sms-review-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(230px,300px);gap:24px}.sms-review-composer label{display:block;font-weight:600;margin-bottom:8px}.sms-review-composer textarea{width:100%;min-height:180px;padding:12px;font-size:16px;line-height:1.5;border:1px solid var(--bs-gray-500);border-radius:8px;resize:vertical;box-sizing:border-box}.sms-review-help,[data-sms-count]{font-size:14px;color:var(--bs-gray-600);margin-top:8px}.sms-review-actions{display:flex;gap:10px;flex-wrap:wrap}.sms-review-actions button,.sms-review-preview summary{min-height:44px}.sms-review-preview summary{cursor:pointer;font-weight:600;padding:10px 0}.sms-review-composer :focus-visible{outline:3px solid var(--primary-color, #7F3D9E);outline-offset:3px}@media(max-width:640px){.sms-review-layout{grid-template-columns:minmax(0,1fr)}.sms-review-composer{padding:16px}.sms-review-actions{flex-direction:column}.sms-review-actions button{width:100%}}
 
 .sms-review-preview .sms-phone-sender{padding:18px}.sms-review-preview .sms-bubble{margin:20px 14px}
+
+#shena-custom-modal::backdrop{background:rgba(0,0,0,.5)}
+
+#shena-custom-modal .modal-footer { gap: 8px; flex-wrap: wrap; }
+#shena-custom-modal .modal-footer .btn { min-height: 44px; margin: 0; }
+#adminClaimModal .modal-body { max-height: 65dvh; overflow-y: auto; }

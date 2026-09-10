@@ -143,4 +143,9 @@ $emailDb->duplicate = false; $emailDb->unavailable = true;
 if ($controller->email('member@example.com') !== null || empty($_SESSION['warning'])) $failed = true;
 echo "Optional member email checks completed: empty, valid, duplicate and failed lookup.\n";
 
+$emailMigration = file_get_contents($root . '/database/migrations/027_optional_member_email.sql');
+if (!str_contains($emailMigration, 'email VARCHAR(255) NULL DEFAULT NULL') || str_contains($emailMigration, 'DROP INDEX')) {
+    fwrite(STDERR, "Optional email schema must allow NULL and preserve uniqueness.\n");
+    $failed = true;
+}
 exit($failed ? 1 : 0);

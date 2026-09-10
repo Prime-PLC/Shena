@@ -13,11 +13,11 @@ try {
     echo '<p role="alert">SMS draft review is unavailable. Apply the SMS review schema migration before using this feature.</p>';
     return;
 }
+if (!$drafts) return;
+if (empty($smsReviewAll)) $_SESSION['sms_review_return'] = parse_url($_SERVER['REQUEST_URI'] ?? '/admin/claims', PHP_URL_PATH);
 ?>
 <div class="sms-review-panel" id="sms-review-inbox">
-    <h2>SMS drafts to review</h2>
-    <p>These actions are already saved. Edit and review each SMS before sending it.</p>
-    <?php if (!$drafts): ?><p>No pending SMS drafts.</p><?php endif; ?>
+
     <?php foreach (array_slice($drafts, 0, 25) as $draft): ?>
         <?php
         $smsComposerId = 'sms-review-' . (int)$draft['id'];

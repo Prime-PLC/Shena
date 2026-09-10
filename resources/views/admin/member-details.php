@@ -870,7 +870,7 @@ $formatRelation = static function ($value) {
             <span><?= htmlspecialchars($member['member_number'] ?? 'N/A') ?></span>
         </div>
         <div class="management-body">
-            <form method="POST" action="/admin/members/update/<?= (int)($member['id'] ?? 0) ?>" id="adminMemberProfileForm">
+            <form method="POST" action="/admin/members/update/<?= (int)($member['id'] ?? 0) ?>" id="adminMemberProfileForm" data-confirm-message="Save these member changes? Package changes may update the monthly payment. No SMS will be sent automatically.">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
                 <input type="hidden" name="return_to" value="<?= htmlspecialchars($memberProfileUrl) ?>">
 
@@ -1100,7 +1100,7 @@ $formatRelation = static function ($value) {
                     </tbody>
                 </table>
             </div>
-            <form method="POST" action="/admin/members/<?= (int)($member['id'] ?? 0) ?>/corporate-members/update" id="corporateEditPanel" class="toggle-panel" style="display:none;margin-top:20px;">
+            <form method="POST" action="/admin/members/<?= (int)($member['id'] ?? 0) ?>/corporate-members/update" id="corporateEditPanel" data-confirm-message="Save these member changes? Package changes may update the monthly payment. No SMS will be sent automatically." class="toggle-panel" style="display:none;margin-top:20px;">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
                 <input type="hidden" name="return_to" value="<?= htmlspecialchars($memberProfileUrl) ?>">
                 <div id="profileCorporateRows">

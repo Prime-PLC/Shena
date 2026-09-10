@@ -7,9 +7,7 @@ $platinumMembers = $platinumMembers ?? [];
 $activePlatinumCount = (int) ($activePlatinumCount ?? 0);
 $csrf_token = $csrf_token ?? '';
 
-$flashSuccess = $_SESSION['success'] ?? '';
-$flashError = $_SESSION['error'] ?? '';
-unset($_SESSION['success'], $_SESSION['error']);
+
 
 $decisionStyles = [
     'approved' => ['bg' => '#D1FAE5', 'color' => '#065F46', 'label' => 'Approved'],
@@ -108,6 +106,7 @@ $decisionStyles = [
             <p class="page-subtitle">Approve Platinum package-group cover and allocate shared inpatient bed-cover days. Each selected Basic package group has 20 days per calendar year.</p>
         </div>
         <div class="action-group">
+            <a class="btn btn-secondary" href="/admin/service-providers"><i class="fas fa-address-book"></i> Service providers</a>
             <a class="btn btn-secondary" href="/admin/members?tier=platinum"><i class="fas fa-users"></i> Platinum members</a>
             <a class="btn btn-secondary" href="/admin/payments?payment_type=platinum"><i class="fas fa-coins"></i> Platinum ledger</a>
         </div>
@@ -238,6 +237,9 @@ $decisionStyles = [
                                 <button type="button" class="btn btn-primary" onclick="PlatinumAdmin.openInpatientModal(<?php echo (int) $request['id']; ?>, <?php echo (int) $request['requested_days']; ?>, <?php echo $remaining; ?>, <?php echo htmlspecialchars(json_encode($request['patient_name']), ENT_QUOTES); ?>)"><i class="fas fa-gavel"></i> Decide</button>
                             </td>
                         </tr>
+                        <tr><td colspan="7"><details><summary class="py-2"><i class="fas fa-address-book" aria-hidden="true"></i> Service provider for hospital request #<?= (int)$request['id'] ?></summary>
+                        <?php $providerCaseType = 'platinum'; $providerCaseId = (int)$request['id']; $providerStage = 'platinum_hospital'; include __DIR__ . '/../partials/claim-provider.php'; ?>
+                        </details></td></tr>
                         <?php endforeach; ?>
                     <?php endif; ?>
                 </tbody>
@@ -263,6 +265,7 @@ $decisionStyles = [
                 <div class="callout">
                     <i class="fas fa-info-circle"></i> Use this for phone or paper submissions the member could not enter themselves. Only members holding Platinum cover appear below. Enable the eligibility override only for genuine exceptions and always record a reason.
                 </div>
+                <?php renderClaimFormState('inpatient_form', 'adminInpatientForm'); ?>
                 <form method="post" action="/admin/inpatient-requests/create" class="form-grid" id="adminInpatientForm">
                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
                     <input type="hidden" name="member_id" id="inpatientMemberId" value="">
@@ -367,7 +370,10 @@ $decisionStyles = [
                         <td><span class="status-badge" style="background:<?php echo $style['bg']; ?>;color:<?php echo $style['color']; ?>"><?php echo htmlspecialchars($style['label']); ?></span></td>
                         <td><?php echo htmlspecialchars(!empty($d['reviewed_at']) ? date('d M Y', strtotime($d['reviewed_at'])) : '—'); ?></td>
                     </tr>
-                    <?php endforeach; ?>
+                    <tr><td colspan="6"><details><summary class="py-2"><i class="fas fa-address-book" aria-hidden="true"></i> Service provider for hospital request #<?= (int)$d['id'] ?></summary>
+                        <?php $providerCaseType = 'platinum'; $providerCaseId = (int)$d['id']; $providerStage = 'platinum_hospital'; include __DIR__ . '/../partials/claim-provider.php'; ?>
+                        </details></td></tr>
+                        <?php endforeach; ?>
                 </tbody>
             </table>
         </div>
@@ -475,7 +481,7 @@ window.PlatinumAdmin = (function () {
             var hint = document.getElementById('inpatientBalanceHint');
             if (!memberSelect || !coverageSelect) { return; }
 
-            var member = PLATINUM_MEMBERS[Number(memberSelect.value)];
+            var member = memberSelect.value === '' ? null : PLATINUM_MEMBERS[Number(memberSelect.value)];
             coverageSelect.innerHTML = '';
             if (hint) { hint.textContent = ''; }
 
@@ -571,10 +577,7 @@ window.PlatinumAdmin = (function () {
 
 // Surface server flash messages through the shared modal design.
 document.addEventListener('DOMContentLoaded', function () {
-    var success = <?php echo json_encode($flashSuccess); ?>;
-    var error = <?php echo json_encode($flashError); ?>;
-    if (success) { PlatinumAdmin.feedback(success, 'success'); }
-    else if (error) { PlatinumAdmin.feedback(error, 'error'); }
+
 });
 
 // Close modals on Escape / backdrop click.
@@ -589,3 +592,5 @@ document.addEventListener('click', function (event) {
     }
 });
 </script>
+
+<?php include __DIR__ . '/../layouts/admin-footer.php'; ?>

@@ -69,6 +69,10 @@ class SmsReviewService
         $db = Database::getInstance();
         $candidate = $db->fetch('SELECT * FROM sms_review_drafts WHERE id = :id', ['id' => $id]);
         if (!$candidate || (!$admin && (int)$candidate['created_by'] !== $actor)) throw new RuntimeException('This SMS draft is not available to you.');
+        if ($decision === 'send' && str_starts_with((string)($candidate['source'] ?? ''), 'Service provider: ')) {
+            require_once __DIR__ . '/../models/ServiceProvider.php';
+            (new ServiceProvider())->assertCurrentDraft($id);
+        }
         // Acquire recipient locks in the same order before locking an individual draft.
         $db->fetchAll('SELECT id FROM sms_review_drafts WHERE phone_number = :phone ORDER BY id FOR UPDATE', ['phone' => $candidate['phone_number']]);
         $draft = $db->fetch('SELECT * FROM sms_review_drafts WHERE id = :id FOR UPDATE', ['id' => $id]);
