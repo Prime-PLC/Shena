@@ -8,6 +8,9 @@ require_once __DIR__ . '/../services/PaymentStatusService.php';
 require_once __DIR__ . '/../services/InAppNotificationService.php';
 require_once __DIR__ . '/../services/SmsService.php';
 require_once __DIR__ . '/../helpers/ReportDocumentTemplate.php';
+require_once __DIR__ . '/../models/PlatinumCoverage.php';
+require_once __DIR__ . '/../services/PlatinumPricingService.php';
+require_once __DIR__ . '/../services/AccountChangeNotificationService.php';
 
 class AdminController extends BaseController
 {
@@ -99,6 +102,7 @@ class AdminController extends BaseController
             $packageKey = $this->sanitizeInput($row['package_key'] ?? '');
             $label = $this->sanitizeInput($row['label'] ?? '');
             $relationship = $this->sanitizeInput($row['relationship'] ?? 'corporate');
+            $dateOfBirth = $this->sanitizeInput($row['date_of_birth'] ?? '');
 
             if ($packageKey === '' && $label === '') {
                 continue;
@@ -109,9 +113,11 @@ class AdminController extends BaseController
             }
 
             $items[] = [
+                'id' => max(0, (int)($row['id'] ?? 0)),
                 'label' => $label !== '' ? $label : 'Corporate member',
                 'relationship' => $relationship !== '' ? $relationship : 'corporate',
                 'package_key' => $packageKey,
+                'date_of_birth' => $dateOfBirth,
             ];
         }
 
@@ -129,9 +135,52 @@ class AdminController extends BaseController
         );
     }
 
+    /**
+     * Keep active and pending Platinum prices aligned with a deliberately changed package
+     * for the principal or corporate member. This does not restart maturity.
+     */
+    private function refreshActivePlatinumPrices(int $memberId, array $member): void
+    {
+        $pricing = new PlatinumPricingService();
+        $coverages = $this->db->fetchAll(
+            "SELECT * FROM platinum_coverages WHERE member_id = :member_id AND status IN ('active', 'pending_payment', 'pending_approval')",
+            ['member_id' => $memberId]
+        );
+
+        foreach ($coverages as $coverage) {
+            $type = $coverage['covered_person_type'] ?? 'principal';
+            $packageKey = PlatinumPricingService::resolvePackageKey($member);
+            $dateOfBirth = $member['date_of_birth'] ?? null;
+
+            if ($type === 'corporate_member') {
+                $corporate = $this->corporateMemberModel->find((int)($coverage['covered_person_id'] ?? 0));
+                if (!$corporate || (int)($corporate['member_id'] ?? 0) !== $memberId) {
+                    continue;
+                }
+                $packageKey = (string)($corporate['package_key'] ?? '');
+                $dateOfBirth = $corporate['date_of_birth'] ?? null;
+            }
+
+            // Contact-only edits must not repair historical rates. Reprice only a changed assignment.
+            if (PlatinumPricingService::canonicalPackageKey((string)($coverage['package_key'] ?? '')) === $packageKey) continue;
+            $quote = $pricing->quote($packageKey, $dateOfBirth);
+            if (!$quote) {
+                throw new Exception('An active Platinum group needs a valid package and date of birth before its contribution can be recalculated.');
+            }
+
+            $this->db->update('platinum_coverages', [
+                'monthly_contribution' => (float)$quote['amount'],
+                'package_key' => $quote['package_key'],
+                'package_name' => $quote['package_name'],
+            ], 'id = :id', ['id' => (int)$coverage['id']]);
+        }
+    }
+
     private function enrichMembersForManagement(array $members): array
     {
+        $platinumByMember = (new PlatinumCoverage())->accountSummariesByMember();
         foreach ($members as &$member) {
+            $member['package_key'] = PlatinumPricingService::canonicalPackageKey((string)($member['package_key'] ?? ''));
             $memberId = (int)($member['id'] ?? 0);
             if ($memberId <= 0) {
                 continue;
@@ -141,6 +190,7 @@ class AdminController extends BaseController
             $member['beneficiaries'] = $this->beneficiaryModel->getActiveBeneficiaries($memberId) ?: [];
             $member['coverage_summary'] = $this->memberModel->getPlanCoverageSummary($member);
             $member['dependant_relationship_options'] = $this->relationshipOptionsForMember($member, $member['beneficiaries']);
+            $member['platinum_groups'] = $platinumByMember[$memberId] ?? [];
         }
         unset($member);
 
@@ -426,7 +476,36 @@ class AdminController extends BaseController
         $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
         $perPage = 50; // Show 50 members per page for better performance
 
+        // Keep Basic and Platinum books of business separable.
+        $tier = in_array($_GET['tier'] ?? 'all', ['all', 'basic', 'platinum'], true) ? $_GET['tier'] : 'all';
+
         $members = $this->memberModel->getAllMembersWithDetails($search, $status, $package);
+
+        $platinumTierMap = (new PlatinumCoverage())->tierMapByMember();
+        foreach ($members as &$memberRow) {
+            $memberTier = $platinumTierMap[(int) $memberRow['id']] ?? null;
+            $memberRow['product_tier'] = $memberTier ? 'platinum' : 'basic';
+            $memberRow['platinum_status'] = $memberTier;
+        }
+        unset($memberRow);
+
+        $platinumMemberTotal = count(array_filter($members, fn($m) => $m['product_tier'] === 'platinum'));
+        $basicMemberTotal = count($members) - $platinumMemberTotal;
+        $pendingPlatinumApprovals = $this->db->fetchAll(
+            "SELECT pc.id, pc.member_id, pc.covered_person_type, pc.requested_at, m.member_number,
+                    COALESCE(c.label, CONCAT(u.first_name, ' ', u.last_name)) AS covered_person_name
+             FROM platinum_coverages pc
+             JOIN members m ON m.id = pc.member_id
+             JOIN users u ON u.id = m.user_id
+             LEFT JOIN member_corporate_members c ON pc.covered_person_type = 'corporate_member' AND c.id = pc.covered_person_id
+             WHERE pc.status = 'pending_approval'
+             ORDER BY pc.requested_at ASC LIMIT 3"
+        );
+
+
+        if ($tier !== 'all') {
+            $members = array_values(array_filter($members, fn($m) => $m['product_tier'] === $tier));
+        }
 
         // Calculate statistics
         $totalMembers = $this->memberModel->getTotalMembers();
@@ -453,6 +532,12 @@ class AdminController extends BaseController
         $offset = ($page - 1) * $perPage;
         $members = array_slice($members, $offset, $perPage);
         $members = $this->enrichMembersForManagement($members);
+        $billingService = new PlatinumBillingService();
+        foreach ($members as &$memberRow) {
+            $accountSummary = $billingService->accountSummary($memberRow);
+            $memberRow['account_monthly_amount'] = (float)$accountSummary['total'];
+        }
+        unset($memberRow);
 
         // Get pending approvals (members with pending status)
         $pendingMembers = $this->memberModel->getPendingMembers();
@@ -503,6 +588,13 @@ class AdminController extends BaseController
             'search' => $search,
             'status' => $status,
             'package' => $package,
+            'tier' => $tier,
+            'tier_counts' => [
+                'all' => $basicMemberTotal + $platinumMemberTotal,
+                'basic' => $basicMemberTotal,
+                'platinum' => $platinumMemberTotal,
+            ],
+            'pending_platinum_approvals' => $pendingPlatinumApprovals,
             'packages' => $GLOBALS['membership_packages'] ?? [],
             'csrf_token' => $this->generateCsrfToken(),
             'pagination' => [
@@ -540,8 +632,17 @@ class AdminController extends BaseController
         $search = $_GET['search'] ?? '';
         $status = $_GET['status'] ?? 'all';
         $package = $_GET['package'] ?? 'all';
+        $requestedTier = $_GET['tier'] ?? 'all';
+        $tier = in_array($requestedTier, ['all', 'basic', 'platinum'], true) ? $requestedTier : 'all';
 
         $members = $this->memberModel->getAllMembersWithDetails($search, $status, $package);
+        $platinumMembers = (new PlatinumCoverage())->tierMapByMember();
+        if ($tier !== 'all') {
+            $members = array_values(array_filter($members, static function (array $member) use ($tier, $platinumMembers): bool {
+                $memberTier = isset($platinumMembers[(int) $member['id']]) ? 'platinum' : 'basic';
+                return $memberTier === $tier;
+            }));
+        }
 
         // Set headers for CSV download
         header('Content-Type: text/csv');
@@ -561,6 +662,7 @@ class AdminController extends BaseController
             'Email',
             'Phone',
             'Package',
+            'Product Tier',
             'Status',
             'Registration Date',
             'Last Payment Date',
@@ -577,6 +679,7 @@ class AdminController extends BaseController
                 $member['email'] ?? '',
                 $this->formatCsvIdentifier($member['phone'] ?? ''),
                 $member['package'] ?? 'Standard',
+                isset($platinumMembers[(int) $member['id']]) ? 'Platinum' : 'Basic',
                 ucfirst($member['status'] ?? 'active'),
                 $member['registration_date'] ?? $member['created_at'] ?? '',
                 $member['last_payment_date'] ?? '',
@@ -657,12 +760,7 @@ class AdminController extends BaseController
                 return;
             }
 
-            if (!empty($email) && $this->userModel->findByEmail($email)) {
-                $_SESSION['error'] = 'This email address is already registered. Use a different email or leave it blank if the member has no email.';
-                $_SESSION['error_step'] = 2;
-                $this->redirect('/admin/members/register');
-                return;
-            }
+            $email = $this->optionalMemberEmail($email);
 
             if (!empty($idNumber)) {
                 $existing = $this->memberModel->findByNationalId($idNumber);
@@ -744,6 +842,27 @@ class AdminController extends BaseController
 
             $this->corporateMemberModel->replaceForMember((int)$memberId, $corporateMembers);
 
+            // Platinum replaces the Basic contribution for the selected package group.
+            $platinumMonthly = null;
+            if (($_POST['platinum_opt_in'] ?? '') === '1' && !empty($dateOfBirth)) {
+                require_once __DIR__ . '/../services/PlatinumPricingService.php';
+                $quote = (new PlatinumPricingService())->quote($packageKey, $dateOfBirth);
+                $platinumMonthly = $quote['amount'] ?? null;
+                if ($quote) {
+                    $this->db->insert('platinum_coverages', [
+                        'member_id' => $memberId,
+                        'covered_person_type' => 'principal',
+                        'covered_person_id' => null,
+                        'status' => 'pending_approval',
+                        'package_key' => $quote['package_key'],
+                        'package_name' => $quote['package_name'],
+                        'monthly_contribution' => $quote['amount'],
+                        'maturity_months' => $quote['maturity_months'],
+                        'requested_at' => date('Y-m-d H:i:s'),
+                    ]);
+                }
+            }
+
             $this->db->getConnection()->commit();
 
             // Optionally notify user (email optional)
@@ -770,6 +889,9 @@ class AdminController extends BaseController
                 $smsMsg = "Hi {$firstName}! You've been registered with SHENA Companion. Member No: {$memberNumber}. "
                         . "Set your account password here: {$inviteLink}  (valid 48 hrs). "
                         . "Monthly contribution: KES {$monthlyContribution} via Paybill 4163987, Acct: {$idNumber}.";
+                if ($platinumMonthly) {
+                    $smsMsg .= " You selected SHENA Platinum (hospital and welfare cover): KES " . number_format($platinumMonthly, 2) . "/month. It replaces the Basic contribution for the selected package group once confirmed.";
+                }
                 $smsService = new SmsService();
                 $smsService->sendSms($phone, $smsMsg);
             } catch (Throwable $e) {
@@ -786,7 +908,9 @@ class AdminController extends BaseController
             }
             error_log('Admin register error: ' . $e->getMessage());
             $message = $e->getMessage();
-            if (stripos($message, 'Duplicate entry') !== false || stripos($message, 'SQLSTATE[23000]') !== false) {
+            if (stripos($message, 'email') !== false && stripos($message, 'cannot be null') !== false) {
+                $_SESSION['error'] = 'The database still requires email. Apply migration 027_optional_member_email.sql to enable registration without email.';
+            } elseif (stripos($message, 'Duplicate entry') !== false || stripos($message, 'SQLSTATE[23000]') !== false) {
                 if (stripos($message, 'id_number') !== false) {
                     $_SESSION['error'] = 'This National ID is already registered. Search the members table before creating a new record.';
                     $_SESSION['error_step'] = 1;
@@ -1076,6 +1200,12 @@ class AdminController extends BaseController
     {
         $this->requireAdminAccess();
 
+        $returnTier = in_array($_GET['return_tier'] ?? '', ['basic', 'platinum'], true)
+            ? $_GET['return_tier']
+            : '';
+        $memberManagementUrl = '/admin/members' . ($returnTier !== '' ? '?tier=' . $returnTier : '');
+        $memberProfileUrl = '/admin/members/view/' . (int)$id . ($returnTier !== '' ? '?return_tier=' . $returnTier : '');
+
         // Get member details (include user email/phone)
         $member = $this->memberModel->getMemberById($id);
 
@@ -1104,6 +1234,60 @@ class AdminController extends BaseController
 
         $corporateMembers = $this->corporateMemberModel->getActiveForMember((int)$id) ?: [];
         $beneficiaries = $this->beneficiaryModel->getActiveBeneficiaries((int)$id) ?: [];
+        $billingService = new PlatinumBillingService();
+        $accountMonthlyAmount = $billingService->monthlyAmount($member);
+        $accountContributionBreakdown = $billingService->accountSummary($member)['breakdown'];
+        $platinumCoverages = (new PlatinumCoverage())->forMember((int) $id);
+        $platinumMigrationOptions = [];
+        $pricingService = new PlatinumPricingService();
+        $principalQuote = $pricingService->quote(
+            PlatinumPricingService::resolvePackageKey($member),
+            $member['date_of_birth'] ?? null
+        );
+        $platinumMigrationOptions['principal'] = [
+            'quote' => (float) ($principalQuote['amount'] ?? 0),
+            'token' => $principalQuote ? PlatinumPricingService::quoteToken((int)$id, 'principal', null, $principalQuote) : '',
+            'active' => false,
+            'basic_amount' => MembershipPricingService::resolveSelectedPackageAmount(
+                PlatinumPricingService::resolvePackageKey($member),
+                $GLOBALS['membership_packages'] ?? []
+            ),
+            'current_charge' => 0,
+        ];
+        foreach ($corporateMembers as $corporateMember) {
+            $corporateId = (int) ($corporateMember['id'] ?? 0);
+            $corporateQuote = $pricingService->quote(
+                (string) ($corporateMember['package_key'] ?? ''),
+                $corporateMember['date_of_birth'] ?? null
+            );
+            $platinumMigrationOptions['corporate_' . $corporateId] = [
+                'quote' => (float) ($corporateQuote['amount'] ?? 0),
+                'token' => $corporateQuote ? PlatinumPricingService::quoteToken((int)$id, 'corporate_member', $corporateId, $corporateQuote) : '',
+                'active' => false,
+                'basic_amount' => MembershipPricingService::resolveSelectedPackageAmount(
+                    (string) ($corporateMember['package_key'] ?? ''),
+                    $GLOBALS['membership_packages'] ?? []
+                ),
+                'current_charge' => 0,
+            ];
+        }
+        foreach ($platinumCoverages as $coverage) {
+            if (($coverage['status'] ?? '') !== 'active') {
+                continue;
+            }
+            $optionKey = ($coverage['covered_person_type'] ?? '') === 'corporate_member'
+                ? 'corporate_' . (int) ($coverage['covered_person_id'] ?? 0)
+                : 'principal';
+            if (isset($platinumMigrationOptions[$optionKey])) {
+                $platinumMigrationOptions[$optionKey]['current_charge'] = (float) ($coverage['monthly_contribution'] ?? 0);
+                $platinumMigrationOptions[$optionKey]['active'] = true;
+            }
+        }
+        $accountSmsPreview = null;
+        $accountSmsError = null;
+        try { $accountSmsPreview = (new AccountChangeNotificationService())->preview($member); }
+        catch (Throwable $e) { $accountSmsError = $e instanceof RuntimeException ? $e->getMessage() : 'The account SMS preview is unavailable. Please reload after reviewing the packages.'; }
+        $platinumGroupSummaries = (new PlatinumCoverage())->accountSummariesByMember()[(int)$id] ?? [];
         $coverageSummary = $this->memberModel->getPlanCoverageSummary($member);
         $dependantRelationshipOptions = $this->relationshipOptionsForMember($member, $beneficiaries);
         $activationRestrictions = $this->getMemberActivationRestrictions($member, new Payment());
@@ -1114,6 +1298,7 @@ class AdminController extends BaseController
 
         $membershipPlanData = [];
         foreach (($GLOBALS['membership_packages'] ?? []) as $packageKey => $packageOption) {
+            if (!empty($packageOption['legacy_alias'])) continue;
             $membershipPlanData[$packageKey] = [
                 'name' => $packageOption['name'] ?? $packageKey,
                 'monthly_contribution' => (float)($packageOption['monthly_contribution'] ?? 0),
@@ -1134,6 +1319,8 @@ class AdminController extends BaseController
         $data = [
             'title' => 'Member Details - Admin',
             'member' => $member,
+            'member_management_url' => $memberManagementUrl,
+            'member_profile_url' => $memberProfileUrl,
             'payments' => $payments,
             'beneficiaries' => $beneficiaries,
             'corporate_members' => $corporateMembers,
@@ -1143,6 +1330,13 @@ class AdminController extends BaseController
             'dependant_restrictions' => $dependantRestrictions,
             'packages' => $GLOBALS['membership_packages'] ?? [],
             'membershipPlanData' => $membershipPlanData,
+            'platinum_coverages' => $platinumCoverages,
+            'platinum_group_summaries' => $platinumGroupSummaries,
+            'account_monthly_amount' => $accountMonthlyAmount,
+            'account_contribution_breakdown' => $accountContributionBreakdown,
+            'platinum_migration_options' => $platinumMigrationOptions,
+            'account_sms_preview' => $accountSmsPreview,
+            'account_sms_error' => $accountSmsError,
             'csrf_token' => $this->generateCsrfToken(),
             'stats' => [
                 'total_contributions' => $totalContributions,
@@ -1235,6 +1429,7 @@ class AdminController extends BaseController
 
         $memberStatus = $_POST['status'] ?? 'active';
         $previousStatus = $member['status'] ?? '';
+        $previousMonthlyContribution = (new PlatinumBillingService())->monthlyAmount($member);
         $userStatus = in_array($memberStatus, ['active', 'inactive', 'suspended'], true) ? $memberStatus : 'inactive';
 
         $memberUserData = [
@@ -1268,11 +1463,23 @@ class AdminController extends BaseController
             $updatedUser = $this->userModel->update($member['user_id'], $memberUserData);
             $updatedMember = $this->memberModel->update($id, $memberRecordData);
             $this->corporateMemberModel->replaceForMember((int)$id, $corporateMembers);
+            $this->refreshActivePlatinumPrices((int)$id, array_merge($member, $memberRecordData));
 
             if ($updatedUser && $updatedMember) {
+                $this->db->insert('activity_logs', ['user_id' => (int)$_SESSION['user_id'], 'action' => 'member_package_saved', 'details' => json_encode(['member_id' => (int)$id, 'before_package_key' => $member['package_key'] ?? null, 'after_package_key' => $packageKey, 'before_account_amount' => $previousMonthlyContribution, 'after_account_amount' => (new PlatinumBillingService())->monthlyAmount(array_merge($member, $memberRecordData))])]);
                 $this->db->getConnection()->commit();
+                $updatedMemberData = $this->memberModel->getMemberWithUser((int)$id);
+                $updatedAccountContribution = $updatedMemberData
+                    ? (new PlatinumBillingService())->monthlyAmount($updatedMemberData)
+                    : $monthlyContribution;
                 $_SESSION['success_message'] = 'Member updated successfully!';
                 $this->notifyMemberManagementChange($member, $memberStatus, $previousStatus);
+                $this->notifyContributionChange(
+                    ['id' => (int)$id, 'first_name' => $memberUserData['first_name'], 'last_name' => $memberUserData['last_name'], 'phone' => $phone],
+                    $previousMonthlyContribution,
+                    $updatedAccountContribution,
+                    ['old_package' => PlatinumPricingService::resolvePackageKey($member), 'new_package' => PlatinumPricingService::canonicalPackageKey($packageKey)]
+                );
             } else {
                 $this->db->getConnection()->rollBack();
                 $_SESSION['error_message'] = 'Failed to update member.';
@@ -1282,6 +1489,60 @@ class AdminController extends BaseController
                 $this->db->getConnection()->rollBack();
             }
             $_SESSION['error_message'] = $this->friendlyErrorMessage($e, 'Failed to update member.');
+        }
+
+        $this->redirect($returnTo);
+    }
+
+    public function updateMemberCorporateMembers($id)
+    {
+        $this->requireAdminAccess();
+        $returnTo = $_POST['return_to'] ?? '/admin/members/view/' . (int)$id;
+        if (!is_string($returnTo) || strpos($returnTo, '/admin/') !== 0) {
+            $returnTo = '/admin/members/view/' . (int)$id;
+        }
+
+        try {
+            $this->validateCsrf();
+            $member = $this->memberModel->getMemberById((int)$id);
+            if (!$member) {
+                throw new Exception('Member not found.');
+            }
+
+            $corporateMembers = $this->parseCorporateMembersFromPost();
+            $previousMonthlyContribution = (new PlatinumBillingService())->monthlyAmount($member);
+            $accountContribution = $this->calculateAccountMonthlyContribution(
+                PlatinumPricingService::resolvePackageKey($member),
+                $corporateMembers
+            );
+
+            $this->db->getConnection()->beginTransaction();
+            $this->corporateMemberModel->replaceForMember((int)$id, $accountContribution['line_items']);
+            $this->memberModel->update((int)$id, [
+                'corporate_couple_count' => count($accountContribution['line_items']),
+                'monthly_contribution' => (float)$accountContribution['total_amount'],
+            ]);
+            $this->refreshActivePlatinumPrices((int)$id, $member);
+            $this->db->insert('activity_logs', ['user_id' => (int)$_SESSION['user_id'], 'action' => 'corporate_packages_saved', 'details' => json_encode(['member_id' => (int)$id, 'packages' => $accountContribution['line_items'], 'before_account_amount' => $previousMonthlyContribution, 'after_account_amount' => (new PlatinumBillingService())->monthlyAmount($member)])]);
+            $this->db->getConnection()->commit();
+
+            $updatedMemberData = $this->memberModel->getMemberWithUser((int)$id);
+            $updatedAccountContribution = $updatedMemberData
+                ? (new PlatinumBillingService())->monthlyAmount($updatedMemberData)
+                : (float)$accountContribution['total_amount'];
+
+            $this->notifyContributionChange(
+                $member,
+                $previousMonthlyContribution,
+                $updatedAccountContribution,
+                ['type' => 'household_update']
+            );
+            $_SESSION['success_message'] = 'Corporate members updated successfully.';
+        } catch (Throwable $e) {
+            if ($this->db->getConnection()->inTransaction()) {
+                $this->db->getConnection()->rollBack();
+            }
+            $_SESSION['error_message'] = $this->friendlyErrorMessage($e, 'Failed to update corporate members.');
         }
 
         $this->redirect($returnTo);
@@ -1336,8 +1597,11 @@ class AdminController extends BaseController
                 throw new Exception((string)($policy['message'] ?? 'Please review dependant details.'));
             }
 
+            $coverageOwnerId = (int) ($_POST['coverage_owner_id'] ?? 0);
             $this->beneficiaryModel->addBeneficiary([
                 'member_id' => (int)$id,
+                'coverage_owner_type' => $coverageOwnerId > 0 ? 'corporate_member' : 'principal',
+                'coverage_owner_id' => $coverageOwnerId > 0 ? $coverageOwnerId : null,
                 'full_name' => $fullName,
                 'relationship' => $policy['relationship'] ?? $relationship,
                 'id_number' => $idNumber,
@@ -1649,7 +1913,10 @@ class AdminController extends BaseController
         $auditLogs = $reconciliationService->getRecentReconciliationLogs(5);
         $paymentSummary = $this->getAdminPaymentSummary($reconStats ?? []);
         $paymentBreakdownSummary = $this->paymentStatusService->getPaymentBreakdownSummary($filters);
-        $totalFilteredPayments = $this->paymentModel->getAllPaymentsWithDetailsCount($filters);
+        $isPlatinumLedger = ($filters['payment_type'] ?? '') === 'platinum';
+        $totalFilteredPayments = $isPlatinumLedger
+            ? $this->paymentModel->getPlatinumAllocationsWithDetailsCount($filters)
+            : $this->paymentModel->getAllPaymentsWithDetailsCount($filters);
         $totalPaymentPages = max(1, (int)ceil($totalFilteredPayments / $perPage));
         if ($page > $totalPaymentPages) {
             $page = $totalPaymentPages;
@@ -1658,7 +1925,9 @@ class AdminController extends BaseController
 
         $data = [
             'title' => 'Payments - Admin',
-            'payments' => $this->paymentModel->getAllPaymentsWithDetails($filters, $perPage, $offset),
+            'payments' => $isPlatinumLedger
+                ? $this->paymentModel->getPlatinumAllocationsWithDetails($filters, $perPage, $offset)
+                : $this->paymentModel->getAllPaymentsWithDetails($filters, $perPage, $offset),
             'status' => $status,
             'member_id' => $memberId,
             'payment_filters' => $filters,
@@ -1858,31 +2127,33 @@ class AdminController extends BaseController
             return;
         }
 
+        $_SESSION['claim_form'] = array_filter($_POST, fn($key) => $key !== 'csrf_token', ARRAY_FILTER_USE_KEY);
         try {
             $this->validateCsrf();
 
             $memberId = (int)($_POST['member_id'] ?? 0);
             $member = $this->memberModel->getMemberById($memberId);
             if (!$member) {
-                throw new Exception('Please select a valid member.');
+                throw new InvalidArgumentException('Please select a valid member.');
             }
 
             if (($member['status'] ?? '') !== 'active') {
-                throw new Exception('Claims can only be submitted for active members.');
+                throw new InvalidArgumentException('Claims can only be submitted for active members.');
             }
 
             $requestCashAlternative = isset($_POST['request_cash_alternative']) && $_POST['request_cash_alternative'] === '1';
             $cashAlternativeReason = $requestCashAlternative ? $this->sanitizeInput($_POST['cash_alternative_reason'] ?? '') : '';
             if ($requestCashAlternative && strlen($cashAlternativeReason) < 50) {
-                throw new Exception('Cash alternative reason must be at least 50 characters.');
+                throw new InvalidArgumentException('Cash alternative reason must be at least 50 characters.');
             }
 
             $claimData = [
                 'member_id' => $memberId,
+                'admin_created' => 1,
                 'beneficiary_id' => (int)($_POST['beneficiary_id'] ?? 0),
                 'deceased_name' => $this->sanitizeInput($_POST['deceased_name'] ?? ''),
                 'deceased_id_number' => $this->sanitizeInput($_POST['deceased_id_number'] ?? ''),
-                'date_of_birth' => $_POST['date_of_birth'] ?? null,
+                'date_of_birth' => ($_POST['date_of_birth'] ?? '') ?: null,
                 'date_of_death' => $_POST['date_of_death'] ?? '',
                 'place_of_death' => $this->sanitizeInput($_POST['place_of_death'] ?? ''),
                 'cause_of_death' => $this->sanitizeInput($_POST['cause_of_death'] ?? ''),
@@ -1894,24 +2165,29 @@ class AdminController extends BaseController
                 'notes' => $this->sanitizeInput($_POST['notes'] ?? ''),
             ];
 
-            foreach (['beneficiary_id', 'deceased_name', 'deceased_id_number', 'date_of_death', 'place_of_death', 'cause_of_death', 'mortuary_name', 'mortuary_days_count'] as $field) {
+            foreach (['beneficiary_id', 'deceased_name', 'date_of_death', 'place_of_death', 'cause_of_death', 'mortuary_name'] as $field) {
                 if (empty($claimData[$field])) {
-                    throw new Exception('Please complete all required claim details.');
+                    throw new InvalidArgumentException('Please enter ' . str_replace('_', ' ', $field) . '.');
                 }
             }
 
-            if ($claimData['mortuary_days_count'] > 14) {
-                throw new Exception('Mortuary preservation is covered for a maximum of 14 days per policy.');
+            if (!preg_match('/^\d+$/', (string)($_POST['mortuary_days_count'] ?? '')) || $claimData['mortuary_days_count'] > 14) {
+                throw new InvalidArgumentException('Days in mortuary must be a whole number from 0 to 14.');
             }
 
+            $death = DateTimeImmutable::createFromFormat('!Y-m-d', $claimData['date_of_death']);
+            if (!$death || $death->format('Y-m-d') !== $claimData['date_of_death'] || $death > new DateTimeImmutable('today')) throw new InvalidArgumentException('Enter a valid date of death that is not in the future.');
+            if (!is_numeric($_POST['mortuary_bill_amount'] ?? '') || $claimData['mortuary_bill_amount'] < 0) throw new InvalidArgumentException('Mortuary bill amount must be zero or more.');
+            $beneficiary = $this->db->fetch('SELECT id FROM beneficiaries WHERE id=:id AND member_id=:member_id AND is_active=1', ['id'=>$claimData['beneficiary_id'], 'member_id'=>$memberId]);
+            if (!$beneficiary) throw new InvalidArgumentException('Select an active beneficiary belonging to this member.');
             $claimId = $this->claimModel->submitClaim($claimData);
-            $this->processAdminClaimDocumentUploads($claimId);
+            unset($_SESSION['claim_form'], $_SESSION['claim_form_error']);
             $this->sendClaimAcknowledgementSms($member, $claimId, $claimData);
 
-            $_SESSION['success'] = 'Claim submitted for member successfully.';
+            $_SESSION['success'] = 'Claim CLM-' . date('Y') . '-' . str_pad((string)$claimId, 4, '0', STR_PAD_LEFT) . ' saved. It is now awaiting review.';
         } catch (Throwable $e) {
             error_log('Admin claim submission error: ' . $e->getMessage());
-            $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Failed to submit claim.');
+            $_SESSION['claim_form_error'] = $e instanceof InvalidArgumentException ? $e->getMessage() : 'The claim was not saved because of a system error. Your entries are retained. Please contact support if this continues.';
         }
 
         $this->redirect('/admin/claims');
@@ -2012,15 +2288,13 @@ class AdminController extends BaseController
                         }
                     }
 
-                    // Check required documents per policy Section 8
-                    $claimDocumentModel = new ClaimDocument();
-                    $documents = $claimDocumentModel->getClaimDocuments($claimId);
-                    $requiredDocs = ['id_copy', 'chief_letter', 'mortuary_invoice'];
-                    $uploadedTypes = array_column($documents, 'document_type');
-
-                    foreach ($requiredDocs as $docType) {
-                        if (!in_array($docType, $uploadedTypes)) {
-                            throw new Exception("Required document missing: {$docType}");
+                    if (empty($claim['admin_created'])) {
+                        $claimDocumentModel = new ClaimDocument();
+                        $documents = $claimDocumentModel->getClaimDocuments($claimId);
+                        foreach (['id_copy', 'chief_letter', 'mortuary_invoice'] as $docType) {
+                            if (!in_array($docType, array_column($documents, 'document_type'), true)) {
+                                throw new Exception("Required document missing: {$docType}");
+                            }
                         }
                     }
 
@@ -2275,6 +2549,7 @@ class AdminController extends BaseController
         }
 
         $checklistModel = new ClaimServiceChecklist();
+        $this->generateCsrfToken();
         $checklist = $checklistModel->getClaimChecklist($claimId);
         $completionPercentage = $checklistModel->getCompletionPercentage($claimId);
 
@@ -3812,6 +4087,387 @@ class AdminController extends BaseController
         $this->view('admin.payout-requests', $data);
     }
 
+    public function platinumRequests()
+    {
+        $this->requireAdmin();
+        $coverages = (new PlatinumCoverage())->pending();
+        $eligibilityService = new PlatinumEligibilityService();
+
+        $inpatientRequests = $this->db->fetchAll("SELECT ir.*, m.member_number, u.first_name, u.last_name FROM inpatient_requests ir JOIN members m ON m.id = ir.member_id JOIN users u ON u.id = m.user_id WHERE ir.status IN ('submitted', 'under_review') ORDER BY ir.created_at ASC");
+        foreach ($inpatientRequests as &$request) {
+            $request['remaining_days'] = $eligibilityService->remainingDays((int) $request['platinum_coverage_id']);
+        }
+        unset($request);
+
+        // Decided history so admins can audit past decisions without a DB query.
+        $recentDecisions = $this->db->fetchAll(
+            "SELECT ir.*, m.member_number, u.first_name, u.last_name
+             FROM inpatient_requests ir
+             JOIN members m ON m.id = ir.member_id
+             JOIN users u ON u.id = m.user_id
+             WHERE ir.status NOT IN ('submitted', 'under_review')
+             ORDER BY ir.reviewed_at DESC, ir.updated_at DESC
+             LIMIT 25"
+        );
+
+        $this->view('admin.platinum-requests', [
+            'coverages' => $coverages,
+            'inpatientRequests' => $inpatientRequests,
+            'recentDecisions' => $recentDecisions,
+            // Dynamic member picker restricted to members who actually hold Platinum.
+            'platinumMembers' => (new PlatinumCoverage())->membersWithPlatinum(),
+            'activePlatinumCount' => (int) ($this->db->fetch("SELECT COUNT(*) AS total FROM platinum_coverages WHERE status = 'active'")['total'] ?? 0),
+            'csrf_token' => $this->generateCsrfToken()
+        ]);
+    }
+
+    public function processPlatinumRequest($id)
+    {
+        $this->requireAdmin();
+        $this->validateCsrf();
+        $coverage = new PlatinumCoverage();
+        $action = $_POST['action'] ?? '';
+        if (!in_array($action, ['approve', 'reject'], true)) {
+            $_SESSION['error'] = 'Select a valid action.';
+            $this->redirect('/admin/platinum-requests');
+        }
+        $requested = $coverage->find((int) $id);
+        if (!$requested || $requested['status'] !== 'pending_approval') {
+            $_SESSION['error'] = 'This Platinum request has already been processed.';
+            $this->redirect('/admin/platinum-requests');
+        }
+        try {
+            if ($action === 'approve') {
+                $coverage->approve((int) $id, (int) $_SESSION['user_id']);
+                $_SESSION['success'] = 'Platinum coverage approved. The maturity period has started.';
+            } else {
+                $coverage->reject((int) $id, (int) $_SESSION['user_id']);
+                $_SESSION['success'] = 'Platinum coverage rejected.';
+            }
+            $this->notifyPlatinumDecision((int) $id, $action === 'approve' ? 'active' : 'rejected');
+        } catch (Throwable $e) {
+            error_log('Platinum request processing failed: ' . $e->getMessage());
+            $_SESSION['error'] = 'Unable to process this Platinum request. Please try again.';
+        }
+        $this->redirect('/admin/platinum-requests');
+    }
+
+    /**
+     * Notify a member by SMS/email once their Platinum coverage request has been decided.
+     */
+    private function notifyPlatinumDecision(int $coverageId, string $decision): void
+    {
+        try {
+            $coverage = $this->db->fetch(
+                "SELECT pc.*, m.phone, m.email, u.first_name FROM platinum_coverages pc
+                 JOIN members m ON m.id = pc.member_id
+                 JOIN users u ON u.id = m.user_id
+                 WHERE pc.id = :id",
+                ['id' => $coverageId]
+            );
+            if (!$coverage) {
+                return;
+            }
+            $name = $coverage['first_name'] ?: 'Member';
+            $message = $decision === 'active'
+                ? "Dear {$name}, your SHENA Platinum cover request has been APPROVED and is now active. Maturity date: {$coverage['maturity_date']}. - Shena Companion"
+                : "Dear {$name}, your SHENA Platinum cover request was not approved. Contact us for details or submit a new request. - Shena Companion";
+            (new SmsService())->sendSms($coverage['phone'], $message);
+        } catch (Throwable $exception) {
+            error_log('Platinum decision notification failed: ' . $exception->getMessage());
+        }
+    }
+
+    public function processInpatientRequest($id)
+    {
+        $this->requireAdmin();
+        $this->validateCsrf();
+        try {
+            $approvedDays = filter_var($_POST['approved_days'] ?? null, FILTER_VALIDATE_INT);
+            $overrideBalance = ($_POST['override_balance'] ?? '') === '1';
+            $overrideReason = trim((string) ($_POST['override_reason'] ?? ''));
+            if ($overrideBalance && $overrideReason === '') {
+                $_SESSION['error'] = 'An override reason is required to approve beyond the remaining day balance.';
+                $this->redirect('/admin/platinum-requests');
+                return;
+            }
+            $result = (new PlatinumEligibilityService())->approveInpatientRequest((int) $id, (int) $_SESSION['user_id'], $approvedDays ?: null, trim((string) ($_POST['admin_notes'] ?? '')), $overrideBalance, $overrideReason);
+            $_SESSION['success'] = 'Inpatient request ' . $result['status'] . '.';
+            $this->notifyInpatientDecision((int) $id, (string) $result['status'], (int) ($result['approved_days'] ?? 0));
+        } catch (Throwable $exception) {
+            $_SESSION['error'] = $exception->getMessage();
+        }
+        $this->redirect('/admin/platinum-requests');
+    }
+
+    /**
+     * Admin-side creation of an inpatient request on a member's behalf (phone/paper submissions),
+     * mirroring the admin-created claims pattern. Can optionally bypass member-side eligibility gating
+     * (maturity / active status) with a mandatory override reason, for genuine exception handling.
+     */
+    public function submitInpatientRequestForMember()
+    {
+        $this->requireAdmin();
+        $_SESSION['inpatient_form'] = array_filter($_POST, fn($key) => $key !== 'csrf_token', ARRAY_FILTER_USE_KEY);
+
+        try {
+            $this->validateCsrf();
+            $memberId = (int) ($_POST['member_id'] ?? 0);
+            $coverageId = (int) ($_POST['platinum_coverage_id'] ?? 0);
+            $override = ($_POST['override_eligibility'] ?? '') === '1';
+            $overrideReason = trim((string) ($_POST['override_reason'] ?? ''));
+
+            $coverage = $this->db->fetch('SELECT * FROM platinum_coverages WHERE id = :id AND member_id = :member_id', ['id' => $coverageId, 'member_id' => $memberId]);
+            if (!$coverage) {
+                $_SESSION['inpatient_form_error'] = 'Select a valid member and Platinum coverage.';
+                $this->redirect('/admin/platinum-requests');
+                return;
+            }
+
+            $admissionDate = trim((string) ($_POST['admission_date'] ?? ''));
+            $requestedDays = filter_var($_POST['requested_days'] ?? null, FILTER_VALIDATE_INT);
+            $patientName = trim((string) ($_POST['patient_name'] ?? ''));
+            $facilityName = trim((string) ($_POST['facility_name'] ?? ''));
+            $facilityLocation = trim((string) ($_POST['facility_location'] ?? ''));
+
+            $missing = [];
+            foreach (['patient_name'=>'Patient name', 'facility_name'=>'Hospital name', 'facility_location'=>'Hospital location', 'admission_date'=>'Admission date'] as $key=>$label) {
+                if (trim((string)($_POST[$key] ?? '')) === '') $missing[] = $label . ' is required.';
+            }
+            if (!$requestedDays || $requestedDays < 1 || $requestedDays > 20) $missing[] = 'Requested days must be a whole number from 1 to 20.';
+            $date = DateTimeImmutable::createFromFormat('!Y-m-d', $admissionDate);
+            if ($admissionDate !== '' && (!$date || $date->format('Y-m-d') !== $admissionDate)) $missing[] = 'Enter a valid admission date.';
+            if ($missing) {
+                $_SESSION['inpatient_form_error'] = implode(' ', $missing);
+                $this->redirect('/admin/platinum-requests');
+                return;
+            }
+
+            if (!$override) {
+                $eligibility = (new PlatinumEligibilityService())->eligibility($coverageId, $admissionDate, $requestedDays);
+                if (empty($eligibility['eligible'])) {
+                    $_SESSION['inpatient_form_error'] = ($eligibility['reason'] ?? 'This request is not eligible.') . ' Use the admin override option if this is a genuine exception.';
+                    $this->redirect('/admin/platinum-requests');
+                    return;
+                }
+            } elseif ($overrideReason === '') {
+                $_SESSION['inpatient_form_error'] = 'An override reason is required when bypassing eligibility checks.';
+                $this->redirect('/admin/platinum-requests');
+                return;
+            }
+
+            $requestId = $this->db->insert('inpatient_requests', [
+                'member_id' => $memberId,
+                'admin_created' => 1,
+                'status' => 'submitted',
+                'created_by' => (int) $_SESSION['user_id'],
+                'platinum_coverage_id' => $coverageId,
+                'covered_person_type' => $coverage['covered_person_type'],
+                'covered_person_id' => $coverage['covered_person_id'],
+                'patient_name' => $patientName,
+                'facility_name' => $facilityName,
+                'facility_location' => $facilityLocation,
+                'facility_contact' => trim((string) ($_POST['facility_contact'] ?? '')),
+                'admission_date' => $admissionDate,
+                'requested_days' => $requestedDays,
+                'admission_reference' => trim((string) ($_POST['admission_reference'] ?? '')),
+                'eligibility_override_reason' => $override ? $overrideReason : null,
+            ]);
+            unset($_SESSION['inpatient_form'], $_SESSION['inpatient_form_error']);
+            $_SESSION['success'] = 'Hospital request #' . $requestId . ' saved for ' . $patientName . '. It is now awaiting review.';
+        } catch (Throwable $e) {
+            error_log('Admin-created inpatient request failed: ' . $e->getMessage());
+            $_SESSION['inpatient_form_error'] = 'The hospital request was not saved because of a system error. Your entries are retained. Please contact support if this continues.';
+        }
+        $this->redirect('/admin/platinum-requests');
+    }
+
+    /**
+     * Directly activate Platinum for a principal or corporate Basic coverage group.
+     */
+    public function migrateMemberToPlatinum($id)
+    {
+        $this->requireAdmin();
+        $this->validateCsrf();
+        $this->initAdminModels();
+        $connection = $this->db->getConnection();
+        try {
+            $connection->beginTransaction();
+            // Serialize conversion and notification against changes to this account.
+            $this->db->fetch('SELECT id FROM members WHERE id = :id FOR UPDATE', ['id' => (int)$id]);
+            $member = $this->memberModel->getMemberById((int)$id);
+            if (!$member) throw new RuntimeException('Member not found.');
+            if (($member['status'] ?? '') !== 'active') throw new RuntimeException('Activate the member account before changing its cover to Platinum.');
+            $type = $_POST['covered_person_type'] ?? 'principal';
+            $personId = $type === 'principal' ? null : filter_var($_POST['covered_person_id'] ?? null, FILTER_VALIDATE_INT);
+            if (!in_array($type, ['principal', 'corporate_member'], true) || ($type !== 'principal' && (!$personId || $personId < 1))) {
+                throw new RuntimeException('Choose the principal member or an additional member on this account.');
+            }
+            $owner = $member;
+            if ($type === 'corporate_member') {
+                $this->db->fetch('SELECT id FROM member_corporate_members WHERE id = :id FOR UPDATE', ['id' => $personId]);
+                $owner = $this->corporateMemberModel->find($personId);
+                if (!$owner || (int)$owner['member_id'] !== (int)$id || ($owner['status'] ?? '') !== 'active') {
+                    throw new RuntimeException('Choose an active additional member attached to this account.');
+                }
+            }
+            $packageKey = PlatinumPricingService::resolvePackageKey($owner);
+            $dateOfBirth = $owner['date_of_birth'] ?? null;
+            $quote = (new PlatinumPricingService())->quote($packageKey, $dateOfBirth);
+            if (!$quote) throw new RuntimeException('No cover was changed. Choose an exact Basic package and enter a valid date of birth for the adult coverage owner. The date of birth sets the waiting period; the selected package sets the price.');
+            $token = PlatinumPricingService::quoteToken((int)$id, $type, $personId, $quote);
+            if (!hash_equals($token, (string)($_POST['reviewed_quote'] ?? ''))) throw new RuntimeException('The package or waiting period changed after this page was loaded. Reload and review the new amount before saving.');
+            $rows = $this->db->fetchAll('SELECT * FROM platinum_coverages WHERE member_id = :member_id AND covered_person_type = :type AND covered_person_id <=> :person_id ORDER BY id DESC FOR UPDATE', ['member_id' => (int)$id, 'type' => $type, 'person_id' => $personId]);
+            if (count($rows) > 1) throw new RuntimeException('This member has more than one coverage record for the same group. Review the records before converting.');
+            $existing = $rows[0] ?? null;
+            if ($existing && $existing['status'] === 'active') {
+                $_SESSION['info'] = 'Platinum is already active. No price or waiting period was changed, and no SMS was sent. Use Edit Member to correct the assigned package.';
+            } else {
+                $months = (int)$quote['maturity_months'];
+                $fields = [
+                    'status' => 'active', 'activation_method' => 'admin_direct',
+                    'monthly_contribution' => $quote['amount'], 'maturity_months' => $months,
+                    'package_key' => $quote['package_key'], 'package_name' => $quote['package_name'],
+                    'requested_at' => date('Y-m-d H:i:s'), 'approved_at' => date('Y-m-d H:i:s'),
+                    'approved_by' => (int)$_SESSION['user_id'], 'effective_from' => date('Y-m-d'),
+                    'maturity_date' => date('Y-m-d', strtotime("+{$months} months")), 'coverage_ends_at' => null,
+                    'override_reason' => trim((string)($_POST['reason'] ?? '')), 'override_by' => (int)$_SESSION['user_id'],
+                    'override_at' => date('Y-m-d H:i:s'),
+                ];
+                if ($existing) $this->db->update('platinum_coverages', $fields, 'id = :id', ['id' => $existing['id']]);
+                else $this->db->insert('platinum_coverages', array_merge(['member_id' => (int)$id, 'covered_person_type' => $type, 'covered_person_id' => $personId], $fields));
+                $this->db->insert('activity_logs', ['user_id' => (int)$_SESSION['user_id'], 'action' => 'platinum_conversion', 'details' => json_encode(['member_id' => (int)$id, 'before' => $existing, 'after' => $fields, 'covered_person_type' => $type, 'covered_person_id' => $personId])]);
+                $_SESSION['success'] = 'Platinum saved for ' . $quote['package_name'] . '. Monthly amount for this cover: KES ' . number_format($quote['amount'], 2) . '. No SMS was sent. Review the account update below when you are ready to notify the member.';
+            }
+            $connection->commit();
+            $_SESSION['account_sms_pending'][(int)$id] = ['type' => 'conversion'];
+            unset($_SESSION['account_sms_edits'][(int)$id]);
+            $_SESSION['sms_feedback_target'] = '/admin/members/view/' . (int)$id . '#account-update-sms';
+        } catch (Throwable $e) {
+            if ($connection->inTransaction()) $connection->rollBack();
+            $_SESSION['error'] = $e instanceof RuntimeException ? $e->getMessage() : 'The cover could not be saved. No SMS was sent. Please try again.';
+        }
+        $this->redirect('/admin/members/view/' . (int)$id);
+    }
+
+    /** Return one active Platinum group to its selected Basic package. */
+    public function revertMemberPlatinumToBasic($id)
+    {
+        $this->requireAdmin();
+        $this->validateCsrf();
+        $this->initAdminModels();
+        $connection = $this->db->getConnection();
+        try {
+            $connection->beginTransaction();
+            $this->db->fetch('SELECT id FROM members WHERE id = :id FOR UPDATE', ['id' => (int)$id]);
+            $coverageId = (int)($_POST['platinum_coverage_id'] ?? 0);
+            $coverage = $this->db->fetch('SELECT * FROM platinum_coverages WHERE id = :id AND member_id = :member_id FOR UPDATE', ['id' => $coverageId, 'member_id' => (int)$id]);
+            if (!$coverage) throw new RuntimeException('Coverage was not found on this account.');
+            if ($coverage['status'] === 'cancelled') {
+                $_SESSION['info'] = 'This cover is already Basic. Nothing changed and no SMS was sent.';
+            } elseif ($coverage['status'] !== 'active') {
+                throw new RuntimeException('Only an active Platinum cover can be returned to Basic.');
+            } else {
+                $fields = ['status' => 'cancelled', 'coverage_ends_at' => date('Y-m-d'), 'override_reason' => trim((string)($_POST['reason'] ?? 'Admin returned coverage to Basic')), 'override_by' => (int)$_SESSION['user_id'], 'override_at' => date('Y-m-d H:i:s')];
+                $this->db->update('platinum_coverages', $fields, 'id = :id', ['id' => $coverageId]);
+                $this->db->insert('activity_logs', ['user_id' => (int)$_SESSION['user_id'], 'action' => 'platinum_reversal', 'details' => json_encode(['member_id' => (int)$id, 'coverage_id' => $coverageId, 'before' => $coverage, 'after' => $fields])]);
+                $_SESSION['success'] = 'Basic cover restored. No SMS was sent. Review and send the final account update when your corrections are complete.';
+            }
+            $connection->commit();
+            $_SESSION['account_sms_pending'][(int)$id] = ['type' => 'conversion'];
+            unset($_SESSION['account_sms_edits'][(int)$id]);
+            $_SESSION['sms_feedback_target'] = '/admin/members/view/' . (int)$id . '#account-update-sms';
+        } catch (Throwable $e) {
+            if ($connection->inTransaction()) $connection->rollBack();
+            $_SESSION['error'] = $e instanceof RuntimeException ? $e->getMessage() : 'The cover could not be changed. Please try again.';
+        }
+        $this->redirect('/admin/members/view/' . (int)$id);
+    }
+
+    public function notifyMemberAccountChange($id)
+    {
+        $this->requireAdmin();
+        $this->validateCsrf();
+        $this->initAdminModels();
+        $connection = $this->db->getConnection();
+        try {
+            $connection->beginTransaction();
+            $this->db->fetch('SELECT id FROM members WHERE id = :id FOR UPDATE', ['id' => (int)$id]);
+            $member = $this->memberModel->getMemberWithUser((int)$id);
+            if (!$member) throw new RuntimeException('Member not found.');
+            $queueId = (new AccountChangeNotificationService())->queue($member, (string)($_POST['reviewed_token'] ?? ''), (string)($_POST['message'] ?? ''));
+            $this->db->insert('activity_logs', ['user_id' => (int)$_SESSION['user_id'], 'action' => 'account_update_sms_queued', 'details' => json_encode(['member_id' => (int)$id, 'sms_queue_id' => $queueId])]);
+            $connection->commit();
+            unset($_SESSION['account_sms_pending'][(int)$id], $_SESSION['account_sms_edits'][(int)$id]);
+            try {
+                require_once __DIR__ . '/../services/BulkSmsService.php';
+                $result = (new BulkSmsService())->processQueueByIds([$queueId]);
+                if (!empty($result['submitted_count'])) {
+                    $_SESSION['success'] = 'Your account update was submitted to the SMS provider. Delivery confirmation will appear in SMS history.';
+                } elseif (!empty($result['failed_count'])) {
+                    $_SESSION['warning'] = 'The account is saved, but SMS submission was not confirmed. Check SMS history before retrying.';
+                } else {
+                    $_SESSION['info'] = 'The account update is queued or is already being processed. Check SMS history for its status.';
+                }
+            } catch (Throwable $deliveryError) {
+                $_SESSION['warning'] = 'The account update was saved in SMS history, but submission could not be confirmed. Check its status before retrying.';
+            }
+        } catch (Throwable $e) {
+            if ($connection->inTransaction()) $connection->rollBack();
+            $_SESSION['error'] = $e instanceof RuntimeException ? $e->getMessage() : 'The SMS could not be queued. No new notification was saved.';
+            $_SESSION['account_sms_edits'][(int)$id] = (string)($_POST['message'] ?? '');
+            $_SESSION['account_sms_pending'][(int)$id] ??= ['type' => 'account_update'];
+            $_SESSION['sms_feedback_target'] = '/admin/members/view/' . (int)$id . '#account-update-sms';
+        }
+        $this->redirect('/admin/members/view/' . (int)$id);
+    }
+
+    /**
+     * Remind the admin to review the final account update after a contribution change.
+     */
+    private function notifyContributionChange(array $member, float $oldAmount, float $newAmount, array $change = []): void
+    {
+        $packageChanged = !empty($change['new_package']) && ($change['old_package'] ?? '') !== $change['new_package'];
+        if (abs($oldAmount - $newAmount) >= 0.01 || $packageChanged || ($change['type'] ?? '') === 'household_update') {
+            $_SESSION['account_sms_pending'][(int)$member['id']] = array_merge($change, [
+                'type' => $packageChanged ? 'package_update' : ($change['type'] ?? 'amount_update'),
+                'old_amount' => $oldAmount, 'new_amount' => $newAmount,
+            ]);
+            unset($_SESSION['account_sms_edits'][(int)$member['id']]);
+            $_SESSION['sms_feedback_target'] = '/admin/members/view/' . (int)$member['id'] . '#account-update-sms';
+            $_SESSION['info'] = 'The new monthly amount is saved. No SMS was sent. Open the member profile to review and send one final account update.';
+        }
+    }
+
+    /**
+     * Notify a member by SMS once their inpatient day request has been decided.
+     */
+    private function notifyInpatientDecision(int $requestId, string $status, int $approvedDays): void
+    {
+        try {
+            $request = $this->db->fetch(
+                "SELECT ir.*, m.phone, u.first_name FROM inpatient_requests ir
+                 JOIN members m ON m.id = ir.member_id
+                 JOIN users u ON u.id = m.user_id
+                 WHERE ir.id = :id",
+                ['id' => $requestId]
+            );
+            if (!$request) {
+                return;
+            }
+            $name = $request['first_name'] ?: 'Member';
+            $statusLabel = str_replace('_', ' ', $status);
+            $message = "Dear {$name}, your inpatient request for {$request['patient_name']} was {$statusLabel}.";
+            if (in_array($status, ['approved', 'partially_approved'], true)) {
+                $message .= " Approved days: {$approvedDays}.";
+            }
+            $message .= " - Shena Companion";
+            (new SmsService())->sendSms($request['phone'], $message);
+        } catch (Throwable $exception) {
+            error_log('Inpatient decision notification failed: ' . $exception->getMessage());
+        }
+    }
+
     /**
      * Process (approve/reject) a payout request
      */
@@ -4191,5 +4847,77 @@ class AdminController extends BaseController
             return [];
         }
     }
+    public function serviceProviders()
+    {
+        $this->requireAdminAccess();
+        $this->generateCsrfToken();
+        require_once __DIR__ . '/../models/ServiceProvider.php';
+        $providers = []; $providerError = null;
+        try { $providers = (new ServiceProvider())->directory(); }
+        catch (Throwable $e) { $providerError = 'Service providers are unavailable. Apply migration 026 after migration 025.'; }
+        $this->view('admin.service-providers', ['providers'=>$providers, 'providerError'=>$providerError]);
+    }
+
+    public function saveServiceProvider()
+    {
+        $this->requireAdminAccess();
+        require_once __DIR__ . '/../models/ServiceProvider.php';
+        $connection = $this->db->getConnection();
+        try {
+            $this->validateCsrf();
+            $connection->beginTransaction();
+            $remove = ($_POST['decision'] ?? '') === 'remove';
+            (new ServiceProvider())->saveProvider((int)($_POST['provider_id'] ?? 0), $_POST, (int)$_SESSION['user_id'], $remove);
+            $connection->commit();
+            unset($_SESSION['provider_form']);
+            $_SESSION['success'] = $remove ? 'Provider removed from selection. Unsent messages for this provider were discarded.' : 'Service provider saved.';
+        } catch (Throwable $e) {
+            if ($connection->inTransaction()) $connection->rollBack();
+            $_SESSION['provider_form'] = $_POST;
+            $_SESSION['error'] = $e instanceof RuntimeException ? $e->getMessage() : 'The provider could not be saved. Check the details and try again.';
+        }
+        $this->redirect('/admin/service-providers');
+    }
+
+    public function claimProviderAction()
+    {
+        $this->requireAdminAccess();
+        require_once __DIR__ . '/../models/ServiceProvider.php';
+        $type = (string)($_POST['case_type'] ?? '');
+        $caseId = (int)($_POST['case_id'] ?? 0);
+        $stage = (string)($_POST['stage_key'] ?? '');
+        $connection = $this->db->getConnection();
+        $draftId = null;
+        $previousDraftIds = $_SESSION['sms_review_ids'] ?? [];
+        unset($_SESSION['error']);
+        try {
+            $this->validateCsrf();
+            $connection->beginTransaction();
+            $model = new ServiceProvider();
+            $decision = (string)($_POST['decision'] ?? '');
+            if ($decision === 'notify') {
+                $draftId = $model->contact($type, $caseId, $stage, (int)$_SESSION['user_id']);
+            } elseif (in_array($decision, ['assign', 'remove'], true)) {
+                $providerId = $decision === 'remove' ? 0 : (int)($_POST['provider_id'] ?? 0);
+                if ($decision === 'assign' && !$providerId) throw new RuntimeException('Select a provider first.');
+                $model->assign($type, $caseId, $stage, $providerId, (int)$_SESSION['user_id']);
+            } else throw new RuntimeException('Choose a provider action.');
+            $connection->commit();
+            $_SESSION['success'] = $draftId ? 'Provider SMS ready to edit and review. No SMS has been sent.' : ($decision === 'remove' ? 'Provider removed from this stage. Its unsent draft was discarded.' : 'Provider assigned to this stage. No SMS has been sent.');
+        } catch (Throwable $e) {
+            if ($connection->inTransaction()) $connection->rollBack();
+            unset($_SESSION['sms_feedback_target'], $_SESSION['info']);
+            $_SESSION['sms_review_ids'] = $previousDraftIds;
+            if (!headers_sent()) header_remove('X-Shena-Sms-Review');
+            $_SESSION['error'] = $e instanceof RuntimeException ? $e->getMessage() : 'The provider action could not be saved. Nothing new was sent.';
+        }
+        if ($draftId && !isset($_SESSION['error'])) {
+            $_SESSION['sms_feedback_target'] = '#sms-review-' . $draftId;
+            $_SESSION['sms_review_return'] = $type === 'funeral' ? '/admin/claims/track/' . $caseId : '/admin/platinum-requests';
+            $this->redirect('/sms-review?draft=' . $draftId);
+        }
+        $this->redirect($type === 'funeral' && $caseId > 0 ? '/admin/claims/track/' . $caseId : '/admin/platinum-requests');
+    }
+
 }
 ?>

@@ -87,9 +87,9 @@ A comprehensive web application for managing a welfare association that provides
    - The .htaccess file should handle URL routing
 
 6. **Default Admin Account**
-   - Email: admin@shenacompanion.org
-   - Password: admin123
-   - **Important**: Change this password after first login
+   - Email: 
+   - Password: 
+
 
 ## Configuration
 

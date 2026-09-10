@@ -138,7 +138,7 @@
                     <p>Providing false or misleading information during registration is grounds for immediate cancellation of membership without refund.</p>
                 '],
                 ['id' => 'pb-packages', 'num' => '3', 'title' => 'Membership Packages & Contributions', 'body' => '
-                    <p><strong>SHENA BASIC</strong> is our primary welfare cover during unforeseen eventualities. We support our members and their loved ones with funeral services. <strong>SHENA PLATINUM</strong> provides inpatient support for members and their loved ones. It is a complimentary service to SHENA BASIC. It pays for daily bed charges for members and their dependants. Platinum is selected and charged per covered person.</p>
+                    <p><strong>SHENA BASIC</strong> is our primary welfare cover during unforeseen eventualities. We support our members and their loved ones with funeral services. <strong>SHENA PLATINUM</strong> is an optional inpatient add-on to a selected BASIC package. It pays daily bed charges for the package owner and covered dependants, who share one 20-day annual allowance.</p>
                     <div style="overflow-x: auto; margin: 16px 0;">
                         <table style="width: 100%; border-collapse: collapse; font-size: 0.93rem;">
                             <thead>
@@ -164,7 +164,7 @@
                                 </tr>
                                 <tr>
                                     <td style="padding: 12px 16px; font-weight: 600;">SHENA Platinum</td>
-                                    <td style="padding: 12px 16px; color: #6B7280;">Optional inpatient add-on per selected person</td>
+                                    <td style="padding: 12px 16px; color: #6B7280;">Optional inpatient add-on per selected Basic package group</td>
                                     <td style="padding: 12px 16px;">KES 300-850/mo</td>
                                     <td style="padding: 12px 16px;">See Platinum schedule</td>
                                 </tr>
@@ -175,7 +175,7 @@
                     <p><strong>Payment method:</strong> M-Pesa Paybill <strong>4163987</strong>. Use your full name or National ID number as the account reference. Retain your M-Pesa confirmation SMS as proof of payment.</p>
                 '],
                 ['id' => 'pb-waiting', 'num' => '4', 'title' => 'Waiting Period', 'body' => '
-                    <p>SHENA Basic cover follows the waiting period applicable to the selected Basic package. For SHENA Platinum, maturity is <strong>4 months for selected people below age 60</strong> and <strong>7 months for selected people aged 60 and above</strong>, calculated from the effective date of that person\'s approved Platinum cover.</p>
+                    <p>SHENA Basic cover follows the waiting period applicable to the selected Basic package. For SHENA Platinum, maturity is <strong>4 months when the selected package owner is below age 60</strong> and <strong>7 months when the owner is aged 60 and above</strong>, calculated from the effective date of that package group\'s approved Platinum cover.</p>
                     <p>Platinum inpatient requests are considered only after the selected person\'s cover is active and mature, contributions are current, and the request passes eligibility and administrative review. Newly added or changed covered people may have a new waiting period from their effective date.</p>
                     <p>To request Platinum inpatient support, the member must identify the covered person and provide the facility name and location or contact, admission date, requested number of days, and any available admission or doctor reference. SHENA may approve fewer days than requested when the annual balance is lower.</p>
                     <p>A request may be declined where the person is not selected for Platinum, the admission is not an inpatient case, the annual 20-day balance is exhausted, the facility details cannot be verified, the admission falls outside the active cover period, contributions are overdue, or false information has been provided. Unused days expire at year-end and do not carry forward.</p>
@@ -204,7 +204,7 @@
                             ' . implode('', array_map(function($b) {
                                 return '<div style="background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 10px; padding: 14px 16px; display: flex; align-items: start; gap: 10px;"><i class="fas fa-check-circle" style="color: #7F3D9E; margin-top: 2px; flex-shrink: 0;"></i><span style="font-size: 0.92rem;">'.$b.'</span></div>';
                             }, [
-                                'Up to <strong>20 inpatient bed-cover days</strong> per selected person each year',
+                                'Up to <strong>20 inpatient bed-cover days</strong> per selected Basic package group each year',
                                 'Cover may be used across more than one inpatient admission',
                                 'The person must be specifically selected and approved for Platinum',
                                 'Facility name, location or contact, admission date, and requested days are required',

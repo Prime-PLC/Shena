@@ -17,6 +17,16 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
+          extensions: dom, mbstring
+          tools: composer:v2
+      - name: Install locked PHP dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The repository contains a partial vendor tree. Rebuild it from the lockfile.
+          rm -rf -- "${GITHUB_WORKSPACE}/vendor"
+          composer install --no-interaction --prefer-dist --no-progress
+          php -r "require 'vendor/autoload.php';"
       - name: Run regression tests
         shell: bash
         run: |

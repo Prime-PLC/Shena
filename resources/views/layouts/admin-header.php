@@ -875,10 +875,24 @@ if ($notificationCount === null) {
                     
                     <!-- Member Management -->
                     <li class="nav-item">
-                        <a class="nav-link <?php echo (strpos($_SERVER['REQUEST_URI'], '/admin/members') !== false) ? 'active' : ''; ?>" href="/admin/members">
+                        <a class="nav-link has-submenu <?php echo (strpos($_SERVER['REQUEST_URI'], '/admin/members') !== false) ? 'active' : ''; ?>" href="#" onclick="toggleSubmenu(event, 'members-submenu')">
                             <i class="fas fa-users"></i>
                             <span>Member Management</span>
                         </a>
+                        <ul class="nav-submenu" id="members-submenu">
+                            <li class="nav-item">
+                                <a class="nav-link <?php echo (strpos($_SERVER['REQUEST_URI'], '/admin/members') !== false && strpos($_SERVER['REQUEST_URI'], 'tier=basic') !== false) ? 'active' : ''; ?>" href="/admin/members?tier=basic">
+                                    <i class="fas fa-shield-alt"></i>
+                                    <span>Basic Members</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link <?php echo (strpos($_SERVER['REQUEST_URI'], '/admin/members') !== false && strpos($_SERVER['REQUEST_URI'], 'tier=platinum') !== false) ? 'active' : ''; ?>" href="/admin/members?tier=platinum">
+                                    <i class="fas fa-gem"></i>
+                                    <span>Platinum Members</span>
+                                </a>
+                            </li>
+                        </ul>
                     </li>
 
                     <!-- Agent Management -->
@@ -905,17 +919,24 @@ if ($notificationCount === null) {
 
                     <!-- Claims -->
                     <li class="nav-item">
-                        <a class="nav-link <?php echo (strpos($_SERVER['REQUEST_URI'], '/admin/claims') !== false) ? 'active' : ''; ?>" href="/admin/claims">
+                        <a class="nav-link has-submenu <?php echo (strpos($_SERVER['REQUEST_URI'], '/admin/claims') !== false || strpos($_SERVER['REQUEST_URI'], '/admin/platinum-requests') !== false || strpos($_SERVER['REQUEST_URI'], '/admin/inpatient-requests') !== false) ? 'active' : ''; ?>" href="#" onclick="toggleSubmenu(event, 'claims-submenu')">
                             <i class="fas fa-file-medical"></i>
                             <span>Claims</span>
                         </a>
-                    </li>
-
-                    <li class="nav-item">
-                        <a class="nav-link <?php echo (strpos($_SERVER['REQUEST_URI'], '/admin/platinum-requests') !== false || strpos($_SERVER['REQUEST_URI'], '/admin/inpatient-requests') !== false) ? 'active' : ''; ?>" href="/admin/platinum-requests">
-                            <i class="fas fa-hospital"></i>
-                            <span>Platinum</span>
-                        </a>
+                        <ul class="nav-submenu" id="claims-submenu">
+                            <li class="nav-item">
+                                <a class="nav-link <?php echo (strpos($_SERVER['REQUEST_URI'], '/admin/claims') !== false) ? 'active' : ''; ?>" href="/admin/claims">
+                                    <i class="fas fa-hands-helping"></i>
+                                    <span>Funeral Cover</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link <?php echo (strpos($_SERVER['REQUEST_URI'], '/admin/platinum-requests') !== false || strpos($_SERVER['REQUEST_URI'], '/admin/inpatient-requests') !== false) ? 'active' : ''; ?>" href="/admin/platinum-requests">
+                                    <i class="fas fa-hospital"></i>
+                                    <span>Hospital Cover</span>
+                                </a>
+                            </li>
+                        </ul>
                     </li>
 
                     <!-- Payments -->

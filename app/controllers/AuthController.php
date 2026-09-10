@@ -187,6 +187,12 @@ class AuthController extends BaseController
                 return;
             }
 
+            if (defined('LOCAL_SMS_VERIFICATION_DISABLED') && LOCAL_SMS_VERIFICATION_DISABLED) {
+                $this->establishUserSession($user);
+                $this->json(['success' => true, 'otp_required' => false, 'redirect' => $this->resolveUserRedirect($user['role'] ?? 'member')]);
+                return;
+            }
+
             // Generate OTP and store session
             $otpCode = $this->generateOtpCode();
             $_SESSION['login_otp'] = [
@@ -203,7 +209,7 @@ class AuthController extends BaseController
                 : '****';
 
             $smsService = new SmsService();
-            $smsResult  = $smsService->sendSms($phone, 'Your SHENA login code is ' . $otpCode . '. It expires in 5 minutes.');
+            $smsResult  = $smsService->sendApprovedSms($phone, 'Your SHENA login code is ' . $otpCode . '. It expires in 5 minutes.');
 
             if (empty($smsResult['success']) && $this->isLocalOrDebugEnvironment()) {
                 $this->json(['success' => true, 'otp_required' => true, 'masked_phone' => $maskedPhone,
@@ -302,7 +308,7 @@ class AuthController extends BaseController
             $_SESSION[$rateLimitKey]['last_sent'] = time();
 
             $smsService = new SmsService();
-            $smsResult = $smsService->sendSms($phone, $otpMessage);
+            $smsResult = $smsService->sendApprovedSms($phone, $otpMessage);
 
             if (empty($smsResult['success'])) {
                 if ($this->isLocalOrDebugEnvironment()) {
@@ -474,16 +480,8 @@ class AuthController extends BaseController
                 return;
             }
             
-            // Check if email already exists (only if provided)
-            if (!empty($userData['email']) && $this->userModel->findByEmail($userData['email'])) {
-                $_SESSION['error'] = 'Email address already registered.';
-                $_SESSION['old_input'] = array_merge($userData, $memberData);
-                unset($_SESSION['old_input']['password'], $_SESSION['old_input']['confirm_password']);
-                $_SESSION['error_field'] = 'email';
-                $this->redirect('/register');
-                return;
-            }
-            
+            $userData['email'] = $this->optionalMemberEmail($userData['email'] ?? '');
+
             // Normalize phone and check uniqueness
             $userData['phone'] = formatKenyanPhone($userData['phone']);
             if ($this->userModel->findByPhone($userData['phone'])) {
@@ -868,7 +866,7 @@ class AuthController extends BaseController
             $_SESSION[$rateLimitKey] = $rl;
 
             $smsService = new SmsService();
-            $smsResult = $smsService->sendSms($phone, 'Your SHENA password reset code is ' . $otpCode . '. Valid for 10 minutes. Ignore if you did not request this.');
+            $smsResult = $smsService->sendApprovedSms($phone, 'Your SHENA password reset code is ' . $otpCode . '. Valid for 10 minutes. Ignore if you did not request this.');
 
             if (empty($smsResult['success'])) {
                 if ($this->isLocalOrDebugEnvironment()) {
@@ -1318,6 +1316,7 @@ class AuthController extends BaseController
         }
         $allowedBrackets = ['below_70', '71_80', '81_90', '91_100', '70_80', '81_90', 'above_70'];
         $preselectBracket = $this->sanitizeInput($_GET['bracket'] ?? '');
+        if ($preselectBracket === '70_80') $preselectBracket = '71_80';
         if (!in_array($preselectBracket, $allowedBrackets, true)) {
             $preselectBracket = '';
         }
@@ -1325,6 +1324,7 @@ class AuthController extends BaseController
         $data = [
             'title' => 'Join Shena Companion - Public Registration',
             'tier_definitions' => MembershipPricingService::getTierDefinitions(),
+            'packages' => $membership_packages,
             'preselect_plan'    => $preselectPlan,
             'preselect_bracket' => $preselectBracket,
             'csrf_token' => $this->generateCsrfToken()
@@ -1456,19 +1456,7 @@ class AuthController extends BaseController
                 return;
             }
             
-            // Check if email or national ID already exists
-            if (!empty($email)) {
-                $existingUser = $this->userModel->findByEmail($email);
-                if ($existingUser) {
-                    echo json_encode([
-                        'success' => false,
-                        'message' => 'Email address already registered',
-                        'field' => 'email',
-                        'old_values' => $_POST
-                    ]);
-                    return;
-                }
-            }
+            $email = $this->optionalMemberEmail($email);
 
             $existingPhone = $this->userModel->findByPhone($phone);
             if ($existingPhone) {
@@ -1558,6 +1546,27 @@ class AuthController extends BaseController
 
                 $memberId = $this->memberModel->create($memberData);
 
+                // Platinum replaces the Basic contribution for the selected package group.
+                $platinumOptIn = ($_POST['platinum_opt_in'] ?? '') === '1';
+                if ($platinumOptIn && $age !== null) {
+                    require_once __DIR__ . '/../models/PlatinumCoverage.php';
+                    require_once __DIR__ . '/../services/PlatinumPricingService.php';
+                    $quote = (new PlatinumPricingService())->quote($packageId, $dateOfBirth);
+                    if ($quote) {
+                        $this->db->insert('platinum_coverages', [
+                            'member_id' => $memberId,
+                            'covered_person_type' => 'principal',
+                            'covered_person_id' => null,
+                            'status' => 'pending_approval',
+                            'package_key' => $quote['package_key'],
+                            'package_name' => $quote['package_name'],
+                            'monthly_contribution' => $quote['amount'],
+                            'maturity_months' => $quote['maturity_months'],
+                            'requested_at' => date('Y-m-d H:i:s'),
+                        ]);
+                    }
+                }
+
                 // Handle payment based on method
                 $paymentModel = new Payment();
                 $paymentData = null;
@@ -1618,7 +1627,7 @@ class AuthController extends BaseController
                 ];
 
                 $smsService = new SmsService();
-                $smsResult = $smsService->sendSms($phone, $otpMessage);
+                $smsResult = $smsService->sendApprovedSms($phone, $otpMessage);
 
                 $otpDeliveryMessage = 'Registration successful. Verify OTP sent to your phone, then create your password.';
                 if (empty($smsResult['success'])) {
@@ -1798,7 +1807,7 @@ class AuthController extends BaseController
             $otpMessage = 'Your SHENA registration verification code is ' . $otpCode . '. It expires in 10 minutes.';
 
             $smsService = new SmsService();
-            $smsResult = $smsService->sendSms($phone, $otpMessage);
+            $smsResult = $smsService->sendApprovedSms($phone, $otpMessage);
 
             $_SESSION['signup_otp']['code_hash'] = password_hash($otpCode, PASSWORD_DEFAULT);
             $_SESSION['signup_otp']['expires_at'] = time() + 600;
@@ -2002,7 +2011,11 @@ class AuthController extends BaseController
     private function establishUserSession(array $user)
     {
         $_SESSION['is_first_login'] = empty($user['last_login']);
-        session_regenerate_id(true);
+        // The built-in HTTP server can lose the rotated cookie after a local
+        // AJAX login; production still rotates the session ID as usual.
+        if (!defined('LOCAL_OVERRIDE_APPLIED')) {
+            session_regenerate_id(true);
+        }
 
         $_SESSION['user_id'] = $user['id'];
         $_SESSION['user_email'] = $user['email'];
@@ -2014,6 +2027,10 @@ class AuthController extends BaseController
             $this->userModel->update($user['id'], ['last_login' => date('Y-m-d H:i:s')]);
         } catch (Exception $e) {
             error_log('Failed to update last login: ' . $e->getMessage());
+        }
+
+        if (defined('LOCAL_OVERRIDE_APPLIED')) {
+            session_write_close();
         }
     }
 

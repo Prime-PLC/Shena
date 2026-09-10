@@ -5,6 +5,7 @@ $monthlyPayments = $paymentSummary['monthlyPayments'] ?? ($monthlyPayments ?? 0)
 $pendingReconciliation = $paymentSummary['pendingReconciliation'] ?? ($pendingReconciliation ?? 0);
 $successRate = $successRate ?? 0;
 $paymentFilters = $payment_filters ?? [];
+$member_id = $member_id ?? null;
 $paymentPagination = $payment_pagination ?? [
     'current_page' => 1,
     'total_pages' => 1,
@@ -26,6 +27,8 @@ $paymentExportUrl = '/admin/reports/export?' . http_build_query(array_filter([
     'type' => 'payments',
     'format' => 'csv',
     'status' => ($paymentFilters['status'] ?? '') !== 'all' ? ($paymentFilters['status'] ?? '') : '',
+    'payment_type' => ($paymentFilters['payment_type'] ?? '') !== 'all' ? ($paymentFilters['payment_type'] ?? '') : '',
+    'payment_method' => ($paymentFilters['payment_method'] ?? '') !== 'all' ? ($paymentFilters['payment_method'] ?? '') : '',
     'date_from' => $paymentFilters['date_from'] ?? '',
     'date_to' => $paymentFilters['date_to'] ?? '',
 ], static function ($value) {
@@ -875,6 +878,48 @@ $paymentBreakdownExportUrl = '/admin/reports/export?' . http_build_query(array_f
         </button>
     </div>
 
+    <!-- Product ledger separation: Basic contributions vs Platinum add-on contributions -->
+    <?php
+        $activePaymentType = $paymentFilters['payment_type'] ?? 'all';
+        $paymentLedgerUrl = function (string $type) use ($paymentFilters, $member_id) {
+            $query = array_filter([
+                'search' => $paymentFilters['search'] ?? '',
+                'status' => ($paymentFilters['status'] ?? 'all') !== 'all' ? $paymentFilters['status'] : '',
+                'payment_method' => ($paymentFilters['payment_method'] ?? 'all') !== 'all' ? $paymentFilters['payment_method'] : '',
+                'payment_type' => $type !== 'all' ? $type : '',
+                'date_from' => $paymentFilters['date_from'] ?? '',
+                'date_to' => $paymentFilters['date_to'] ?? '',
+                'member_id' => !empty($member_id) ? (int) $member_id : '',
+            ], fn($value) => $value !== '' && $value !== null);
+
+            return '/admin/payments' . (!empty($query) ? '?' . http_build_query($query) : '');
+        };
+    ?>
+    <div class="ledger-switch">
+        <span class="ledger-switch-label"><i class="fas fa-layer-group"></i> Ledger</span>
+        <a class="ledger-pill <?php echo $activePaymentType === 'all' ? 'active' : ''; ?>" href="<?php echo htmlspecialchars($paymentLedgerUrl('all')); ?>">All contributions</a>
+        <a class="ledger-pill <?php echo $activePaymentType === 'monthly' ? 'active' : ''; ?>" href="<?php echo htmlspecialchars($paymentLedgerUrl('monthly')); ?>"><i class="fas fa-shield-alt"></i> Basic monthly</a>
+        <a class="ledger-pill is-platinum <?php echo $activePaymentType === 'platinum' ? 'active' : ''; ?>" href="<?php echo htmlspecialchars($paymentLedgerUrl('platinum')); ?>"><i class="fas fa-gem"></i> Platinum add-on</a>
+        <a class="ledger-pill <?php echo $activePaymentType === 'registration' ? 'active' : ''; ?>" href="<?php echo htmlspecialchars($paymentLedgerUrl('registration')); ?>"><i class="fas fa-file-signature"></i> Registration fees</a>
+        <?php if ($activePaymentType === 'platinum'): ?>
+            <a class="ledger-pill ledger-link" href="/admin/platinum-requests"><i class="fas fa-hospital"></i> Platinum approvals desk</a>
+        <?php endif; ?>
+    </div>
+    <?php if ($activePaymentType === 'platinum'): ?>
+        <div class="ledger-note"><i class="fas fa-gem"></i> Showing Platinum allocations within normal combined monthly contributions. Separate Platinum payments are retained only for exceptional/manual settlement.</div>
+    <?php endif; ?>
+
+    <style>
+        .ledger-switch { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: #fff; border-radius: 12px; padding: 12px 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        .ledger-switch-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #9CA3AF; }
+        .ledger-pill { display: inline-flex; align-items: center; gap: 7px; padding: 9px 16px; border-radius: 999px; border: 1.5px solid #E5E7EB; background: #F9FAFB; color: #4B5563; font-size: 13px; font-weight: 600; text-decoration: none; transition: all 0.2s; }
+        .ledger-pill:hover { border-color: #7F3D9E; color: #7F3D9E; }
+        .ledger-pill.active { background: linear-gradient(135deg, #7F3D9E 0%, #7C3AED 100%); border-color: transparent; color: #fff; }
+        .ledger-pill.is-platinum.active { background: linear-gradient(135deg, #7F20B0 0%, #5E2B7A 100%); }
+        .ledger-pill.ledger-link { margin-left: auto; background: #F3E8FF; border-color: #E9D5FF; color: #7F20B0; }
+        .ledger-note { display: flex; align-items: center; gap: 10px; font-size: 13px; padding: 12px 16px; border-radius: 10px; margin-bottom: 16px; background: #F3E8FF; border-left: 4px solid #7F20B0; color: #5B21B6; }
+    </style>
+
     <!-- All Payments Tab -->
     <div class="tab-content active" id="content-all">
         <div class="table-header">
@@ -897,7 +942,7 @@ $paymentBreakdownExportUrl = '/admin/reports/export?' . http_build_query(array_f
                     <?php endforeach; ?>
                 </select>
                 <select name="payment_type" aria-label="Payment type">
-                    <?php foreach (['all' => 'All types', 'registration' => 'Registration', 'monthly' => 'Monthly', 'reactivation' => 'Reactivation', 'penalty' => 'Penalty'] as $value => $label): ?>
+                    <?php foreach (['all' => 'All types', 'registration' => 'Registration', 'monthly' => 'Monthly (Basic + Platinum)', 'platinum' => 'Exceptional Platinum-only payment', 'reactivation' => 'Reactivation', 'penalty' => 'Penalty'] as $value => $label): ?>
                         <option value="<?php echo $value; ?>" <?php echo (($paymentFilters['payment_type'] ?? 'all') === $value) ? 'selected' : ''; ?>><?php echo $label; ?></option>
                     <?php endforeach; ?>
                 </select>
@@ -929,6 +974,7 @@ $paymentBreakdownExportUrl = '/admin/reports/export?' . http_build_query(array_f
                     <th>Transaction ID</th>
                     <th>Member Name</th>
                     <th>Amount</th>
+                    <?php if (($paymentFilters['payment_type'] ?? '') === 'platinum'): ?><th>Platinum group / month</th><?php endif; ?>
                     <th>Payment Method</th>
                     <th>Date & Time</th>
                     <th>Status</th>
@@ -943,6 +989,7 @@ $paymentBreakdownExportUrl = '/admin/reports/export?' . http_build_query(array_f
                     <td><strong><?php echo htmlspecialchars($p['transaction_id'] ?? $p['mpesa_receipt_number'] ?? '—'); ?></strong></td>
                     <td><?php echo htmlspecialchars(($p['first_name'] ?? '') . ' ' . ($p['last_name'] ?? '')); ?></td>
                     <td><strong>KSh <?php echo number_format($p['amount'], 2); ?></strong></td>
+                    <?php if (($paymentFilters['payment_type'] ?? '') === 'platinum'): ?><td><?php echo htmlspecialchars($p['platinum_group'] ?? 'Exceptional payment'); ?><div style="font-size:11px;color:#6B7280"><?php echo !empty($p['allocation_month']) ? htmlspecialchars(date('M Y', strtotime($p['allocation_month']))) : 'Standalone'; ?></div></td><?php endif; ?>
                     <td><?php echo htmlspecialchars(ucfirst(str_replace('_', ' ', $p['payment_method'] ?? '—'))); ?></td>
                     <td><?php echo date('M j, Y g:i A', strtotime($p['created_at'])); ?></td>
                     <td><span class="status-badge <?php echo $p['status'] === 'completed' ? 'success' : ($p['status'] === 'failed' ? 'danger' : 'pending'); ?>"><?php echo ucfirst($p['status']); ?></span></td>
@@ -963,7 +1010,7 @@ $paymentBreakdownExportUrl = '/admin/reports/export?' . http_build_query(array_f
                 </tr>
                 <?php endforeach; ?>
                 <?php else: ?>
-                <tr><td colspan="8" style="text-align:center; padding: 24px; color:#6B7280;">No payments found.</td></tr>
+                <tr><td colspan="<?php echo (($paymentFilters['payment_type'] ?? '') === 'platinum') ? 9 : 8; ?>" style="text-align:center; padding: 24px; color:#6B7280;">No payments found.</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>

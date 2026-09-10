@@ -1,0 +1,1 @@
+ALTER TABLE claims ADD COLUMN admin_created TINYINT(1) NOT NULL DEFAULT 0 AFTER member_id;

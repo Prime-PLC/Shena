@@ -40,6 +40,7 @@ class PaymentController extends BaseController
             $amount = $input['amount'] ?? null;
             $phoneNumber = $input['phone_number'] ?? null;
             $paymentType = $input['payment_type'] ?? 'monthly';
+            $platinumCoverageId = isset($input['platinum_coverage_id']) ? (int) $input['platinum_coverage_id'] : null;
             
             // Validate input
             if (!$memberId || !$amount || !$phoneNumber) {
@@ -64,7 +65,27 @@ class PaymentController extends BaseController
                 }
             }
 
-            $amount = $this->resolveMemberPaymentAmount($paymentType, $member, $amount);
+            $platinumCoverage = null;
+            if ($paymentType === 'platinum') {
+                if (!$platinumCoverageId) {
+                    $this->json(['error' => 'Missing Platinum coverage reference'], 400);
+                    return;
+                }
+                require_once __DIR__ . '/../models/PlatinumCoverage.php';
+                $platinumCoverage = (new PlatinumCoverage())->find($platinumCoverageId);
+                if (!$platinumCoverage || (int) $platinumCoverage['member_id'] !== (int) $memberId) {
+                    $this->json(['error' => 'Platinum coverage not found'], 404);
+                    return;
+                }
+                if (!in_array($platinumCoverage['status'], ['pending_payment', 'active'], true)) {
+                    $this->json(['error' => 'This Platinum coverage is not awaiting payment'], 400);
+                    return;
+                }
+                // Amount is always derived server-side from the coverage record, never trusted from the client.
+                $amount = (float) $platinumCoverage['monthly_contribution'];
+            } else {
+                $amount = $this->resolveMemberPaymentAmount($paymentType, $member, $amount);
+            }
 
             // Format phone number
             $phoneNumber = $this->formatPhoneNumber($phoneNumber);
@@ -89,7 +110,8 @@ class PaymentController extends BaseController
                     $phoneNumber,
                     $response['CheckoutRequestID'],
                     $paymentType,
-                    $response['MerchantRequestID'] ?? null
+                    $response['MerchantRequestID'] ?? null,
+                    $platinumCoverage ? ['platinum_coverage_id' => (int) $platinumCoverage['id']] : []
                 );
                 
                 $this->json([
@@ -279,7 +301,8 @@ class PaymentController extends BaseController
             case 'reactivation':
                 return defined('REACTIVATION_FEE') ? REACTIVATION_FEE : 100;
             case 'monthly':
-                return $member['monthly_contribution'] ?? $requestedAmount;
+                require_once __DIR__ . '/../services/PlatinumBillingService.php';
+                return (new PlatinumBillingService())->monthlyAmount($member);
             default:
                 return $requestedAmount;
         }

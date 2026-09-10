@@ -70,10 +70,28 @@ class BulkSmsService
 
         $stmt = $this->db->prepare($sql);
         if ($stmt->execute($params)) {
-            return $this->db->lastInsertId();
+            $campaignId = (int) $this->db->lastInsertId();
+            $this->ensureCampaignAudienceIsPersisted($campaignId, $data['target_audience']);
+            return $campaignId;
         }
 
         return false;
+    }
+
+    private function ensureCampaignAudienceIsPersisted(int $campaignId, string $targetAudience): void
+    {
+        // Some production database setups have previously produced blank audience values
+        // despite a valid create request. Reapply and verify the authoritative value before
+        // any sender can read the campaign; never infer or default this to all_members.
+        $this->db->prepare('UPDATE bulk_messages SET target_audience = ? WHERE id = ?')
+            ->execute([$targetAudience, $campaignId]);
+
+        $statement = $this->db->prepare('SELECT target_audience FROM bulk_messages WHERE id = ? LIMIT 1');
+        $statement->execute([$campaignId]);
+        $persistedAudience = trim((string) $statement->fetchColumn());
+        if ($persistedAudience !== $targetAudience) {
+            throw new RuntimeException('Campaign audience could not be persisted; refusing to create a campaign that might send to the wrong recipients.');
+        }
     }
 
     private function normalizeCampaignTargetAudience($targetAudience): string
@@ -483,6 +501,7 @@ class BulkSmsService
                         $message,
                         $campaign['title'],
                         null,
+                        true,
                         true
                     );
 
@@ -515,7 +534,7 @@ class BulkSmsService
                         );
                     }
                 } else {
-                    $result = $this->smsService->sendSms($recipient['recipient_value'], $message);
+                    $result = $this->smsService->sendApprovedSms($recipient['recipient_value'], $message);
 
                     if (!empty($result['success'])) {
                         $this->updateRecipientStatus(
@@ -610,6 +629,19 @@ class BulkSmsService
         return $stmt->rowCount() > 0;
     }
 
+    public function resumePausedCampaign(int $bulkMessageId): bool
+    {
+        $stmt = $this->db->prepare("UPDATE bulk_messages
+            SET status = CASE
+                WHEN started_at IS NOT NULL THEN 'sending'
+                WHEN scheduled_at IS NOT NULL THEN 'scheduled'
+                ELSE 'draft'
+            END
+            WHERE id = ? AND status = 'paused'");
+        $stmt->execute([$bulkMessageId]);
+
+        return $stmt->rowCount() > 0;
+    }
     public function resumePausedCampaignForManualSend(int $bulkMessageId): bool
     {
         $stmt = $this->db->prepare("UPDATE bulk_messages SET status = 'sending' WHERE id = ? AND status = 'paused'");
@@ -1271,7 +1303,7 @@ class BulkSmsService
         $newCampaignId = $this->createCampaign([
             'title' => 'Copy of ' . ($campaign['title'] ?? 'SMS Campaign'),
             'message' => $campaign['message'] ?? '',
-            'target_audience' => $campaign['target_audience'] ?? 'all_members',
+            'target_audience' => $campaign['target_audience'] ?? '',
             'custom_filters' => $filters + ['recipient_mode' => 'refresh recipients'],
             'scheduled_at' => null,
         ], $createdBy);
@@ -1280,7 +1312,7 @@ class BulkSmsService
             return false;
         }
 
-        $recipients = $this->getRecipients($campaign['target_audience'] ?? 'all_members', $filters);
+        $recipients = $this->getRecipients($campaign['target_audience'] ?? '', $filters);
         if (!empty($recipients)) {
             $this->queueRecipients($newCampaignId, $recipients);
         }
@@ -1322,7 +1354,7 @@ class BulkSmsService
         }
 
         $this->updateRecipientStatus($recipientId, 'pending', null, null, null, null, null, null);
-        $result = $this->smsService->sendSms($phone, $message);
+        $result = $this->smsService->sendApprovedSms($phone, $message);
         if (!empty($result['success'])) {
             $this->updateRecipientStatus(
                 $recipientId,
@@ -1366,7 +1398,8 @@ class BulkSmsService
         $sql = "UPDATE bulk_messages SET status = 'cancelled' WHERE id = ?
                 AND status IN ('draft', 'scheduled', 'paused')";
         $stmt = $this->db->prepare($sql);
-        return $stmt->execute([$campaignId]);
+        $stmt->execute([$campaignId]);
+        return $stmt->rowCount() > 0;
     }
 
     public function updateScheduledAt($campaignId, $scheduledAt)
@@ -1448,8 +1481,12 @@ class BulkSmsService
         $failedCount = 0;
 
         foreach ($items as $item) {
+            // One worker owns this send even when an admin and background worker overlap.
+            $claim = $this->db->prepare("UPDATE sms_queue SET status = 'processing', updated_at = NOW() WHERE id = ? AND status = 'pending'");
+            $claim->execute([(int)$item['id']]);
+            if ($claim->rowCount() !== 1) continue;
             try {
-                $result = $this->smsService->sendSms($item['phone_number'], $item['message']);
+                $result = $this->smsService->sendApprovedSms($item['phone_number'], $item['message']);
 
                 if (!empty($result['success'])) {
                     $this->updateQueueStatus(
@@ -1463,13 +1500,13 @@ class BulkSmsService
                     );
                     $sentCount++;
                 } else {
-                    $this->updateQueueStatus($item['id'], 'failed', $result['error'] ?? 'Unknown error', null, null, null, $result);
+                    $this->updateQueueStatus($item['id'], ($result['status'] ?? '') === 'unknown' ? 'unknown' : 'failed', $result['error'] ?? 'Unknown error', null, null, null, $result);
                     $failedCount++;
                 }
 
                 usleep(100000);
             } catch (Throwable $e) {
-                $this->updateQueueStatus($item['id'], 'failed', $e->getMessage());
+                $this->updateQueueStatus($item['id'], 'unknown', 'Submission outcome is uncertain. Check the provider before retrying.');
                 $failedCount++;
             }
         }
@@ -1498,9 +1535,13 @@ class BulkSmsService
         $processed = 0;
 
         foreach ($items as $item) {
+            // One worker owns this send even when an admin and background worker overlap.
+            $claim = $this->db->prepare("UPDATE sms_queue SET status = 'processing', updated_at = NOW() WHERE id = ? AND status = 'pending'");
+            $claim->execute([(int)$item['id']]);
+            if ($claim->rowCount() !== 1) continue;
             $processed++;
             try {
-                $result = $this->smsService->sendSms($item['phone_number'], $item['message']);
+                $result = $this->smsService->sendApprovedSms($item['phone_number'], $item['message']);
                 if (!empty($result['success'])) {
                     $this->updateQueueStatus(
                         $item['id'],
@@ -1513,11 +1554,11 @@ class BulkSmsService
                     );
                     $submitted++;
                 } else {
-                    $this->updateQueueStatus($item['id'], 'failed', $result['error'] ?? 'Unknown error', null, null, null, $result);
+                    $this->updateQueueStatus($item['id'], ($result['status'] ?? '') === 'unknown' ? 'unknown' : 'failed', $result['error'] ?? 'Unknown error', null, null, null, $result);
                     $failed++;
                 }
             } catch (Throwable $e) {
-                $this->updateQueueStatus($item['id'], 'failed', $e->getMessage());
+                $this->updateQueueStatus($item['id'], 'unknown', 'Submission outcome is uncertain. Check the provider before retrying.');
                 $failed++;
             }
         }

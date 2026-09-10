@@ -37,6 +37,7 @@ class HomeController extends BaseController
         ];
 
         foreach ($membership_packages as $key => $package) {
+            if (!empty($package['legacy_alias'])) continue;
             $category = strtolower((string)($package['category'] ?? ''));
 
             if (!isset($packageTiers[$category])) {

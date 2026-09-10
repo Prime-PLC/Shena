@@ -7,3 +7,84 @@
 [06-Mar-2026 09:03:12 Africa/Nairobi] PHP Warning:  Undefined array key "county" in C:\xampp\htdocs\Shena\app\controllers\AuthController.php on line 950
 [06-Mar-2026 09:03:12 Africa/Nairobi] PHP Deprecated:  trim(): Passing null to parameter #1 ($string) of type string is deprecated in C:\xampp\htdocs\Shena\app\core\BaseController.php on line 102
 [06-Mar-2026 09:03:13 Africa/Nairobi] SMS sending failed: {"status":"error","statusCode":"216","reason":"Invalid credentials"}
+[20-Aug-2026 00:22:34 Africa/Nairobi] Failed to add dependant: Please fill in dependant name, relationship, and date of birth.
+[20-Aug-2026 00:23:07 Africa/Nairobi] Failed to add dependant: Please enter a valid dependant date of birth.
+[20-Aug-2026 01:02:28 Africa/Nairobi] Application error: PlatinumCoverage::getCoverage(): Return value must be of type ?array, false returned
+[20-Aug-2026 01:02:28 Africa/Nairobi] Stack trace: #0 C:\xampp\htdocs\Shena\app\controllers\MemberController.php(304): PlatinumCoverage->getCoverage()
+#1 C:\xampp\htdocs\Shena\app\core\Router.php(416): MemberController->submitPlatinumRequest()
+#2 C:\xampp\htdocs\Shena\app\core\Router.php(399): Router->executeAction()
+#3 C:\xampp\htdocs\Shena\app\core\Router.php(364): Router->executeRoute()
+#4 C:\xampp\htdocs\Shena\index.php(66): Router->dispatch()
+#5 {main}
+[20-Aug-2026 01:09:44 Africa/Nairobi] Application error: Call to undefined method PDO::fetch()
+[20-Aug-2026 01:09:44 Africa/Nairobi] Stack trace: #0 C:\xampp\htdocs\Shena\app\controllers\AdminController.php(3821): PlatinumEligibilityService->hasVerifiedPayment()
+#1 C:\xampp\htdocs\Shena\app\core\Router.php(416): AdminController->platinumRequests()
+#2 C:\xampp\htdocs\Shena\app\core\Router.php(399): Router->executeAction()
+#3 C:\xampp\htdocs\Shena\app\core\Router.php(364): Router->executeRoute()
+#4 C:\xampp\htdocs\Shena\index.php(66): Router->dispatch()
+#5 {main}
+[20-Aug-2026 01:10:12 Africa/Nairobi] Application error: Call to undefined method PDO::fetch()
+[20-Aug-2026 01:10:12 Africa/Nairobi] Stack trace: #0 C:\xampp\htdocs\Shena\app\controllers\AdminController.php(3821): PlatinumEligibilityService->hasVerifiedPayment()
+#1 C:\xampp\htdocs\Shena\app\core\Router.php(416): AdminController->platinumRequests()
+#2 C:\xampp\htdocs\Shena\app\core\Router.php(399): Router->executeAction()
+#3 C:\xampp\htdocs\Shena\app\core\Router.php(364): Router->executeRoute()
+#4 C:\xampp\htdocs\Shena\index.php(66): Router->dispatch()
+#5 {main}
+[24-Aug-2026 19:05:07 Africa/Nairobi] PHP Warning:  Undefined array key "tier" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 432
+[24-Aug-2026 19:48:40 Africa/Nairobi] SMS not sent: HostPinnacle credentials not configured
+[24-Aug-2026 19:57:57 Africa/Nairobi] PHP Warning:  Undefined array key "tier" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 432
+[24-Aug-2026 19:58:02 Africa/Nairobi] PHP Warning:  Undefined array key "tier" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 432
+[24-Aug-2026 21:59:16 Africa/Nairobi] PHP Warning:  Undefined array key "tier" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 434
+[24-Aug-2026 22:00:31 Africa/Nairobi] PHP Warning:  Undefined array key "tier" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 434
+[24-Aug-2026 22:16:46 Africa/Nairobi] PHP Warning:  Undefined array key "platinum_intent" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 434
+[24-Aug-2026 22:16:46 Africa/Nairobi] PHP Warning:  Undefined array key "tier" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 438
+[24-Aug-2026 22:17:09 Africa/Nairobi] PHP Warning:  Undefined array key "tier" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 438
+[24-Aug-2026 22:21:56 Africa/Nairobi] PHP Warning:  Undefined array key "tier" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 438
+[24-Aug-2026 22:22:06 Africa/Nairobi] PHP Warning:  Undefined array key "platinum_intent" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 434
+[24-Aug-2026 22:22:06 Africa/Nairobi] PHP Warning:  Undefined array key "tier" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 438
+[24-Aug-2026 22:22:13 Africa/Nairobi] PHP Warning:  Undefined array key "platinum_intent" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 434
+[24-Aug-2026 22:22:13 Africa/Nairobi] PHP Warning:  Undefined array key "tier" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 438
+[24-Aug-2026 22:22:20 Africa/Nairobi] PHP Warning:  Undefined array key "platinum_intent" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 434
+[24-Aug-2026 22:22:20 Africa/Nairobi] PHP Warning:  Undefined array key "tier" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 438
+[24-Aug-2026 22:34:11 Africa/Nairobi] PHP Warning:  Undefined array key "tier" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 436
+[24-Aug-2026 23:03:26 Africa/Nairobi] PHP Warning:  Undefined array key "tier" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 435
+[24-Aug-2026 23:23:34 Africa/Nairobi] PHP Warning:  Undefined array key "tier" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 435
+[24-Aug-2026 23:23:42 Africa/Nairobi] PHP Warning:  Undefined array key "tier" in C:\xampp\htdocs\Shena\app\controllers\AdminController.php on line 435
+[25-Aug-2026 13:11:49 Africa/Nairobi] SMS not sent: HostPinnacle credentials not configured
+[25-Aug-2026 13:42:53 Africa/Nairobi] SMS not sent: HostPinnacle credentials not configured
+[25-Aug-2026 13:44:25 Africa/Nairobi] SMS not sent: HostPinnacle credentials not configured
+[25-Aug-2026 13:56:16 Africa/Nairobi] PHP Warning:  Undefined variable $accountMonthlyAmount in C:\xampp\htdocs\Shena\app\controllers\MemberController.php on line 337
+[25-Aug-2026 13:56:52 Africa/Nairobi] PHP Warning:  Undefined variable $accountMonthlyAmount in C:\xampp\htdocs\Shena\app\controllers\MemberController.php on line 337
+[25-Aug-2026 14:08:22 Africa/Nairobi] PHP Warning:  Undefined variable $accountMonthlyAmount in C:\xampp\htdocs\Shena\app\controllers\MemberController.php on line 337
+[25-Aug-2026 14:12:21 Africa/Nairobi] Database query error: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'm.phone' in 'field list'
+[25-Aug-2026 14:12:21 Africa/Nairobi] SQL: SELECT pc.*, m.phone, m.email, u.first_name FROM platinum_coverages pc
+                 JOIN members m ON m.id = pc.member_id
+                 JOIN users u ON u.id = m.user_id
+                 WHERE pc.id = :id
+[25-Aug-2026 14:12:21 Africa/Nairobi] Params: Array
+(
+    [id] => 1
+)
+
+[25-Aug-2026 14:12:21 Africa/Nairobi] Platinum decision notification failed: Database query failed: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'm.phone' in 'field list'
+[25-Aug-2026 14:19:24 Africa/Nairobi] SMS not sent: HostPinnacle credentials not configured
+[25-Aug-2026 14:21:02 Africa/Nairobi] SMS not sent: HostPinnacle credentials not configured
+[25-Aug-2026 14:23:27 Africa/Nairobi] SMS not sent: HostPinnacle credentials not configured
+[25-Aug-2026 14:23:44 Africa/Nairobi] SMS not sent: HostPinnacle credentials not configured
+[25-Aug-2026 14:36:00 Africa/Nairobi] SMS not sent: HostPinnacle credentials not configured
+[25-Aug-2026 14:36:54 Africa/Nairobi] Database query error: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'm.phone' in 'field list'
+[25-Aug-2026 14:36:54 Africa/Nairobi] SQL: SELECT pc.*, m.phone, m.email, u.first_name FROM platinum_coverages pc
+                 JOIN members m ON m.id = pc.member_id
+                 JOIN users u ON u.id = m.user_id
+                 WHERE pc.id = :id
+[25-Aug-2026 14:36:54 Africa/Nairobi] Params: Array
+(
+    [id] => 2
+)
+
+[25-Aug-2026 14:36:54 Africa/Nairobi] Platinum decision notification failed: Database query failed: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'm.phone' in 'field list'
+[25-Aug-2026 14:37:19 Africa/Nairobi] PHP Warning:  Undefined variable $accountMonthlyAmount in C:\xampp\htdocs\Shena\app\controllers\MemberController.php on line 337
+[25-Aug-2026 14:50:28 Africa/Nairobi] SMS not sent: HostPinnacle credentials not configured
+[25-Aug-2026 14:50:55 Africa/Nairobi] SMS not sent: HostPinnacle credentials not configured
+[25-Aug-2026 14:51:52 Africa/Nairobi] SMS not sent: HostPinnacle credentials not configured
+[25-Aug-2026 15:22:28 Africa/Nairobi] SMS not sent: HostPinnacle credentials not configured

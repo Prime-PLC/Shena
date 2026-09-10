@@ -10,13 +10,17 @@ $getOldValue = function($field) {
     $old = $_SESSION['form_data'][$field] ?? '';
     return htmlspecialchars($old);
 };
+require_once __DIR__ . '/../../../app/services/PlatinumPricingService.php';
 $membershipPlanData = [];
-foreach (($packages ?? []) as $packageKey => $package) {
+foreach (($packages ?? []) as $packageKey => $package) { if (!empty($package['legacy_alias'])) continue;
     $membershipPlanData[$packageKey] = [
         'name' => $package['name'] ?? $packageKey,
         'monthly_contribution' => (float)($package['monthly_contribution'] ?? 0),
+        'coverage_type' => $package['coverage_type'] ?? 'principal_only',
+        'platinum_amount' => (new PlatinumPricingService())->packageAmount($packageKey),
     ];
 }
+$platinumPriceData = $GLOBALS['platinum_config']['prices'] ?? [];
 ?>
 
 <style>
@@ -540,7 +544,7 @@ foreach (($packages ?? []) as $packageKey => $package) {
                         <small class="form-hint">Format: +254712345678</small>
                     </div>
                     <div class="form-group">
-                        <label for="email" class="form-label">Email Address <span class="required">*</span></label>
+                        <label for="email" class="form-label">Email Address <small class="text-muted">(optional)</small></label>
                         <input type="email" class="form-input" id="email" name="email" placeholder="member@example.com" value="<?php echo $getOldValue('email'); ?>">
                     </div>
                     <div class="form-group full-width">
@@ -587,7 +591,7 @@ foreach (($packages ?? []) as $packageKey => $package) {
                 </div>
                 
                 <div class="package-options">
-                    <?php foreach (($packages ?? []) as $packageKey => $package): ?>
+                    <?php foreach (($packages ?? []) as $packageKey => $package): if (!empty($package['legacy_alias'])) continue; ?>
                         <div class="package-option">
                             <input
                                 type="radio"
@@ -621,11 +625,23 @@ foreach (($packages ?? []) as $packageKey => $package) {
                         <button type="button" class="btn-reset" onclick="addAgentCorporateRow()" style="margin-top: 10px;">
                             <i class="fas fa-plus"></i> Add Corporate Member
                         </button>
-                        <small class="form-hint">Each corporate member uses the exact package selected for that person.</small>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Expected Monthly Contribution</label>
                         <div class="form-input corporate-total-preview" id="corporateTotalPreview" aria-live="polite">KES 0/month</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Product Tier <span style="color:#EF4444">*</span></label>
+                        <select name="platinum_opt_in" id="agentPlatinumOptIn" class="form-input" required>
+                            <option value="0" selected>SHENA Basic &mdash; funeral &amp; last-respect cover</option>
+                            <option value="1">SHENA Platinum &mdash; inpatient and welfare cover</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="agentPlatinumPanel" style="grid-column:1/-1;display:none;background:linear-gradient(135deg,#7F20B0 0%,#5E2B7A 100%);border-radius:10px;padding:14px 18px;color:#fff">
+                        <strong><i class="fas fa-gem"></i> SHENA Platinum &mdash; <span id="agentPlatinumPrice">--</span>/month</strong>
+                        <div style="font-size:0.85rem;opacity:0.92;margin-top:6px;line-height:1.55">
+                            Includes up to <strong>20 inpatient bed-cover days per year</strong>.
+                        </div>
                     </div>
                 </div>
             </div>
@@ -692,6 +708,7 @@ const memberSubmitBtn = memberForm.querySelector('.step-submit');
 let memberCurrentStep = 1;
 const memberInitialStep = <?php echo json_encode(max(1, min(6, $initialStep))); ?>;
 const membershipPlanData = <?php echo json_encode($membershipPlanData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
+const platinumPriceData = <?php echo json_encode($platinumPriceData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
 const agentCorporateLineItems = document.getElementById('agentCorporateLineItems');
 const memberCorporateTotalPreview = document.getElementById('corporateTotalPreview');
 let agentCorporateIndex = 0;
@@ -707,8 +724,32 @@ function updateMemberContributionPreview() {
         corporateTotal += Number(membershipPlanData[selectedCorporatePackage]?.monthly_contribution || 0);
     });
     const total = baseAmount + corporateTotal;
-    memberCorporateTotalPreview.textContent = 'KES ' + total.toLocaleString() + '/month';
+    const platinumSelect = document.getElementById('agentPlatinumOptIn');
+    const platinum = platinumSelect?.value === '1' ? agentPlatinumPriceForPackage(packageKey) : 0;
+    memberCorporateTotalPreview.textContent = platinum
+        ? 'KES ' + (corporateTotal + platinum).toLocaleString() + '/month'
+        : 'KES ' + total.toLocaleString() + '/month';
 }
+
+function agentPlatinumPriceForPackage(packageKey) {
+        return Number(membershipPlanData[packageKey]?.platinum_amount || 0) || null;
+    }
+
+function updateAgentPlatinumPrice() {
+    const priceEl = document.getElementById('agentPlatinumPrice');
+    const dobInput = document.getElementById('date_of_birth');
+    const tierInput = document.getElementById('agentPlatinumOptIn');
+    const panel = document.getElementById('agentPlatinumPanel');
+    if (!priceEl) return;
+    const selectedPackage = memberForm.querySelector('input[name="package"]:checked');
+    const price = agentPlatinumPriceForPackage(selectedPackage?.value || '');
+    if (panel) panel.style.display = tierInput?.value === '1' ? '' : 'none';
+    priceEl.textContent = price ? ('KES ' + price.toLocaleString()) : 'choose a Basic package';
+    updateMemberContributionPreview();
+}
+document.getElementById('date_of_birth')?.addEventListener('change', updateAgentPlatinumPrice);
+document.getElementById('agentPlatinumOptIn')?.addEventListener('change', updateAgentPlatinumPrice);
+updateAgentPlatinumPrice();
 
 function addAgentCorporateRow() {
     if (!agentCorporateLineItems) return;

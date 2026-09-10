@@ -584,7 +584,7 @@
                             </div>
                             <div class="contact-text">
                                 <strong>Email</strong>
-                                <a href="mailto:info@shenacompanion.org">info@shenacompanion.org</a>
+                                <a href="mailto:info@shenacompanion.co.ke">info@shenacompanion.co.ke</a>
                             </div>
                         </div>
                         

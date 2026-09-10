@@ -745,6 +745,10 @@ require_once __DIR__ . '/../layouts/admin-header.php';
                                     <?php endif; ?>
                                 </div>
                             </div>
+                            <?php
+                            $providerCaseType = 'funeral'; $providerCaseId = (int)$claim['id']; $providerStage = $item['service_type'];
+                            include __DIR__ . '/../partials/claim-provider.php';
+                            ?>
                         </div>
                     <?php endforeach; ?>
                 </div>

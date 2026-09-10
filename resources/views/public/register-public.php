@@ -1,3 +1,8 @@
+<?php
+require_once __DIR__ . '/../../../app/services/PlatinumPricingService.php';
+$publicPlatinumAmounts = [];
+foreach (($GLOBALS['membership_packages'] ?? []) as $key => $definition) $publicPlatinumAmounts[$key] = (new PlatinumPricingService())->packageAmount($key);
+?>
 <?php include VIEWS_PATH . '/layouts/header.php'; ?>
 
 <style>
@@ -64,6 +69,7 @@
     }
     .btn-register:hover { background: #5b21b6; }
     .support-text { color: #64748b; font-size: 0.85rem; }
+    .product-summary { background:#f5f3ff; border:1px solid #ddd6fe; border-radius:10px; padding:12px; color:#4c1d95; font-size:.88rem; line-height:1.55; }
 
     @media (max-width: 991px) {
         .side-panel { min-height: 260px; }
@@ -79,14 +85,14 @@
                     <div>
                         <span class="side-badge">QUICK SIGNUP</span>
                         <h2>Join SHENA in seconds</h2>
-                        <p>Register with just your name and phone number. After login, we'll guide you through plan selection and account activation right on your dashboard.</p>
+                        <p>Choose Basic or Platinum, then complete verification and activation from your dashboard.</p>
                     </div>
                     <div style="margin-top:auto; padding-top:24px;">
                         <div style="background:rgba(255,255,255,0.15); border-radius:12px; padding:14px 16px; font-size:0.85rem; line-height:1.6;">
                             <div style="font-weight:700; margin-bottom:6px; color:rgba(255,255,255,0.9);">What happens after signup?</div>
                             <div>✔ OTP verification</div>
                             <div>✔ Create your password</div>
-                            <div>✔ Select your membership plan</div>
+                            <div>✔ Choose Basic or Platinum</div>
                             <div>✔ Pay KES 200 registration fee</div>
                         </div>
                     </div>
@@ -118,6 +124,34 @@
                                 <input type="text" class="form-control" id="last_name" name="last_name" required autocomplete="family-name">
                             </div>
                         </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="date_of_birth" class="form-label">Date of Birth <span class="required-star">*</span></label>
+                                <input type="date" class="form-control" id="date_of_birth" name="date_of_birth" required max="<?php echo date('Y-m-d'); ?>">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="package_id" class="form-label">Basic membership package <span class="required-star">*</span></label>
+                                <select class="form-select" id="package_id" name="package_id" required>
+                                    <option value="">Select a Basic package</option>
+                                    <?php foreach (($packages ?? []) as $packageKey => $package): if (!empty($package['legacy_alias'])) continue; ?>
+                                        <option value="<?php echo e($packageKey); ?>" data-monthly="<?php echo (float) ($package['monthly_contribution'] ?? 0); ?>" data-coverage-type="<?php echo e($package['coverage_type'] ?? 'principal_only'); ?>">
+                                            <?php echo e($package['name'] ?? $packageKey); ?> — KES <?php echo number_format((float) ($package['monthly_contribution'] ?? 0)); ?>/month
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="platinum_opt_in" class="form-label">Product tier <span class="required-star">*</span></label>
+                            <select class="form-select" id="platinum_opt_in" name="platinum_opt_in" required>
+                                <option value="0" selected>SHENA Basic — funeral and last-respect cover</option>
+                                <option value="1">SHENA Platinum — inpatient and welfare cover</option>
+                            </select>
+                            <small class="text-muted">Platinum replaces the Basic monthly contribution for the selected package group. It provides up to 20 inpatient bed-cover days each calendar year after approval and maturity.</small>
+                        </div>
+                        <div class="product-summary" id="productSummary" aria-live="polite">Choose your date of birth and Basic package to see the monthly contribution.</div>
 
                         <div class="row">
                             <div class="col-md-8 mb-3">
@@ -154,6 +188,38 @@ document.addEventListener('DOMContentLoaded', function () {
     const submitBtn = document.getElementById('submitBtn');
     const resultBox = document.getElementById('resultBox');
     const phoneInput = document.getElementById('phone');
+    const dobInput = document.getElementById('date_of_birth');
+    const packageInput = document.getElementById('package_id');
+    const tierInput = document.getElementById('platinum_opt_in');
+    const productSummary = document.getElementById('productSummary');
+
+    const publicPlatinumAmounts = <?= json_encode($publicPlatinumAmounts, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    function platinumPrice(packageKey) {
+        return Number(publicPlatinumAmounts[packageKey] || 0) || null;
+    }
+
+    function updateProductSummary() {
+        const option = packageInput.options[packageInput.selectedIndex];
+        const basic = Number(option?.dataset.monthly || 0);
+        let age = null;
+        if (dobInput.value) {
+            const dob = new Date(dobInput.value + 'T00:00:00');
+            age = Math.floor((Date.now() - dob.getTime()) / 31557600000);
+        }
+        const wantsPlatinum = tierInput.value === '1';
+        const platinum = wantsPlatinum ? platinumPrice(packageInput.value) : 0;
+        if (!basic) {
+            productSummary.textContent = 'Choose a Basic package to see the monthly contribution.';
+        } else if (wantsPlatinum && platinum === null) {
+            productSummary.textContent = 'Basic: KES ' + basic.toLocaleString() + '/month. Enter a valid date of birth to calculate the Platinum monthly contribution.';
+        } else if (wantsPlatinum) {
+            productSummary.textContent = 'Platinum monthly contribution: KES ' + platinum.toLocaleString() + '. This replaces the Basic rate of KES ' + basic.toLocaleString() + ' for this package group.';
+        } else {
+            productSummary.textContent = 'Basic monthly contribution: KES ' + basic.toLocaleString() + '.';
+        }
+    }
+    [dobInput, packageInput, tierInput].forEach(function (input) { input.addEventListener('change', updateProductSummary); });
+    updateProductSummary();
 
     phoneInput.addEventListener('input', function (e) {
         let value = e.target.value.replace(/\D/g, '');

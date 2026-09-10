@@ -13,6 +13,13 @@ class Router
     
     private function loadRoutes()
     {
+        $this->addRoute('GET', '/sms-review', 'SmsReviewController@index');
+        $this->addRoute('POST', '/sms-review/{id}', 'SmsReviewController@review');
+
+        $this->addRoute('GET', '/admin/service-providers', 'AdminController@serviceProviders');
+        $this->addRoute('POST', '/admin/service-providers', 'AdminController@saveServiceProvider');
+        $this->addRoute('POST', '/admin/claims/provider', 'AdminController@claimProviderAction');
+
         // Public Routes
         $this->addRoute('GET', '/', 'HomeController@index');
         $this->addRoute('GET', '/about', 'HomeController@about');
@@ -69,6 +76,10 @@ class Router
         
         // Member Routes (Protected)
         $this->addRoute('GET', '/dashboard', 'MemberController@dashboard');
+        $this->addRoute('GET', '/platinum', 'MemberController@platinum');
+        $this->addRoute('POST', '/platinum/request', 'MemberController@submitPlatinumRequest');
+        $this->addRoute('GET', '/inpatient-requests', 'MemberController@inpatientRequests');
+        $this->addRoute('POST', '/inpatient-requests', 'MemberController@submitInpatientRequest');
         $this->addRoute('GET', '/profile', 'MemberController@profile');
         $this->addRoute('POST', '/profile', 'MemberController@updateProfile');
         $this->addRoute('POST', '/member/profile/complete', 'MemberController@completeProfileFromPopup');
@@ -125,6 +136,7 @@ class Router
         $this->addRoute('GET', '/admin/members/view/{id}', 'AdminController@viewMember');
         $this->addRoute('GET', '/admin/members/edit/{id}', 'AdminController@editMember');
         $this->addRoute('POST', '/admin/members/update/{id}', 'AdminController@updateMember');
+        $this->addRoute('POST', '/admin/members/{id}/corporate-members/update', 'AdminController@updateMemberCorporateMembers');
         $this->addRoute('POST', '/admin/members/{id}/dependants/add', 'AdminController@addMemberDependant');
         $this->addRoute('POST', '/admin/members/{id}/dependants/update', 'AdminController@updateMemberDependant');
         $this->addRoute('POST', '/admin/members/{id}/dependants/delete', 'AdminController@deleteMemberDependant');
@@ -183,6 +195,7 @@ class Router
         $this->addRoute('POST', '/admin/communications/send-now', 'BulkSmsController@sendNow');
         $this->addRoute('POST', '/admin/communications/edit-campaign', 'BulkSmsController@editCampaign');
         $this->addRoute('POST', '/admin/communications/pause-campaign', 'BulkSmsController@pauseCampaign');
+        $this->addRoute('POST', '/admin/communications/resume-campaign', 'BulkSmsController@resumeCampaign');
         $this->addRoute('POST', '/admin/communications/reschedule', 'BulkSmsController@reschedule');
         $this->addRoute('POST', '/admin/communications/send-queue-item', 'BulkSmsController@sendQueueItem');
         $this->addRoute('POST', '/admin/communications/retry-queue-item', 'BulkSmsController@retryQueueItem');
@@ -266,6 +279,13 @@ class Router
         
         // Payout Request Routes (Admin)
         $this->addRoute('GET', '/admin/payouts', 'AdminController@payoutRequests');
+        $this->addRoute('GET', '/admin/platinum-requests', 'AdminController@platinumRequests');
+        $this->addRoute('POST', '/admin/platinum-requests/{id}/process', 'AdminController@processPlatinumRequest');
+        $this->addRoute('POST', '/admin/inpatient-requests/{id}/process', 'AdminController@processInpatientRequest');
+        $this->addRoute('POST', '/admin/inpatient-requests/create', 'AdminController@submitInpatientRequestForMember');
+        $this->addRoute('POST', '/admin/members/{id}/platinum/migrate', 'AdminController@migrateMemberToPlatinum');
+        $this->addRoute('POST', '/admin/members/{id}/platinum/revert', 'AdminController@revertMemberPlatinumToBasic');
+        $this->addRoute('POST', '/admin/members/{id}/account-update-sms', 'AdminController@notifyMemberAccountChange');
         $this->addRoute('POST', '/admin/payouts/{id}/process', 'AdminController@processPayoutRequest');
 
 

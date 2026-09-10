@@ -243,6 +243,14 @@ class PaymentService
                     $confirmedPayment = $paymentModel->find($paymentId);
                     $memberId = $confirmedPayment['member_id'];
                     $paymentType = $confirmedPayment['payment_type'] ?? 'monthly';
+                    if ($paymentType === 'monthly') {
+                        require_once __DIR__ . '/PlatinumBillingService.php';
+                        (new PlatinumBillingService())->applyMonthlyPayment(
+                            (int) $paymentId,
+                            (int) $memberId,
+                            $transactionDate ?: date('Y-m-d H:i:s')
+                        );
+                    }
                     
                     // Get member and user models
                     $memberModel = new Member();
@@ -319,7 +327,8 @@ class PaymentService
                          // Enforce minimum arrears calculation if detailed logic needed
                          // For now, valid payment check:
                          $reactivationFee = defined('REACTIVATION_FEE') ? REACTIVATION_FEE : 100;
-                         $monthlyContribution = $member['monthly_contribution'];
+                         require_once __DIR__ . '/PlatinumBillingService.php';
+                         $monthlyContribution = (new PlatinumBillingService())->monthlyAmount($member);
                          
                          $arrearsAmount = $monthsMissed * $monthlyContribution;
                          $totalRequired = $arrearsAmount + $reactivationFee;
@@ -372,11 +381,11 @@ class PaymentService
         }
     }
     
-    public function recordPaymentAttempt($memberId, $amount, $phoneNumber, $checkoutRequestId, $paymentType = 'monthly', $merchantRequestId = null)
+    public function recordPaymentAttempt($memberId, $amount, $phoneNumber, $checkoutRequestId, $paymentType = 'monthly', $merchantRequestId = null, array $extra = [])
     {
         $paymentModel = new Payment();
 
-        return $paymentModel->recordPayment([
+        return $paymentModel->recordPayment(array_merge([
             'member_id' => $memberId,
             'amount' => $amount,
             'payment_type' => $paymentType,
@@ -386,7 +395,7 @@ class PaymentService
             'transaction_reference' => $checkoutRequestId,
             'checkout_request_id' => $checkoutRequestId,
             'merchant_request_id' => $merchantRequestId
-        ]);
+        ], $extra));
     }
 
     private function findPaymentByCheckoutRequestId($checkoutRequestId)

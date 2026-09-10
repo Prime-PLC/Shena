@@ -8,7 +8,7 @@ $search = $search ?? '';
 $status = $status ?? 'all';
 $package = $package ?? 'all';
 $membershipPlanData = [];
-foreach ($packages as $packageKey => $packageOption) {
+foreach ($packages as $packageKey => $packageOption) { if (!empty($packageOption['legacy_alias'])) continue;
     $membershipPlanData[$packageKey] = [
         'name' => $packageOption['name'] ?? $packageKey,
         'monthly_contribution' => (float)($packageOption['monthly_contribution'] ?? 0),
@@ -26,11 +26,15 @@ $activeMemberTab = match ($status ?? 'all') {
     'grace_period' => 'grace',
     default => 'all',
 };
-$buildMemberPageUrl = function (int $page) use ($search, $status, $package) {
+$tier = $tier ?? 'all';
+$isFocusedTierList = in_array($tier, ['basic', 'platinum'], true);
+$tierCounts = $tier_counts ?? ['all' => 0, 'basic' => 0, 'platinum' => 0];
+$buildMemberPageUrl = function (int $page) use ($search, $status, $package, $tier) {
     $query = array_filter([
         'search' => $search ?? '',
         'status' => ($status ?? 'all') !== 'all' ? $status : '',
         'package' => ($package ?? 'all') !== 'all' ? $package : '',
+        'tier' => ($tier ?? 'all') !== 'all' ? $tier : '',
         'page' => $page > 1 ? $page : '',
     ], function ($value) {
         return $value !== '' && $value !== null;
@@ -38,11 +42,24 @@ $buildMemberPageUrl = function (int $page) use ($search, $status, $package) {
 
     return '/admin/members' . (!empty($query) ? '?' . http_build_query($query) : '');
 };
-$buildMemberFilterUrl = function (string $targetStatus) use ($search, $package) {
+$buildMemberFilterUrl = function (string $targetStatus) use ($search, $package, $tier) {
     $query = array_filter([
         'search' => $search ?? '',
         'status' => $targetStatus !== 'all' ? $targetStatus : '',
         'package' => ($package ?? 'all') !== 'all' ? $package : '',
+        'tier' => ($tier ?? 'all') !== 'all' ? $tier : '',
+    ], function ($value) {
+        return $value !== '' && $value !== null;
+    });
+
+    return '/admin/members' . (!empty($query) ? '?' . http_build_query($query) : '');
+};
+$buildMemberTierUrl = function (string $targetTier) use ($search, $status, $package) {
+    $query = array_filter([
+        'search' => $search ?? '',
+        'status' => ($status ?? 'all') !== 'all' ? $status : '',
+        'package' => ($package ?? 'all') !== 'all' ? $package : '',
+        'tier' => $targetTier !== 'all' ? $targetTier : '',
     ], function ($value) {
         return $value !== '' && $value !== null;
     });
@@ -858,6 +875,116 @@ $buildMemberFilterUrl = function (string $targetStatus) use ($search, $package) 
         overflow: hidden;
     }
 
+    /* Product tier switch (Basic vs Platinum concern separation) */
+    .tier-switch {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        background: white;
+        border-radius: 12px;
+        padding: 12px 16px;
+        margin-bottom: 16px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .tier-switch-label {
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #9CA3AF;
+        margin-right: 4px;
+    }
+
+    .tier-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 16px;
+        border-radius: 999px;
+        border: 1.5px solid #E5E7EB;
+        background: #F9FAFB;
+        color: #4B5563;
+        font-size: 13px;
+        font-weight: 600;
+        text-decoration: none;
+        transition: all 0.2s;
+    }
+
+    .tier-pill:hover {
+        border-color: #7F3D9E;
+        color: #7F3D9E;
+    }
+
+    .tier-count {
+        background: #E5E7EB;
+        color: #4B5563;
+        border-radius: 999px;
+        padding: 2px 9px;
+        font-size: 11px;
+        font-weight: 700;
+    }
+
+    .tier-pill.active {
+        background: linear-gradient(135deg, #7F3D9E 0%, #7C3AED 100%);
+        border-color: transparent;
+        color: white;
+    }
+
+    .tier-pill.active .tier-count {
+        background: rgba(255, 255, 255, 0.25);
+        color: white;
+    }
+
+    .tier-pill.tier-platinum.active {
+        background: linear-gradient(135deg, #7F20B0 0%, #5E2B7A 100%);
+    }
+
+    .tier-pill.tier-link {
+        margin-left: auto;
+        background: #F3E8FF;
+        border-color: #E9D5FF;
+        color: #7F20B0;
+    }
+
+    .tier-context-note {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 13px;
+        padding: 12px 16px;
+        border-radius: 10px;
+        margin-bottom: 16px;
+        background: #F3F4F6;
+        border-left: 4px solid #9CA3AF;
+        color: #4B5563;
+    }
+
+    .tier-context-note.is-platinum {
+        background: #F3E8FF;
+        border-left-color: #7F20B0;
+        color: #5B21B6;
+    }
+
+    /* Tier badge inside the member rows */
+    .tier-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 9px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        white-space: nowrap;
+    }
+
+    .tier-badge.is-platinum { background: #F3E8FF; color: #7F20B0; }
+    .tier-badge.is-basic { background: #F3F4F6; color: #6B7280; }
+    .tier-badge.is-pending { background: #FEF3C7; color: #92400E; }
+
     .tabs-nav {
         display: flex;
         border-bottom: 2px solid #F3F4F6;
@@ -1157,6 +1284,96 @@ $buildMemberFilterUrl = function (string $targetStatus) use ($search, $package) 
     }
 </style>
 
+<?php if ($isFocusedTierList): ?>
+<?php
+    $listTitle = $tier === 'platinum' ? 'Platinum Members' : 'Basic Members';
+    $listDescription = $tier === 'platinum'
+        ? 'Members with Platinum cover and their current cover position.'
+        : 'Members on Basic cover.';
+?>
+<div class="page-header">
+    <h1 class="page-title"><?php echo htmlspecialchars($listTitle); ?></h1>
+    <p class="page-subtitle"><?php echo htmlspecialchars($listDescription); ?></p>
+</div>
+
+<div class="directory-card">
+    <div class="directory-header">
+        <div class="directory-title"><?php echo htmlspecialchars($listTitle); ?></div>
+        <div class="directory-actions">
+            <a class="btn-new-registration" href="/admin/members/register"><i class="fas fa-user-plus"></i> Register Member</a>
+            <a class="btn-export" href="/admin/members/export-csv?tier=<?php echo urlencode($tier); ?>"><i class="fas fa-download"></i> Export</a>
+        </div>
+    </div>
+    <form method="get" action="/admin/members" style="display:flex;gap:10px;padding:0 20px 18px;flex-wrap:wrap;">
+        <input type="hidden" name="tier" value="<?php echo htmlspecialchars($tier); ?>">
+        <input type="search" name="search" value="<?php echo htmlspecialchars($search); ?>" placeholder="Search name, member number or ID" style="min-width:260px;flex:1;padding:10px 12px;border:1px solid #D1D5DB;border-radius:8px;">
+        <select name="status" style="padding:10px 12px;border:1px solid #D1D5DB;border-radius:8px;">
+            <option value="all">All statuses</option>
+            <?php foreach (['active' => 'Active', 'grace_period' => 'Grace period', 'suspended' => 'Suspended', 'inactive' => 'Inactive'] as $statusValue => $statusLabel): ?>
+                <option value="<?php echo $statusValue; ?>" <?php echo $status === $statusValue ? 'selected' : ''; ?>><?php echo $statusLabel; ?></option>
+            <?php endforeach; ?>
+        </select>
+        <button type="submit" class="btn-export"><i class="fas fa-search"></i> Search</button>
+    </form>
+    <div class="table-scroll-wrap">
+        <table class="members-table management-table">
+            <thead>
+                <tr>
+                    <th>MEMBER</th>
+                    <th>MEMBER NO.</th>
+                    <?php if ($tier === 'platinum'): ?>
+                        <th>COVERED PACKAGE</th>
+                        <th>MONTHLY CONTRIBUTION</th>
+                        <th>DAY ALLOWANCE</th>
+                    <?php else: ?>
+                        <th>PACKAGE</th>
+                    <?php endif; ?>
+                    <th>STATUS</th>
+                    <th>LAST PAYMENT</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (empty($members)): ?>
+                    <tr><td colspan="<?php echo $tier === 'platinum' ? 8 : 6; ?>" style="text-align:center;padding:40px;color:#6B7280;">No <?php echo strtolower(htmlspecialchars($listTitle)); ?> found.</td></tr>
+                <?php else: ?>
+                    <?php foreach ($members as $member): ?>
+                        <?php
+                            $memberName = trim(($member['first_name'] ?? '') . ' ' . ($member['last_name'] ?? '')) ?: 'Unnamed member';
+                            $lastPaid = !empty($member['last_payment_date'])
+                                ? 'KES ' . number_format((float)($member['last_payment_amount'] ?? 0), 0) . ' · ' . date('d M Y', strtotime($member['last_payment_date']))
+                                : 'No payment recorded';
+                            $platinumGroups = $member['platinum_groups'] ?? [];
+                        ?>
+                        <tr>
+                            <td><a class="member-name" href="/admin/members/view/<?php echo (int)($member['id'] ?? 0); ?>?return_tier=<?php echo urlencode($tier); ?>"><?php echo htmlspecialchars($memberName); ?></a></td>
+                            <td><?php echo htmlspecialchars($member['member_number'] ?? '—'); ?></td>
+                            <?php if ($tier === 'platinum'): ?>
+                                <td><?php foreach ($platinumGroups as $group): ?><div><?php echo htmlspecialchars($group['package_name'] ?? $group['group_name'] ?? 'Platinum package'); ?></div><?php endforeach; ?></td>
+                                <td>KES <?php echo number_format((float)($member['account_monthly_amount'] ?? 0), 0); ?></td>
+                                <td><?php foreach ($platinumGroups as $group): ?><div><?php echo (int)($group['remaining_days'] ?? 20); ?> of 20 days</div><?php endforeach; ?></td>
+                            <?php else: ?>
+                                <td><span class="package-badge"><?php echo htmlspecialchars($member['package'] ?? '—'); ?></span></td>
+                            <?php endif; ?>
+                            <td><span class="status-badge <?php echo htmlspecialchars($member['status'] ?? 'inactive'); ?>"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $member['status'] ?? 'inactive'))); ?></span></td>
+                            <td><?php echo htmlspecialchars($lastPaid); ?></td>
+                            <td><a class="row-action primary" href="/admin/members/view/<?php echo (int)($member['id'] ?? 0); ?>?return_tier=<?php echo urlencode($tier); ?>">View</a></td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+    <div class="table-pagination">
+        <div>Showing <?php echo count($members); ?> of <?php echo (int)($pagination['total_items'] ?? 0); ?> members</div>
+        <div class="pagination-buttons">
+            <a class="pagination-btn <?php echo (int)($pagination['current_page'] ?? 1) <= 1 ? 'disabled' : ''; ?>" href="<?php echo htmlspecialchars($buildMemberPageUrl(max(1, (int)($pagination['current_page'] ?? 1) - 1))); ?>">Previous</a>
+            <span style="padding:0 12px;color:#6B7280;">Page <?php echo (int)($pagination['current_page'] ?? 1); ?> of <?php echo max(1, (int)($pagination['total_pages'] ?? 1)); ?></span>
+            <a class="pagination-btn <?php echo (int)($pagination['current_page'] ?? 1) >= (int)($pagination['total_pages'] ?? 1) ? 'disabled' : ''; ?>" href="<?php echo htmlspecialchars($buildMemberPageUrl((int)($pagination['current_page'] ?? 1) + 1)); ?>">Next</a>
+        </div>
+    </div>
+</div>
+<?php else: ?>
 <!-- Page Header -->
 <div class="page-header">
     <h1 class="page-title">Member Management</h1>
@@ -1220,6 +1437,40 @@ $buildMemberFilterUrl = function (string $targetStatus) use ($search, $package) 
     </div>
 </div>
 
+<!-- Product tier separation: Basic vs Platinum books of business -->
+<div class="tier-switch" role="tablist" aria-label="Membership product">
+    <span class="tier-switch-label"><i class="fas fa-layer-group"></i> Product</span>
+    <a class="tier-pill <?php echo $tier === 'all' ? 'active' : ''; ?>" href="<?php echo htmlspecialchars($buildMemberTierUrl('all')); ?>">
+        All products <span class="tier-count"><?php echo (int) ($tierCounts['all'] ?? 0); ?></span>
+    </a>
+    <a class="tier-pill tier-basic <?php echo $tier === 'basic' ? 'active' : ''; ?>" href="<?php echo htmlspecialchars($buildMemberTierUrl('basic')); ?>">
+        <i class="fas fa-shield-alt"></i> SHENA Basic <span class="tier-count"><?php echo (int) ($tierCounts['basic'] ?? 0); ?></span>
+    </a>
+    <a class="tier-pill tier-platinum <?php echo $tier === 'platinum' ? 'active' : ''; ?>" href="<?php echo htmlspecialchars($buildMemberTierUrl('platinum')); ?>">
+        <i class="fas fa-gem"></i> SHENA Platinum <span class="tier-count"><?php echo (int) ($tierCounts['platinum'] ?? 0); ?></span>
+    </a>
+    <?php if ($tier === 'platinum'): ?>
+        <a class="tier-pill tier-link" href="/admin/platinum-requests"><i class="fas fa-hospital"></i> Platinum approvals &amp; inpatient desk</a>
+    <?php endif; ?>
+</div>
+
+<?php if ($tier !== 'all'): ?>
+    <div class="tier-context-note <?php echo $tier === 'platinum' ? 'is-platinum' : ''; ?>">
+        <?php if ($tier === 'platinum'): ?>
+            <i class="fas fa-gem"></i> Showing only members with SHENA Platinum. Platinum replaces the Basic contribution for each selected coverage group.
+        <?php else: ?>
+            <i class="fas fa-shield-alt"></i> Showing Basic-only members. These accounts have no Platinum add-on &mdash; open a member to add one.
+        <?php endif; ?>
+    </div>
+<?php endif; ?>
+
+<?php if ($tier === 'platinum' && !empty($pending_platinum_approvals)): ?>
+    <div style="margin:0 0 16px;padding:13px 16px;border:1px solid #DDD6FE;border-left:4px solid #7F3D9E;border-radius:10px;background:#FAF5FF;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap">
+        <span style="color:#4C1D95;font-weight:600"><i class="fas fa-hourglass-half"></i> <?= count($pending_platinum_approvals) ?> Platinum request<?= count($pending_platinum_approvals) === 1 ? '' : 's' ?> awaiting approval<?= count($pending_platinum_approvals) > 1 ? ' — including ' . htmlspecialchars($pending_platinum_approvals[0]['covered_person_name'] ?? 'a member') : '' ?>.</span>
+        <a href="/admin/platinum-requests" class="btn btn-primary btn-sm"><i class="fas fa-check-circle"></i> Review requests</a>
+    </div>
+<?php endif; ?>
+
 <!-- Tabbed Interface -->
 <div class="tabs-container">
     <div class="tabs-nav">
@@ -1267,7 +1518,7 @@ $buildMemberFilterUrl = function (string $targetStatus) use ($search, $package) 
                 <i class="fas fa-user-plus"></i>
                 Register New Member
             </a>
-            <a href="/admin/members/export-csv" class="tab-action-btn">
+            <a href="/admin/members/export-csv?tier=<?php echo urlencode($tier); ?>" class="tab-action-btn">
                 <i class="fas fa-download"></i>
                 Export CSV
             </a>
@@ -1289,7 +1540,7 @@ $buildMemberFilterUrl = function (string $targetStatus) use ($search, $package) 
             </select>
             <select class="filter-select" id="filter-package" name="package">
                 <option value="all">All Packages</option>
-                <?php foreach ($packages as $packageKey => $packageOption): ?>
+                <?php foreach ($packages as $packageKey => $packageOption): if (!empty($packageOption['legacy_alias'])) continue; ?>
                     <option value="<?php echo htmlspecialchars($packageKey); ?>" <?php echo (($package ?? 'all') === $packageKey) ? 'selected' : ''; ?>>
                         <?php echo htmlspecialchars($packageOption['name'] ?? $packageKey); ?>
                     </option>
@@ -1328,7 +1579,7 @@ $buildMemberFilterUrl = function (string $targetStatus) use ($search, $package) 
                 <i class="fas fa-money-bill-wave"></i>
                 Payment History
             </a>
-            <a href="/admin/members/export-csv?status=active" class="tab-action-btn">
+            <a href="/admin/members/export-csv?status=active&amp;tier=<?php echo urlencode($tier); ?>" class="tab-action-btn">
                 <i class="fas fa-download"></i>
                 Export Active
             </a>
@@ -1385,7 +1636,7 @@ $buildMemberFilterUrl = function (string $targetStatus) use ($search, $package) 
     <!-- Import/Export Tab -->
     <div id="tab-tools" class="tab-content">
         <div class="tab-actions">
-            <a href="/admin/members/export-csv" class="tab-action-btn primary">
+            <a href="/admin/members/export-csv?tier=<?php echo urlencode($tier); ?>" class="tab-action-btn primary">
                 <i class="fas fa-file-export"></i>
                 Export All Members
             </a>
@@ -1402,7 +1653,7 @@ $buildMemberFilterUrl = function (string $targetStatus) use ($search, $package) 
             <div class="directory-header">
                 <div class="directory-title">Comprehensive Directory</div>
                 <div class="directory-actions">
-                    <button class="btn-export" onclick="window.location.href='/admin/members/export-csv<?php echo !empty($search) || $status !== 'all' || $package !== 'all' ? '?' . http_build_query(['search' => $search, 'status' => $status, 'package' => $package]) : ''; ?>';">
+                    <button class="btn-export" onclick="window.location.href='/admin/members/export-csv<?php echo !empty($search) || $status !== 'all' || $package !== 'all' || $tier !== 'all' ? '?' . http_build_query(['search' => $search, 'status' => $status, 'package' => $package, 'tier' => $tier]) : ''; ?>';">
                         <i class="fas fa-download"></i>
                         Export CSV
                     </button>
@@ -1460,8 +1711,8 @@ $buildMemberFilterUrl = function (string $targetStatus) use ($search, $package) 
                                 'next_of_kin' => $member['next_of_kin'] ?? '',
                                 'next_of_kin_relationship' => $member['next_of_kin_relationship'] ?? '',
                                 'next_of_kin_phone' => $member['next_of_kin_phone'] ?? '',
-                                'monthly_contribution_raw' => (float)($member['monthly_contribution'] ?? 0),
-                                'monthly_contribution' => 'KES ' . number_format((float)($member['monthly_contribution'] ?? 0), 2),
+                                'monthly_contribution_raw' => (float)($member['account_monthly_amount'] ?? $member['monthly_contribution'] ?? 0),
+                                'monthly_contribution' => 'KES ' . number_format((float)($member['account_monthly_amount'] ?? $member['monthly_contribution'] ?? 0), 2),
                                 'corporate_members' => array_map(function ($item) {
                                     return [
                                         'label' => $item['label'] ?? '',
@@ -1480,6 +1731,7 @@ $buildMemberFilterUrl = function (string $targetStatus) use ($search, $package) 
                                     ];
                                 }, $member['beneficiaries'] ?? []),
                                 'dependant_relationship_options' => $member['dependant_relationship_options'] ?? [],
+                                'platinum_groups' => $member['platinum_groups'] ?? [],
                                 'last_payment_amount' => 'KES ' . number_format($lastPaymentAmount, 2),
                                 'last_payment_date' => $lastPaymentDate,
                                 'agent_number' => $member['agent_number'] ?? 'N/A',
@@ -1498,6 +1750,23 @@ $buildMemberFilterUrl = function (string $targetStatus) use ($search, $package) 
                                         <a class="member-name" href="/admin/members/view/<?php echo (int)($member['id'] ?? 0); ?>" style="border: 0; background: transparent; padding: 0; cursor: pointer; text-decoration:none;">
                                             <?php echo htmlspecialchars($memberName); ?>
                                         </a>
+                                        <?php if (($member['product_tier'] ?? 'basic') === 'platinum'): ?>
+                                            <?php if (($member['platinum_status'] ?? '') === 'active'): ?>
+                                                <span class="tier-badge is-platinum" title="Holds active SHENA Platinum cover"><i class="fas fa-gem"></i> Platinum</span>
+                                            <?php else: ?>
+                                                <span class="tier-badge is-pending" title="Platinum request awaiting admin approval"><i class="fas fa-hourglass-half"></i> Platinum pending</span>
+                                            <?php endif; ?>
+                                        <?php else: ?>
+                                            <span class="tier-badge is-basic">Basic</span>
+                                        <?php endif; ?>
+                                        <?php foreach (($member['platinum_groups'] ?? []) as $group): ?>
+                                            <div style="font-size:11px;color:#6B7280;margin-top:4px;line-height:1.35">
+                                                <i class="fas fa-gem" style="color:#7F20B0"></i> <?= htmlspecialchars($group['group_name'] ?? 'Platinum group') ?>:
+                                                KES <?= number_format((float)($group['monthly_contribution'] ?? 0), 0) ?>/mo ·
+                                                deficit KES <?= number_format((float)($group['current_month_deficit'] ?? 0), 0) ?> ·
+                                                <?= (int)($group['remaining_days'] ?? 20) ?>/20 days
+                                            </div>
+                                        <?php endforeach; ?>
                                     </div>
                                 </div>
                             </td>
@@ -1947,4 +2216,5 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
+<?php endif; ?>
 <?php include_once __DIR__ . '/../layouts/admin-footer.php'; ?>

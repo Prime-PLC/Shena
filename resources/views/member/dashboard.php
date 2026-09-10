@@ -1,3 +1,8 @@
+<?php
+require_once __DIR__ . '/../../../app/services/PlatinumPricingService.php';
+$onboardingPlatinumPrices = [];
+foreach (($GLOBALS['membership_packages'] ?? []) as $key => $definition) $onboardingPlatinumPrices[$key] = (new PlatinumPricingService())->packageAmount($key);
+?>
 <?php 
 $page = 'dashboard';
 include __DIR__ . '/../layouts/member-header.php';
@@ -557,6 +562,10 @@ $missingFields = $missing_profile_fields ?? [];
                     <h2><?php echo $monthsCovered; ?>/12</h2>
                 </div>
                 <div class="contribution-item">
+                    <h4>MONTHLY PAYABLE</h4>
+                    <h2>KES <?php echo number_format((float)($account_monthly_amount ?? $member['monthly_contribution'] ?? 0), 2); ?></h2>
+                </div>
+                <div class="contribution-item">
                     <h4>CURRENT MONTH</h4>
                     <span class="status-indicator">
                         <i class="fas fa-check-circle"></i> <?php echo $currentMonthStatus; ?>
@@ -814,6 +823,15 @@ $missingFields = $missing_profile_fields ?? [];
                     <strong id="onb-plan-name"></strong>
                     <span class="onb-plan-summary-price" id="onb-plan-price"></span>
                 </div>
+                <div id="onb-platinum-cta" style="display:none;margin-top:14px;background:linear-gradient(135deg,#7F20B0 0%,#5E2B7A 100%);border-radius:12px;padding:14px 16px;color:#fff">
+                    <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin:0">
+                        <input type="checkbox" id="onb-platinum-opt-in" style="margin-top:4px">
+                        <span>
+                            <strong>Add SHENA Platinum &mdash; Hospital Cover</strong><br>
+                            <span style="font-size:0.85rem;opacity:0.9">Get up to 20 inpatient bed-cover days shared by the selected package group. Added to your combined monthly contribution at <span id="onb-platinum-price">--</span>/month, once approved.</span>
+                        </span>
+                    </label>
+                </div>
             </div>
 
             <!-- ── Step 4: Activate Membership ────────────────────── -->
@@ -875,7 +893,7 @@ $missingFields = $missing_profile_fields ?? [];
         individual: {
             flat: false, hint: 'Your age',
             brackets: [
-                { key: 'individual_below_70', label: 'Below 70 years', price: 100 },
+                { key: 'individual_below_70', label: '70 years and below', price: 100 },
                 { key: 'individual_71_80',    label: '71–80 years',    price: 350 },
                 { key: 'individual_81_90',    label: '81–90 years',    price: 450 },
                 { key: 'individual_91_100',   label: '91–100 years',   price: 650 }
@@ -885,8 +903,8 @@ $missingFields = $missing_profile_fields ?? [];
         extended_family_1: {
             flat: false, hint: 'Age of the oldest parent you are covering',
             brackets: [
-                { key: 'couple_children_parents_below_70', label: 'Below 70 years', price: 250 },
-                { key: 'couple_children_parents_70_80',    label: '70–80 years',    price: 350 },
+                { key: 'couple_children_parents_below_70', label: '70 years and below', price: 250 },
+                { key: 'couple_children_parents_71_80',    label: '71–80 years',    price: 350 },
                 { key: 'couple_children_parents_81_90',    label: '81–90 years',    price: 450 },
                 { key: 'couple_children_parents_91_100',   label: '91–100 years',   price: 650 }
             ]
@@ -894,7 +912,7 @@ $missingFields = $missing_profile_fields ?? [];
         extended_family_2: {
             flat: false, hint: 'Age of the oldest parent or in-law you are covering',
             brackets: [
-                { key: 'couple_children_parents_inlaws_below_70', label: 'Below 70 years', price: 300 },
+                { key: 'couple_children_parents_inlaws_below_70', label: '70 years and below', price: 300 },
                 { key: 'couple_children_parents_inlaws_71_80',    label: '71–80 years',    price: 400 },
                 { key: 'couple_children_parents_inlaws_81_90',    label: '81–90 years',    price: 550 },
                 { key: 'couple_children_parents_inlaws_91_100',   label: '91–100 years',   price: 650 }
@@ -903,8 +921,8 @@ $missingFields = $missing_profile_fields ?? [];
         executive: {
             flat: false, hint: 'Your age',
             brackets: [
-                { key: 'executive_below_70', label: 'Below 70 years',  price: 300 },
-                { key: 'executive_above_70', label: '70 years & above', price: 500 }
+                { key: 'executive_below_70', label: '70 years and below',  price: 300 },
+                { key: 'executive_above_70', label: '71 years & above', price: 500 }
             ]
         }
     };
@@ -965,8 +983,8 @@ $missingFields = $missing_profile_fields ?? [];
 
         // Determine the individual bracket key based on age
         var bracketKey, bracketLabel, bracketPrice;
-        if (age < 70) {
-            bracketKey = 'individual_below_70'; bracketLabel = 'Below 70 years'; bracketPrice = 100;
+        if (age <= 70) {
+            bracketKey = 'individual_below_70'; bracketLabel = '70 years and below'; bracketPrice = 100;
         } else if (age <= 80) {
             bracketKey = 'individual_71_80'; bracketLabel = '71–80 years'; bracketPrice = 350;
         } else if (age <= 90) {
@@ -1028,6 +1046,28 @@ $missingFields = $missing_profile_fields ?? [];
         planNameEl.textContent  = name;
         planPriceEl.textContent = 'KES ' + price.toLocaleString() + '/month';
         planSummary.style.display = '';
+        var platinumCta = document.getElementById('onb-platinum-cta');
+        if (platinumCta) { platinumCta.style.display = ''; }
+        updatePlatinumPriceEstimate();
+    }
+
+    const onboardingPlatinumPrices = <?= json_encode($onboardingPlatinumPrices, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    function platinumBandPrice(packageKey) {
+        return Number(onboardingPlatinumPrices[packageKey] || 0) || null;
+    }
+
+    function updatePlatinumPriceEstimate() {
+        var priceEl = document.getElementById('onb-platinum-price');
+        if (!priceEl) { return; }
+        var dobInput = document.getElementById('onb-dob');
+        var age = null;
+        if (dobInput && dobInput.value) {
+            var dob = new Date(dobInput.value);
+            var diffMs = Date.now() - dob.getTime();
+            age = Math.floor(diffMs / (1000 * 60 * 60 * 24 * 365.25));
+        }
+        var price = platinumBandPrice(selectedPackageId);
+        priceEl.textContent = price ? ('KES ' + price.toLocaleString()) : 'choose a Basic package';
     }
 
     planSelect.addEventListener('change', function () {
@@ -1086,6 +1126,10 @@ $missingFields = $missing_profile_fields ?? [];
             var fd2 = new FormData();
             fd2.append('csrf_token', CSRF);
             fd2.append('package_id', selectedPackageId);
+            var onbDob = document.getElementById('onb-dob');
+            if (onbDob && onbDob.value) { fd2.append('date_of_birth', onbDob.value); }
+            var platinumOptIn = document.getElementById('onb-platinum-opt-in');
+            if (platinumOptIn && platinumOptIn.checked) { fd2.append('platinum_opt_in', '1'); }
             try {
                 var r2 = await fetch('/member/onboarding/package', { method: 'POST', body: fd2, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
                 var d2 = await r2.json();

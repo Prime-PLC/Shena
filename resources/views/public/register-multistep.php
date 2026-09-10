@@ -156,8 +156,8 @@
                     
                     <div class="row">
                         <div class="col-md-6 mb-4">
-                            <label for="email" class="form-label">Email Address</label>
-                            <input type="email" class="form-control" id="email" name="email" placeholder="name@example.com" required>
+                            <label for="email" class="form-label">Email Address (optional)</label>
+                            <input type="email" class="form-control" id="email" name="email" placeholder="name@example.com">
                         </div>
                         <div class="col-md-6 mb-4">
                             <label for="phone" class="form-label">M-Pesa Phone Number</label>
@@ -191,7 +191,7 @@
                                 <div class="package-icon"><i class="fas fa-user"></i></div>
                                 <div class="package-title">Individual</div>
                                 <div class="package-price">
-                                    <span class="package-price-label">Below 70 Years</span>
+                                    <span class="package-price-label">70 Years and Below</span>
                                     <span class="package-price-value">Ksh 100</span>
                                 </div>
                                 <div class="package-price">
@@ -206,7 +206,7 @@
                                 <div class="package-icon"><i class="fas fa-users"></i></div>
                                 <div class="package-title">Family/Couples</div>
                                 <div class="package-price">
-                                    <span class="package-price-label">Below 70 Years</span>
+                                    <span class="package-price-label">70 Years and Below</span>
                                     <span class="package-price-value">Ksh 150</span>
                                 </div>
                                 <div class="package-price">

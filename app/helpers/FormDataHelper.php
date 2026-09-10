@@ -50,3 +50,12 @@ function isOldValueSelected($field, $value) {
     $old = $_SESSION['form_data'][$field] ?? '';
     return $old == $value ? 'selected' : '';
 }
+
+/** Retain failed admin claim entries across redirects without persisting them in browser storage. */
+function renderClaimFormState(string $key, string $formId): void {
+    $values = $_SESSION[$key] ?? [];
+    $error = $_SESSION[$key . '_error'] ?? '';
+    unset($_SESSION[$key], $_SESSION[$key . '_error']);
+    if (!$values && !$error) return;
+    echo '<script type="application/json" data-claim-form-state="' . htmlspecialchars($formId, ENT_QUOTES) . '">' . json_encode(['values'=>$values, 'error'=>$error], JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) . '</script>';
+}

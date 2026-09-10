@@ -59,9 +59,9 @@ try {
         $expectedPackageName = '';
         
         if ($packageType === 'individual') {
-            if ($age < 70) {
+            if ($age <= 70) {
                 $expectedAmount = 100.0;
-                $expectedPackageName = 'Individual Below 70';
+                $expectedPackageName = 'Individual 70 and Below';
             } elseif ($age >= 71 && $age <= 80) {
                 $expectedAmount = 350.0;
                 $expectedPackageName = 'Individual 71-80';
@@ -74,9 +74,9 @@ try {
             }
         } 
         elseif ($packageType === 'executive') {
-            if ($age < 70) {
+            if ($age <= 70) {
                 $expectedAmount = 400.0;
-                $expectedPackageName = 'Executive Below 70';
+                $expectedPackageName = 'Executive 70 and Below';
             } else {
                 $expectedAmount = 800.0; // Above 70
                 $expectedPackageName = 'Executive Above 70';
@@ -84,9 +84,9 @@ try {
         }
         elseif ($packageType === 'couple') {
             // Couple packages: pricing based on primary member's age
-            if ($age < 70) {
+            if ($age <= 70) {
                 $expectedAmount = 200.0;
-                $expectedPackageName = 'Couple Below 70';
+                $expectedPackageName = 'Couple 70 and Below';
             } else {
                 $expectedAmount = 550.0; // Above 70
                 $expectedPackageName = 'Couple Above 70';
@@ -95,9 +95,9 @@ try {
         elseif ($packageType === 'family') {
             // Family packages: pricing based on primary member's age
             // Note: This is simplified - actual package may vary by dependents included
-            if ($age < 70) {
-                $expectedAmount = 300.0; // Base for family below 70
-                $expectedPackageName = 'Family Below 70';
+            if ($age <= 70) {
+                $expectedAmount = 300.0; // Base for family 70 and below
+                $expectedPackageName = 'Family 70 and Below';
             } else {
                 $expectedAmount = 650.0; // Base for family above 70
                 $expectedPackageName = 'Family Above 70';

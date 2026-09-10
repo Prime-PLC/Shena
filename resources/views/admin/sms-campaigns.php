@@ -25,13 +25,14 @@ $editCampaignToOpenJson = $editCampaignToOpen ? json_encode([
     'id' => (int)$editCampaignToOpen['id'],
     'title' => $editCampaignToOpen['title'] ?? '',
     'message' => $editCampaignToOpen['message'] ?? '',
-    'target_audience' => $editCampaignToOpen['target_audience'] ?? 'all_members',
+    'target_audience' => $editCampaignToOpen['target_audience'] ?? '',
     'custom_filters' => is_array($editCampaignToOpenFilters) ? $editCampaignToOpenFilters : [],
     'scheduled_at' => !empty($editCampaignToOpen['scheduled_at']) ? date('Y-m-d\TH:i', strtotime($editCampaignToOpen['scheduled_at'])) : '',
 ], JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_HEX_TAG) : 'null';
 ?>
 <?php include_once __DIR__ . '/../layouts/admin-header.php'; ?>
 
+<p><a class="btn btn-outline-primary" href="/sms-review">Review action SMS drafts</a></p>
 <style>
     .page-header {
         background: #7F3D9E;
@@ -426,6 +427,33 @@ $editCampaignToOpenJson = $editCampaignToOpen ? json_encode([
         margin-bottom: 1.5rem;
     }
 
+    .campaign-composer {
+        margin: 0 0 24px;
+        background: #fff;
+        border: 1px solid #E5E7EB;
+        border-radius: 12px;
+        box-shadow: 0 4px 14px rgba(15, 23, 42, .06);
+        scroll-margin-top: 24px;
+    }
+
+    .campaign-composer-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 20px 24px;
+        color: #fff;
+        background: #7F3D9E;
+        border-radius: 12px 12px 0 0;
+    }
+
+    .campaign-composer-header h2 { margin: 0; font-family: 'Playfair Display', serif; font-size: 1.35rem; }
+    .campaign-composer-header p { margin: 4px 0 0; color: rgba(255,255,255,.9); font-size: .9rem; }
+    .campaign-composer-body { padding: 24px; }
+
+    @media (max-width: 640px) {
+        .campaign-composer-header, .campaign-composer-body { padding: 18px; }
+    }
     .modern-modal {
         display: none;
         position: fixed;
@@ -581,65 +609,6 @@ $editCampaignToOpenJson = $editCampaignToOpen ? json_encode([
         align-items: start;
     }
 
-    .sms-phone-frame {
-        width: min(100%, 292px);
-        margin: 0 auto;
-        border: 10px solid #101820;
-        border-radius: 34px;
-        background: #fff;
-        box-shadow: 0 18px 45px rgba(17, 24, 39, 0.18);
-        overflow: hidden;
-    }
-
-    .sms-phone-screen {
-        min-height: 460px;
-        display: flex;
-        flex-direction: column;
-        background: #fff;
-    }
-
-    .sms-phone-top {
-        height: 54px;
-        display: grid;
-        grid-template-columns: 32px 1fr 32px;
-        align-items: center;
-        border-bottom: 1px solid #F3F4F6;
-        padding: 0 12px;
-        color: #111827;
-    }
-
-    .sms-phone-sender {
-        text-align: center;
-        font-weight: 800;
-        font-size: 12px;
-        letter-spacing: 0;
-    }
-
-    .sms-phone-body {
-        flex: 1;
-        padding: 30px 24px;
-    }
-
-    .sms-phone-meta {
-        text-align: center;
-        font-size: 10px;
-        color: #6B7280;
-        margin-bottom: 10px;
-        line-height: 1.35;
-    }
-
-    .sms-bubble {
-        background: #F4F4F5;
-        border: 1px solid #D4D4D8;
-        border-radius: 12px;
-        padding: 12px 14px;
-        color: #111827;
-        font-size: 13px;
-        line-height: 1.45;
-        white-space: pre-wrap;
-        word-break: break-word;
-    }
-
     .sms-phone-compose {
         display: grid;
         grid-template-columns: 1fr 34px;
@@ -697,7 +666,7 @@ $editCampaignToOpenJson = $editCampaignToOpen ? json_encode([
             <p>Create and manage bulk SMS campaigns for members</p>
         </div>
         <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-            <button class="modern-btn primary" onclick="openSmsCampaignOperationModal('createCampaignModal')">
+            <button class="modern-btn primary" onclick="openCreateCampaignForm()">
                 <i class="fas fa-plus"></i> Create Campaign
             </button>
             <button class="modern-btn secondary" onclick="tryProcessScheduledCampaigns()">
@@ -775,7 +744,7 @@ $editCampaignToOpenJson = $editCampaignToOpen ? json_encode([
             <i class="fas fa-sms"></i>
             <h3>No SMS Campaigns Yet</h3>
             <p>Create your first SMS campaign to send bulk messages to members</p>
-            <button class="modern-btn primary" onclick="openSmsCampaignOperationModal('createCampaignModal')">
+            <button class="modern-btn primary" onclick="openCreateCampaignForm()">
                 <i class="fas fa-plus"></i> Create First Campaign
             </button>
         </div>
@@ -801,7 +770,7 @@ $editCampaignToOpenJson = $editCampaignToOpen ? json_encode([
                         'id' => (int)$campaign['id'],
                         'title' => $campaign['title'] ?? '',
                         'message' => $campaign['message'] ?? '',
-                        'target_audience' => $campaign['target_audience'] ?? 'all_members',
+                        'target_audience' => $campaign['target_audience'] ?? '',
                         'custom_filters' => is_array($smsCampaignFilters) ? $smsCampaignFilters : [],
                         'scheduled_at' => !empty($campaign['scheduled_at']) ? date('Y-m-d\TH:i', strtotime($campaign['scheduled_at'])) : '',
                     ], JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_HEX_TAG), ENT_QUOTES, 'UTF-8'); ?>
@@ -842,6 +811,16 @@ $editCampaignToOpenJson = $editCampaignToOpen ? json_encode([
                             <button class="action-btn" onclick="viewCampaign(<?php echo $campaign['id']; ?>)" title="View Details">
                                 <i class="fas fa-eye"></i>
                             </button>
+                            <?php if ($campaign['status'] === 'paused'): ?>
+                                <button class="action-btn warning" onclick="resumeCampaign(<?php echo $campaign['id']; ?>)" title="Resume Campaign">
+                                    <i class="fas fa-play"></i>
+                                </button>
+                            <?php endif; ?>
+                            <?php if (in_array($campaign['status'], ['draft', 'scheduled'], true)): ?>
+                                <button class="action-btn warning" onclick="pauseCampaign(<?php echo $campaign['id']; ?>)" title="Pause Campaign">
+                                    <i class="fas fa-pause"></i>
+                                </button>
+                            <?php endif; ?>
                             <?php if (in_array($campaign['status'], ['draft', 'scheduled', 'paused'], true)): ?>
                                 <button class="action-btn" data-campaign="<?php echo $campaignEditJson; ?>" onclick="editSmsCampaign(this)" title="Edit">
                                     <i class="fas fa-edit"></i>
@@ -952,15 +931,16 @@ $editCampaignToOpenJson = $editCampaignToOpen ? json_encode([
     </div>
 </div>
 
-<!-- Create Campaign Modal -->
-<div class="modern-modal" id="createCampaignModal">
-    <div class="modal-content-modern">
-        <div class="modal-header-modern">
-            <h3><i class="fas fa-plus"></i> Create SMS Campaign</h3>
-            <button class="modal-close" onclick="closeModal('createCampaignModal')">&times;</button>
+<!-- Inline Campaign Creation -->
+<section class="campaign-composer" id="createCampaignPanel" tabindex="-1" aria-labelledby="createCampaignHeading">
+    <div class="campaign-composer-header">
+        <div>
+            <h2 id="createCampaignHeading"><i class="fas fa-plus" aria-hidden="true"></i> Create SMS Campaign</h2>
+            <p>Choose a precise audience, preview the message, then save, schedule, or send.</p>
         </div>
-        <div class="modal-body-modern">
-            <form action="/admin/communications/create-campaign" method="POST" id="createCampaignForm">
+    </div>
+    <div class="campaign-composer-body">
+        <form action="/admin/communications/create-campaign" method="POST" id="createCampaignForm">
                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
                 <div class="form-group">
                     <label for="campaign-title">Campaign Title</label>
@@ -1062,16 +1042,14 @@ $editCampaignToOpenJson = $editCampaignToOpen ? json_encode([
                 </div>
 
                 <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 2rem;">
-                    <button type="button" class="modern-btn secondary" onclick="closeModal('createCampaignModal')">Cancel</button>
+                    <button type="button" class="modern-btn secondary" onclick="resetCreateCampaignForm()">Clear form</button>
                     <button type="submit" class="modern-btn primary">
                         <i class="fas fa-save"></i> Create Campaign
                     </button>
                 </div>
             </form>
-        </div>
     </div>
-</div>
-
+</section>
 <div class="modern-modal" id="smsCampaignPreviewModal">
     <div class="modal-content-modern" style="max-width: 860px;">
         <div class="modal-header-modern">
@@ -1136,7 +1114,10 @@ $editCampaignToOpenJson = $editCampaignToOpen ? json_encode([
                 </div>
                 <div class="form-group">
                     <label for="edit-target-audience">Target Audience</label>
+                    <input type="hidden" id="edit-locked-target-audience" value="">
+                    <p id="edit-payment-audience-lock" style="display:none; margin:8px 0 0; color:#6B21A8; font-size:.84rem;"><i class="fas fa-lock" aria-hidden="true"></i> This campaign came from Payment Breakdown. Its payment audience is locked to prevent an accidental all-members send.</p>
                     <select class="form-control" id="edit-target-audience" name="target_audience" required>
+                        <option value="">Select audience...</option>
                         <option value="all_members">All Members</option>
                         <option value="active">Active Members Only</option>
                         <option value="inactive">Inactive Members</option>
@@ -1283,27 +1264,24 @@ function closeModal(modalId) {
     document.getElementById(modalId).classList.remove('active');
 }
 
-// Check SMS campaign availability and show modal if unavailable
-function showSmsCampaignUnavailableModal() {
-    const modal = document.getElementById('smsCampaignUnavailableModal');
-    if (modal) {
-        modal.hidden = false;
-        modal.querySelector('[data-close-sms-unavailable]')?.focus();
-    }
+function openCreateCampaignForm() {
+    switchSmsTab('campaigns');
+    const panel = document.getElementById('createCampaignPanel');
+    panel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    window.setTimeout(() => document.getElementById('campaign-title')?.focus(), 250);
 }
 
-// Wrapper to check availability before opening campaign operations modal
-function openSmsCampaignOperationModal(modalId) {
-    // Check if SMS campaigns are temporarily unavailable
-    // For now, they are unavailable, so show the modal instead of opening the requested modal
-    showSmsCampaignUnavailableModal();
+function resetCreateCampaignForm() {
+    const form = document.getElementById('createCampaignForm');
+    form?.reset();
+    document.getElementById('char-counter').textContent = '0';
+    document.getElementById('schedule-type')?.dispatchEvent(new Event('change'));
+    document.getElementById('target-audience')?.dispatchEvent(new Event('change'));
+    document.getElementById('campaign-title')?.focus();
 }
 
-// Wrapper to check availability before processing scheduled campaigns
 function tryProcessScheduledCampaigns() {
-    // Check if SMS campaigns are temporarily unavailable
-    // For now, they are unavailable, so show the modal instead of processing
-    showSmsCampaignUnavailableModal();
+    processScheduledCampaigns();
 }
 
 function switchSmsTab(tab) {
@@ -1658,7 +1636,7 @@ function openSmsCampaignEditor(campaign) {
     document.getElementById('edit-campaign-message').value = campaign.message || '';
 
     const audienceSelect = document.getElementById('edit-target-audience');
-    const storedAudience = campaign.target_audience || 'all_members';
+    const storedAudience = campaign.target_audience || '';
     // Defensive: if the stored audience has no matching option (e.g. a payment group
     // added after this dropdown was last updated), preserve it instead of silently
     // losing the selection, which previously caused campaigns to fall back to all_members.
@@ -1670,6 +1648,15 @@ function openSmsCampaignEditor(campaign) {
         audienceSelect.appendChild(preservedOption);
     }
     audienceSelect.value = storedAudience;
+    const lockedAudienceInput = document.getElementById('edit-locked-target-audience');
+    const paymentLockNote = document.getElementById('edit-payment-audience-lock');
+    const paymentGroup = String(campaign.custom_filters?.payment_group || '').trim();
+    const lockedPaymentAudience = paymentGroup ? `payment_${paymentGroup}` : '';
+    const isPaymentAudienceLocked = lockedPaymentAudience !== '';
+    audienceSelect.disabled = isPaymentAudienceLocked;
+    lockedAudienceInput.name = isPaymentAudienceLocked ? 'target_audience' : '';
+    lockedAudienceInput.value = isPaymentAudienceLocked ? lockedPaymentAudience : '';
+    paymentLockNote.style.display = isPaymentAudienceLocked ? '' : 'none';
 
     setEditFilterValues(campaign.custom_filters || {});
     audienceSelect.dispatchEvent(new Event('change'));
@@ -1959,7 +1946,7 @@ function pauseCampaign(id) {
 
 function resumeCampaign(id) {
     const proceed = () => {
-        fetch('/admin/communications/send-campaign', {
+        fetch('/admin/communications/resume-campaign', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -1969,7 +1956,7 @@ function resumeCampaign(id) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                ShenaApp.showNotification('Campaign resumed!', 'success');
+                ShenaApp.showNotification('Campaign resumed. It will continue from its existing recipient queue.', 'success');
                 location.reload();
             } else {
                 ShenaApp.showNotification('Failed to resume: ' + (data.message || 'Unknown error'), 'error');
@@ -2133,7 +2120,7 @@ function openSmsCampaignPreviewFromData(campaign, confirmAction) {
 
     document.getElementById('smsPreviewBubble').textContent = previewText || 'Message preview';
     document.getElementById('smsPreviewTitle').textContent = campaign.title || 'Untitled campaign';
-    document.getElementById('smsPreviewAudience').textContent = String(campaign.target_audience || 'all_members').replace(/_/g, ' ');
+    document.getElementById('smsPreviewAudience').textContent = String(campaign.target_audience || 'Audience missing').replace(/_/g, ' ');
     document.getElementById('smsPreviewRecipient').textContent = 'Resolving first recipient...';
     document.getElementById('smsPreviewSchedule').textContent = campaign.scheduled_at ? new Date(campaign.scheduled_at).toLocaleString() : 'Send immediately';
     document.getElementById('smsPreviewCharacters').textContent = `${message.length}/160 (${Math.ceil(Math.max(message.length, 1) / 160)} segment)`;
@@ -2160,7 +2147,7 @@ function submitSmsCampaignForm(form) {
     .then(data => {
         if (data.success) {
             ShenaApp.showNotification('Campaign created successfully!', 'success');
-            closeModal('createCampaignModal');
+            resetCreateCampaignForm();
             location.reload();
         } else {
             ShenaApp.showNotification('Failed to create campaign: ' + (data.message || 'Unknown error'), 'error');

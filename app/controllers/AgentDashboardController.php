@@ -418,17 +418,7 @@ class AgentDashboardController extends BaseController
                 'corporate_members' => $_POST['corporate_members'] ?? []
             ];
 
-            // Validate email if provided
-            $emailInput = $this->sanitizeInput($_POST['email'] ?? '');
-            if (!empty($emailInput)) {
-                $emailCheck = $this->db->fetch('SELECT id FROM users WHERE email = :email', ['email' => $emailInput]);
-                if ($emailCheck) {
-                    $_SESSION['error'] = 'This email address is already registered. Use a different email or leave it blank if the member has no email.';
-                    $_SESSION['error_step'] = 2;
-                    $this->redirect('/agent/register-member');
-                    return;
-                }
-            }
+            $emailInput = $this->optionalMemberEmail($_POST['email'] ?? '');
 
             // Normalize phone and validate uniqueness
             $phoneInput = formatKenyanPhone($this->sanitizeInput($_POST['phone'] ?? ''));
@@ -459,7 +449,7 @@ class AgentDashboardController extends BaseController
             // Create user record
             $firstName = $this->sanitizeInput($_POST['first_name']);
             $lastName = $this->sanitizeInput($_POST['last_name']);
-            $email = $this->sanitizeInput($_POST['email']);
+            $email = $emailInput;
             $phone = $this->sanitizeInput($_POST['phone']);
 
             $userStmt = $this->db->getConnection()->prepare(
@@ -532,6 +522,27 @@ class AgentDashboardController extends BaseController
             $memberId = (int)$this->db->getConnection()->lastInsertId();
             $this->corporateMemberModel->replaceForMember($memberId, $accountContribution['line_items']);
 
+            // Platinum replaces the Basic contribution for the selected package group.
+            $platinumMonthly = null;
+            if (($_POST['platinum_opt_in'] ?? '') === '1' && !empty($_POST['date_of_birth'])) {
+                require_once __DIR__ . '/../services/PlatinumPricingService.php';
+                $quote = (new PlatinumPricingService())->quote($packageKey, $_POST['date_of_birth']);
+                $platinumMonthly = $quote['amount'] ?? null;
+                if ($quote) {
+                    $this->db->insert('platinum_coverages', [
+                        'member_id' => $memberId,
+                        'covered_person_type' => 'principal',
+                        'covered_person_id' => null,
+                        'status' => 'pending_approval',
+                        'package_key' => $quote['package_key'],
+                        'package_name' => $quote['package_name'],
+                        'monthly_contribution' => $quote['amount'],
+                        'maturity_months' => $quote['maturity_months'],
+                        'requested_at' => date('Y-m-d H:i:s'),
+                    ]);
+                }
+            }
+
             $this->db->getConnection()->commit();
 
             // Send in-app notification to admins about the new member
@@ -569,6 +580,9 @@ class AgentDashboardController extends BaseController
                 $smsMsg = "Hi {$inviteFirstName}! You've been registered with SHENA Companion. Member No: {$inviteMemberNo}. "
                         . "Set your account password here: {$inviteLink}  (valid 48 hrs). "
                         . "Monthly contribution: KES {$inviteAmount} via Paybill 4163987, Acct: {$inviteId}.";
+                if ($platinumMonthly) {
+                    $smsMsg .= " You selected SHENA Platinum (hospital and welfare cover): KES " . number_format($platinumMonthly, 2) . "/month. It replaces the Basic contribution for the selected package group once confirmed.";
+                }
                 $smsService = new SmsService();
                 $smsService->sendSms($invitePhone, $smsMsg);
             } catch (Exception $e) {
@@ -1016,24 +1030,8 @@ class AgentDashboardController extends BaseController
         $dependentData['relationship'] = (string)($policy['relationship'] ?? $dependentData['relationship']);
 
         try {
-            $oldMonthly = (int)($member['monthly_contribution'] ?? 0);
             $this->beneficiaryModel->addBeneficiary($dependentData);
-
-            $dependents = $this->beneficiaryModel->getActiveBeneficiaries($memberId);
-            $memberForCalc = [
-                'date_of_birth' => $member['date_of_birth'] ?? null,
-                'package_key' => $member['package_key'] ?? null,
-                'package' => $member['package'] ?? null
-            ];
-            $newMonthly = $this->memberModel->calculateMonthlyContribution($memberForCalc, $dependents ?: []);
-            $this->memberModel->update($memberId, ['monthly_contribution' => $newMonthly]);
-
-            if ($newMonthly > $oldMonthly) {
-                $increase = $newMonthly - $oldMonthly;
-                $_SESSION['success'] = 'Dependent added successfully. Monthly contribution increased by KES ' . number_format($increase) . ' (new total: KES ' . number_format($newMonthly) . ').';
-            } else {
-                $_SESSION['success'] = 'Dependent added successfully.';
-            }
+            $_SESSION['success'] = 'Dependent added successfully.';
         } catch (Exception $e) {
             $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Failed to add dependent.');
         }

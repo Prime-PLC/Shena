@@ -10,6 +10,8 @@ $dependantRelationshipOptions = $dependant_relationship_options ?? [];
 $activationRestrictions = $activation_restrictions ?? [];
 $dependantRestrictions = $dependant_restrictions ?? [];
 $csrfToken = $csrf_token ?? ($_SESSION['csrf_token'] ?? '');
+$memberManagementUrl = $member_management_url ?? '/admin/members';
+$memberProfileUrl = $member_profile_url ?? '/admin/members/view/' . (int)($member['id'] ?? 0);
 $formatRelation = static function ($value) {
     return ucwords(str_replace('_', ' ', (string)$value));
 };
@@ -41,10 +43,6 @@ $formatRelation = static function ($value) {
 
     .page-header {
         margin-bottom: 20px;
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        gap: 16px;
     }
 
     .page-title {
@@ -66,6 +64,27 @@ $formatRelation = static function ($value) {
         display: flex;
         flex-wrap: wrap;
         gap: 10px;
+    }
+
+    .member-quick-actions {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+        padding: 14px 16px;
+        margin: 0 0 20px;
+        background: #FFFFFF;
+        border: 1px solid #E5E7EB;
+        border-radius: 10px;
+    }
+
+    .member-quick-actions-label {
+        margin-right: 4px;
+        color: #6B7280;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
     }
 
     .btn {
@@ -563,8 +582,17 @@ $formatRelation = static function ($value) {
 </style>
 
 <div class="member-details-container">
+    <?php
+        $platinumGroupSummaries = $platinum_group_summaries ?? [];
+        $accountBreakdown = $account_contribution_breakdown ?? [];
+        $principalBreakdown = 'Principal ' . ($accountBreakdown['principal_tier'] ?? 'Basic') . ' KES ' . number_format((float)($accountBreakdown['principal_amount'] ?? 0), 0);
+        $corporateBreakdown = (int)($accountBreakdown['corporate_count'] ?? 0) > 0
+            ? 'Corporate ' . ucfirst((string)($accountBreakdown['corporate_tier_label'] ?? 'Basic')) . ' KES ' . number_format((float)($accountBreakdown['corporate_amount'] ?? 0), 0)
+            : '';
+        $lastPayment = !empty($payments[0]) ? $payments[0] : null;
+    ?>
     <div class="breadcrumb-row">
-        <a href="/admin/members">Member Management</a>
+        <a href="<?= htmlspecialchars($memberManagementUrl) ?>">Member Management</a>
         <span>/</span>
         <span><?= htmlspecialchars(($member['first_name'] ?? '') . ' ' . ($member['last_name'] ?? '')) ?></span>
     </div>
@@ -575,34 +603,38 @@ $formatRelation = static function ($value) {
             <h1 class="page-title">Manage Member Profile</h1>
             <p class="page-kicker"><?= htmlspecialchars($member['member_number'] ?? 'N/A') ?> · <?= htmlspecialchars(($member['first_name'] ?? '') . ' ' . ($member['last_name'] ?? '')) ?></p>
         </div>
-        <div class="header-actions">
-            <a href="/admin/members" class="btn btn-secondary">Back to Members</a>
-        </div>
     </div>
 
-    <!-- Statistics -->
+    <div class="member-quick-actions" aria-label="Member quick actions">
+        <span class="member-quick-actions-label">Quick actions</span>
+        <button type="button" class="btn btn-primary" onclick="switchProfileTab('overview'); togglePanel('memberEditPanel');">Edit Member</button>
+        <button type="button" class="btn btn-success" onclick="openAdminPayModal()">Collect Payment</button>
+        <button type="button" class="btn btn-secondary" onclick="switchProfileTab('dependants')">Manage Dependants</button>
+        <a href="<?= htmlspecialchars($memberManagementUrl) ?>" class="btn btn-secondary">Back to Members</a>
+    </div>
+
+    <!-- Immediate account position: the details needed before an admin takes action. -->
     <div class="stats-grid">
         <div class="stat-card">
-            <div class="stat-label">Total Contributions</div>
-            <div class="stat-value">KES <?= number_format($stats['total_contributions'] ?? 0, 2) ?></div>
+            <div class="stat-label">Account Status</div>
+            <div class="stat-value"><?= htmlspecialchars(ucwords(str_replace('_', ' ', $member['status'] ?? 'inactive'))) ?></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Monthly Contribution</div>
+            <div class="stat-value">KES <?= number_format((float)($account_monthly_amount ?? $member['monthly_contribution'] ?? 0), 0) ?></div>
+            <div class="stat-label" style="margin-top:4px;"><?= htmlspecialchars(trim($principalBreakdown . ($corporateBreakdown !== '' ? ' + ' . $corporateBreakdown : ''))) ?></div>
         </div>
         <div class="stat-card">
             <div class="stat-label">Last Payment</div>
-            <div class="stat-value"><?= !empty($stats['last_payment_date']) ? date('M j, Y', strtotime($stats['last_payment_date'])) : 'N/A' ?></div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">Membership Duration</div>
-            <div class="stat-value"><?= $stats['membership_months'] ?? 0 ?> mon</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">Beneficiaries</div>
-            <div class="stat-value"><?= count($beneficiaries) ?></div>
+            <div class="stat-value"><?= $lastPayment ? 'KES ' . number_format((float)($lastPayment['amount'] ?? 0), 0) : 'None' ?></div>
+            <div class="stat-label" style="margin-top:4px;"><?= $lastPayment && !empty($lastPayment['payment_date']) ? date('d M Y', strtotime($lastPayment['payment_date'])) : 'No payment recorded' ?></div>
         </div>
     </div>
 
     <div class="profile-tabs" role="tablist" aria-label="Member profile sections">
         <button type="button" class="profile-tab active" data-profile-tab="overview" onclick="switchProfileTab('overview')">Overview</button>
         <button type="button" class="profile-tab" data-profile-tab="dependants" onclick="switchProfileTab('dependants')">Dependants</button>
+        <button type="button" class="profile-tab" data-profile-tab="corporate" onclick="switchProfileTab('corporate')">Corporate Members</button>
         <button type="button" class="profile-tab" data-profile-tab="payments" onclick="switchProfileTab('payments')">Payments</button>
     </div>
 
@@ -652,7 +684,7 @@ $formatRelation = static function ($value) {
                     </div>
                     <div class="info-item">
                         <div class="info-label">Monthly Contribution</div>
-                        <div class="info-value">KES <?= number_format((float)($member['monthly_contribution'] ?? 0), 2) ?></div>
+                        <div class="info-value">KES <?= number_format((float)($account_monthly_amount ?? $member['monthly_contribution'] ?? 0), 2) ?></div>
                     </div>
                     <div class="info-item">
                         <div class="info-label">Registered</div>
@@ -702,7 +734,7 @@ $formatRelation = static function ($value) {
                         <?php endif; ?>
                         <form method="POST" action="/admin/members/activate/<?= $member['id'] ?>" id="activate-form">
                             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
-                            <input type="hidden" name="return_to" value="/admin/members/view/<?= (int)($member['id'] ?? 0) ?>">
+                            <input type="hidden" name="return_to" value="<?= htmlspecialchars($memberProfileUrl) ?>">
                             <input type="hidden" name="activation_override" id="activationOverride" value="0">
                             <button type="button" onclick="confirmActivate()" class="btn btn-primary" style="width: 100%;">Activate Member</button>
                         </form>
@@ -713,34 +745,90 @@ $formatRelation = static function ($value) {
 
         <div class="member-info-card">
             <div class="card-header">
-                <span class="card-title">Plan & Corporate Members</span>
-                <button type="button" class="btn btn-secondary" onclick="togglePanel('memberEditPanel')">Manage</button>
+                <span class="card-title">Membership Plan</span>
+                <button type="button" class="btn btn-secondary" onclick="togglePanel('memberEditPanel')">Edit</button>
             </div>
             <div class="card-body">
                 <div class="info-item">
                     <div class="info-label">Primary Package</div>
                     <div class="info-value"><?= htmlspecialchars($member['package'] ?? 'N/A') ?></div>
                 </div>
-                <div class="relation-grid">
-                    <?php if (empty($corporateMembers)): ?>
-                        <div class="corporate-card">No corporate members attached.</div>
-                    <?php else: ?>
-                        <?php foreach ($corporateMembers as $corporateIndex => $corporate): ?>
-                            <div class="corporate-card">
-                                <strong><?= htmlspecialchars($corporate['label'] ?? 'Corporate member') ?></strong>
-                                <div><?= htmlspecialchars($corporate['relationship'] ?? 'corporate') ?></div>
-                                <div><?= htmlspecialchars($corporate['package_name'] ?? ($corporate['package_key'] ?? 'N/A')) ?></div>
-                                <div>KES <?= number_format((float)($corporate['monthly_contribution'] ?? 0), 2) ?></div>
-                                <div class="card-actions">
-                                    <button type="button" class="btn btn-secondary btn-sm" onclick="editCorporateMember(<?= (int)$corporateIndex ?>)">Edit</button>
-                                    <button type="button" class="btn btn-danger btn-sm" onclick="deleteCorporateMember(<?= (int)($corporate['id'] ?? 0) ?>, '<?= htmlspecialchars($corporate['label'] ?? 'Corporate member', ENT_QUOTES) ?>')">Delete</button>
-                                </div>
-                            </div>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </div>
             </div>
         </div>
+
+        <div class="member-info-card">
+            <div class="card-header">
+                <span class="card-title"><i class="fas fa-shield-alt"></i> SHENA Platinum</span>
+            </div>
+            <div class="card-body">
+                <?php $platinumCoverages = $platinum_coverages ?? []; ?>
+                <?php if (empty($platinumCoverages)): ?>
+                    <p style="color:#6B7280;font-size:13px;margin:0 0 12px 0">No Platinum cover on this account yet.</p>
+                <?php else: ?>
+                    <div class="relation-grid">
+                        <?php foreach ($platinumCoverages as $pc): ?>
+                            <div class="corporate-card">
+                                <strong><?= htmlspecialchars($pc['covered_person_name'] ?? ucfirst($pc['covered_person_type'])) ?></strong>
+                                <div><?= htmlspecialchars(ucfirst(str_replace('_', ' ', $pc['status']))) ?></div>
+                                <div>KES <?= number_format((float)($pc['monthly_contribution'] ?? 0), 2) ?>/mo</div>
+                                <?php if (($pc['status'] ?? '') === 'active'): ?>
+                                    <form method="POST" action="/admin/members/<?= (int)($member['id'] ?? 0) ?>/platinum/revert" id="platinumRevertForm<?= (int)$pc['id'] ?>" style="margin-top:10px">
+                                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
+                                        <input type="hidden" name="platinum_coverage_id" value="<?= (int)$pc['id'] ?>">
+                                        <input type="hidden" name="reason" value="Admin returned coverage to Basic">
+                                        <button type="button" class="btn btn-secondary btn-sm" onclick="confirmPlatinumRevert(<?= (int)$pc['id'] ?>, <?= htmlspecialchars(json_encode($pc['package_name'] ?? $pc['covered_person_name'] ?? 'selected'), ENT_QUOTES) ?>)">Return to Basic</button>
+                                    </form>
+                                <?php endif; ?>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+                <form method="POST" action="/admin/members/<?= (int)($member['id'] ?? 0) ?>/platinum/migrate" id="platinumMigrationForm" onsubmit="return validatePlatinumMigration(event)" style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+                    <input type="hidden" name="reviewed_quote" id="platinumReviewedQuote" value="">
+                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
+                    <div>
+                        <label style="display:block;font-size:12px;font-weight:600;color:#6B7280;margin-bottom:4px">Coverage group</label>
+                        <select name="covered_person_type" id="platinumMigrateType" onchange="updatePlatinumMigrationPreview()" style="padding:9px;border:1px solid #D1D5DB;border-radius:6px">
+                            <option value="principal">Principal member</option>
+                            <?php if (!empty($corporateMembers)): ?>
+                                <option value="corporate_member">Corporate member</option>
+                            <?php endif; ?>
+                        </select>
+                    </div>
+                    <div id="platinumMigratePersonWrap" style="display:none">
+                        <label style="display:block;font-size:12px;font-weight:600;color:#6B7280;margin-bottom:4px">Person</label>
+                        <select name="covered_person_id" id="platinumMigratePerson" onchange="updatePlatinumMigrationPreview()" style="padding:9px;border:1px solid #D1D5DB;border-radius:6px">
+                            <?php foreach ($corporateMembers as $c): ?><option value="<?= (int)$c['id'] ?>"><?= htmlspecialchars($c['label'] ?? 'Corporate member') ?></option><?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display:block;font-size:12px;font-weight:600;color:#6B7280;margin-bottom:4px">Reason (optional)</label>
+                        <input type="text" name="reason" placeholder="e.g. Verbal request, cash payment collected" style="padding:9px;border:1px solid #D1D5DB;border-radius:6px;width:260px">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-bolt"></i> Activate Platinum now</button>
+                    <div id="platinumMigrationPreview" role="alert" aria-live="assertive" tabindex="-1" style="flex-basis:100%;font-size:13px;font-weight:600;color:#374151"></div>
+                </form>
+            </div>
+        </div>
+
+        <?php if (!empty($_SESSION['account_sms_pending'][(int)$member['id']])): ?>
+        <?php if (!empty($account_sms_preview)): ?>
+            <?php
+            $smsComposerId = 'account-update-sms';
+            $smsTitle = 'Notify the member';
+            $smsPhone = $account_sms_preview['phone'];
+            $smsMessage = $_SESSION['account_sms_edits'][(int)$member['id']] ?? $account_sms_preview['message'];
+            unset($_SESSION['account_sms_edits'][(int)$member['id']]);
+            $smsAction = '/admin/members/' . (int)$member['id'] . '/account-update-sms';
+            $smsHidden = ['reviewed_token' => $account_sms_preview['token']];
+            $smsAllowSave = false;
+            include __DIR__ . '/../partials/sms-composer.php';
+            ?>
+        <?php else: ?>
+            <div class="member-info-card" id="account-update-sms" tabindex="-1"><p><?= htmlspecialchars($account_sms_error ?? 'Review the member details to prepare an SMS.', ENT_QUOTES) ?></p></div>
+        <?php endif; ?>
+
+        <?php endif; ?>
 
         <div class="member-info-card">
             <div class="card-header">
@@ -782,9 +870,9 @@ $formatRelation = static function ($value) {
             <span><?= htmlspecialchars($member['member_number'] ?? 'N/A') ?></span>
         </div>
         <div class="management-body">
-            <form method="POST" action="/admin/members/update/<?= (int)($member['id'] ?? 0) ?>" id="adminMemberProfileForm">
+            <form method="POST" action="/admin/members/update/<?= (int)($member['id'] ?? 0) ?>" id="adminMemberProfileForm" data-confirm-message="Save these member changes? Package changes may update the monthly payment. No SMS will be sent automatically.">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
-                <input type="hidden" name="return_to" value="/admin/members/view/<?= (int)($member['id'] ?? 0) ?>">
+                <input type="hidden" name="return_to" value="<?= htmlspecialchars($memberProfileUrl) ?>">
 
                 <div class="form-grid">
                     <div class="form-group">
@@ -836,11 +924,11 @@ $formatRelation = static function ($value) {
                     <div class="form-group">
                         <label class="form-label" for="memberPackage">Package</label>
                         <select class="form-select" id="memberPackage" name="package_key" required>
-                            <?php foreach ($packages as $packageKey => $packageOption): ?>
+                            <?php foreach ($packages as $packageKey => $packageOption): if (!empty($packageOption['legacy_alias'])) continue; ?>
                                 <option
                                     value="<?= htmlspecialchars($packageKey) ?>"
                                     data-monthly-contribution="<?= htmlspecialchars((string)($packageOption['monthly_contribution'] ?? 0)) ?>"
-                                    <?= (($member['package_key'] ?? '') === $packageKey) ? 'selected' : '' ?>
+                                    <?= (PlatinumPricingService::canonicalPackageKey((string)($member['package_key'] ?? '')) === $packageKey) ? 'selected' : '' ?>
                                 >
                                     <?= htmlspecialchars(($packageOption['name'] ?? $packageKey) . ' - KES ' . number_format((float)($packageOption['monthly_contribution'] ?? 0), 0)) ?>
                                 </option>
@@ -850,7 +938,7 @@ $formatRelation = static function ($value) {
                     <div class="form-group">
                         <label class="form-label">Monthly Payable Amount</label>
                         <div class="form-input" id="memberMonthlyPreview" style="background:#F9FAFB;font-weight:700;">
-                            KES <?= number_format((float)($member['monthly_contribution'] ?? 0), 2) ?>
+                            KES <?= number_format((float)($account_monthly_amount ?? $member['monthly_contribution'] ?? 0), 2) ?>
                         </div>
                     </div>
                     <div class="form-group full">
@@ -871,42 +959,11 @@ $formatRelation = static function ($value) {
                     </div>
                 </div>
 
-                <div class="section-title-row">
-                    <h3>Corporate Members</h3>
-                    <button type="button" class="btn btn-secondary" onclick="addCorporateProfileRow()">
-                        Add Corporate Member
-                    </button>
-                </div>
-                <div id="corporateManagePanel">
-                <div id="profileCorporateRows">
-                    <?php foreach ($corporateMembers as $index => $corporate): ?>
-                        <div class="corporate-row">
-                            <input class="form-input corporate-label" name="corporate_members[<?= (int)$index ?>][label]" placeholder="Name / label" value="<?= htmlspecialchars($corporate['label'] ?? '') ?>">
-                            <input class="form-input" name="corporate_members[<?= (int)$index ?>][relationship]" placeholder="Relationship" value="<?= htmlspecialchars($corporate['relationship'] ?? 'corporate') ?>">
-                            <select class="form-select corporate-package" name="corporate_members[<?= (int)$index ?>][package_key]" onchange="updateProfileContributionPreview()">
-                                <?php foreach ($packages as $packageKey => $packageOption): ?>
-                                    <option value="<?= htmlspecialchars($packageKey) ?>" <?= (($corporate['package_key'] ?? '') === $packageKey) ? 'selected' : '' ?>>
-                                        <?= htmlspecialchars(($packageOption['name'] ?? $packageKey) . ' - KES ' . number_format((float)($packageOption['monthly_contribution'] ?? 0), 0)) ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                            <div class="corporate-amount">KES <?= number_format((float)($corporate['monthly_contribution'] ?? 0), 2) ?></div>
-                            <button type="button" class="btn btn-danger" onclick="this.closest('.corporate-row').remove(); updateProfileContributionPreview();" aria-label="Remove corporate member">
-                                Remove
-                            </button>
-                        </div>
-                    <?php endforeach; ?>
-                    <?php if (empty($corporateMembers)): ?>
-                        <div class="corporate-card" id="noCorporateMembers">No corporate members attached.</div>
-                    <?php endif; ?>
-                </div>
-                </div>
-
                 <div class="inline-actions">
                     <button type="submit" class="btn btn-primary">
                         Save Member Profile
                     </button>
-                    <a href="/admin/members" class="btn btn-secondary">
+                    <a href="<?= htmlspecialchars($memberManagementUrl) ?>" class="btn btn-secondary">
                         Back to Member Management
                     </a>
                 </div>
@@ -925,29 +982,43 @@ $formatRelation = static function ($value) {
             <div class="section-title-row">
                 <h3>Covered Dependants</h3>
             </div>
-            <div class="relation-grid">
-                <?php if (empty($beneficiaries)): ?>
-                    <div class="dependant-card">No dependants recorded under this member.</div>
-                <?php else: ?>
-                    <?php foreach ($beneficiaries as $beneficiary): ?>
-                        <div class="dependant-card">
-                            <strong><?= htmlspecialchars($beneficiary['full_name'] ?? 'N/A') ?></strong>
-                            <div><?= htmlspecialchars($formatRelation($beneficiary['relationship'] ?? '')) ?></div>
-                            <div>ID: <?= htmlspecialchars($beneficiary['id_number'] ?? 'N/A') ?></div>
-                            <div>DOB: <?= htmlspecialchars($beneficiary['date_of_birth'] ?? 'N/A') ?></div>
-                            <div>Phone: <?= htmlspecialchars($beneficiary['phone_number'] ?? 'N/A') ?></div>
-                            <div class="card-actions">
-                                <button type="button" class="btn btn-secondary btn-sm" onclick="openDependantEdit(<?= (int)($beneficiary['id'] ?? 0) ?>)">Edit</button>
-                                <button type="button" class="btn btn-danger btn-sm" onclick="deleteDependant(<?= (int)($beneficiary['id'] ?? 0) ?>, '<?= htmlspecialchars($beneficiary['full_name'] ?? 'Dependant', ENT_QUOTES) ?>')">Delete</button>
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
-                <?php endif; ?>
+            <div class="table-container">
+                <table class="data-table">
+                    <thead><tr><th>Name</th><th>Relationship</th><th>Covered under</th><th>ID / Birth Cert.</th><th>Date of Birth</th><th>Phone</th><th>Actions</th></tr></thead>
+                    <tbody>
+                        <?php if (empty($beneficiaries)): ?>
+                            <tr><td colspan="7"><div class="empty-state"><p>No dependants recorded under this member.</p></div></td></tr>
+                        <?php else: ?>
+                            <?php foreach ($beneficiaries as $beneficiary): ?>
+                                <?php
+                                    $coveredUnder = 'Principal package';
+                                    if (($beneficiary['coverage_owner_type'] ?? '') === 'corporate_member') {
+                                        foreach ($corporateMembers as $corporate) {
+                                            if ((int)($corporate['id'] ?? 0) === (int)($beneficiary['coverage_owner_id'] ?? 0)) {
+                                                $coveredUnder = 'Corporate: ' . ($corporate['label'] ?? 'Member');
+                                                break;
+                                            }
+                                        }
+                                    }
+                                ?>
+                                <tr>
+                                    <td><?= htmlspecialchars($beneficiary['full_name'] ?? 'N/A') ?></td>
+                                    <td><?= htmlspecialchars($formatRelation($beneficiary['relationship'] ?? '')) ?></td>
+                                    <td><?= htmlspecialchars($coveredUnder) ?></td>
+                                    <td><?= htmlspecialchars($beneficiary['id_number'] ?? '—') ?></td>
+                                    <td><?= htmlspecialchars($beneficiary['date_of_birth'] ?? '—') ?></td>
+                                    <td><?= htmlspecialchars($beneficiary['phone_number'] ?? '—') ?></td>
+                                    <td><button type="button" class="btn btn-secondary btn-sm" onclick="openDependantEdit(<?= (int)($beneficiary['id'] ?? 0) ?>)">Edit</button></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
             </div>
 
             <form method="POST" action="/admin/members/<?= (int)($member['id'] ?? 0) ?>/dependants/add" id="dependantAddPanel" class="toggle-panel" style="display:none;margin-top:20px;" onsubmit="return confirmAddDependant(event);">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
-                <input type="hidden" name="return_to" value="/admin/members/view/<?= (int)($member['id'] ?? 0) ?>">
+                <input type="hidden" name="return_to" value="<?= htmlspecialchars($memberProfileUrl) ?>">
                 <input type="hidden" name="dependant_override" id="dependantOverride" value="0">
                 <div class="form-grid">
                     <div class="form-group">
@@ -971,6 +1042,16 @@ $formatRelation = static function ($value) {
                         <input class="form-input" id="dependantIdNumber" name="id_number">
                     </div>
                     <div class="form-group">
+                        <label class="form-label" for="dependantCoverageOwner">Covered under</label>
+                        <select class="form-select" id="dependantCoverageOwner" name="coverage_owner_id">
+                            <option value="">Principal package</option>
+                            <?php foreach ($corporateMembers as $corporate): ?>
+                                <option value="<?= (int)($corporate['id'] ?? 0) ?>">Corporate: <?= htmlspecialchars($corporate['label'] ?? 'Member') ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <input type="hidden" name="coverage_owner_type" id="dependantCoverageOwnerType" value="principal">
+                    </div>
+                    <div class="form-group">
                         <label class="form-label" for="dependantDateOfBirth">Date of Birth</label>
                         <input class="form-input" id="dependantDateOfBirth" name="date_of_birth" type="date" max="<?= date('Y-m-d') ?>">
                     </div>
@@ -983,6 +1064,66 @@ $formatRelation = static function ($value) {
                             Add Dependant
                         </button>
                     </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    </section>
+
+    <section class="profile-tab-panel" data-profile-panel="corporate">
+    <div class="data-table-card">
+        <div class="card-header">
+            <span class="card-title">Corporate Members</span>
+            <div class="header-actions">
+                <button type="button" class="btn btn-secondary" onclick="openCorporateEditor()">Edit Corporate Members</button>
+                <button type="button" class="btn btn-primary" onclick="openCorporateEditor(true)">Add Corporate Member</button>
+            </div>
+        </div>
+        <div class="management-body" id="corporateManagePanel">
+            <div class="table-container">
+                <table class="data-table">
+                    <thead><tr><th>Corporate Member</th><th>Relationship</th><th>Date of Birth</th><th>Package</th><th>Monthly Amount</th></tr></thead>
+                    <tbody>
+                        <?php if (empty($corporateMembers)): ?>
+                            <tr><td colspan="5"><div class="empty-state"><p>No corporate members added yet.</p></div></td></tr>
+                        <?php else: ?>
+                            <?php foreach ($corporateMembers as $corporate): ?>
+                                <tr>
+                                    <td><?= htmlspecialchars($corporate['label'] ?? 'Corporate member') ?></td>
+                                    <td><?= htmlspecialchars($formatRelation($corporate['relationship'] ?? 'corporate')) ?></td>
+                                    <td><?= htmlspecialchars($corporate['date_of_birth'] ?? '—') ?></td>
+                                    <td><?= htmlspecialchars($corporate['package_name'] ?? $corporate['package_key'] ?? '—') ?></td>
+                                    <td>KES <?= number_format((float)($corporate['monthly_contribution'] ?? 0), 2) ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+            <form method="POST" action="/admin/members/<?= (int)($member['id'] ?? 0) ?>/corporate-members/update" id="corporateEditPanel" data-confirm-message="Save these member changes? Package changes may update the monthly payment. No SMS will be sent automatically." class="toggle-panel" style="display:none;margin-top:20px;">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+                <input type="hidden" name="return_to" value="<?= htmlspecialchars($memberProfileUrl) ?>">
+                <div id="profileCorporateRows">
+                    <?php foreach ($corporateMembers as $index => $corporate): ?>
+                        <div class="corporate-row">
+                            <input type="hidden" name="corporate_members[<?= (int)$index ?>][id]" value="<?= (int)($corporate['id'] ?? 0) ?>">
+                            <input class="form-input corporate-label" name="corporate_members[<?= (int)$index ?>][label]" placeholder="Full name" value="<?= htmlspecialchars($corporate['label'] ?? '') ?>" required>
+                            <input class="form-input" name="corporate_members[<?= (int)$index ?>][relationship]" placeholder="Relationship" value="<?= htmlspecialchars($corporate['relationship'] ?? 'corporate') ?>">
+                            <input class="form-input" type="date" name="corporate_members[<?= (int)$index ?>][date_of_birth]" value="<?= htmlspecialchars($corporate['date_of_birth'] ?? '') ?>" title="Needed when Platinum is selected">
+                            <select class="form-select corporate-package" name="corporate_members[<?= (int)$index ?>][package_key]" onchange="updateProfileContributionPreview()">
+                                <?php foreach ($packages as $packageKey => $packageOption): if (!empty($packageOption['legacy_alias'])) continue; ?>
+                                    <option value="<?= htmlspecialchars($packageKey) ?>" <?= (PlatinumPricingService::canonicalPackageKey((string)($corporate['package_key'] ?? '')) === $packageKey) ? 'selected' : '' ?>><?= htmlspecialchars(($packageOption['name'] ?? $packageKey) . ' - KES ' . number_format((float)($packageOption['monthly_contribution'] ?? 0), 0)) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="corporate-amount">KES <?= number_format((float)($corporate['monthly_contribution'] ?? 0), 2) ?></div>
+                            <button type="button" class="btn btn-danger" onclick="this.closest('.corporate-row').remove(); updateProfileContributionPreview();">Remove</button>
+                        </div>
+                    <?php endforeach; ?>
+                    <?php if (empty($corporateMembers)): ?><div class="corporate-card" id="noCorporateMembers">Add a corporate member to begin.</div><?php endif; ?>
+                </div>
+                <div class="inline-actions" style="margin-top:18px;">
+                    <button type="submit" class="btn btn-primary">Save Corporate Members</button>
+                    <button type="button" class="btn btn-secondary" onclick="togglePanel('corporateEditPanel')">Cancel</button>
                 </div>
             </form>
         </div>
@@ -1038,43 +1179,6 @@ $formatRelation = static function ($value) {
                 </div>
             </div>
 
-            <div class="data-table-card">
-                <div class="card-header">
-                    <span class="card-title">Registered Beneficiaries</span>
-                </div>
-                <div class="table-container">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>Relationship</th>
-                                <th>ID Number</th>
-                                <th>Phone</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php if (empty($beneficiaries)): ?>
-                                <tr>
-                                    <td colspan="4">
-                                        <div class="empty-state">
-                                            <p>No beneficiaries registered</p>
-                                        </div>
-                                    </td>
-                                </tr>
-                            <?php else: ?>
-                                <?php foreach ($beneficiaries as $beneficiary): ?>
-                                <tr>
-                                    <td><?= htmlspecialchars($beneficiary['full_name'] ?? ($beneficiary['name'] ?? 'N/A')) ?></td>
-                                    <td><?= htmlspecialchars($beneficiary['relationship'] ?? 'N/A') ?></td>
-                                    <td><?= htmlspecialchars($beneficiary['id_number'] ?? 'N/A') ?></td>
-                                    <td><?= htmlspecialchars($beneficiary['phone_number'] ?? ($beneficiary['phone'] ?? 'N/A')) ?></td>
-                                </tr>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
     </section>
 </div>
 
@@ -1088,7 +1192,7 @@ $formatRelation = static function ($value) {
                 </div>
                 <div class="modal-body">
                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
-                    <input type="hidden" name="return_to" value="/admin/members/view/<?= (int)($member['id'] ?? 0) ?>">
+                    <input type="hidden" name="return_to" value="<?= htmlspecialchars($memberProfileUrl) ?>">
                     <input type="hidden" name="dependant_id" id="editDependantId">
                     <div class="form-group">
                         <label class="form-label" for="editDependantFullName">Full Name</label>
@@ -1128,13 +1232,13 @@ $formatRelation = static function ($value) {
 
 <form method="POST" action="/admin/members/<?= (int)($member['id'] ?? 0) ?>/dependants/delete" id="deleteDependantForm" style="display:none;">
     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
-    <input type="hidden" name="return_to" value="/admin/members/view/<?= (int)($member['id'] ?? 0) ?>">
+    <input type="hidden" name="return_to" value="<?= htmlspecialchars($memberProfileUrl) ?>">
     <input type="hidden" name="dependant_id" id="deleteDependantId">
 </form>
 
 <form method="POST" action="/admin/members/<?= (int)($member['id'] ?? 0) ?>/corporate-members/delete" id="deleteCorporateMemberForm" style="display:none;">
     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
-    <input type="hidden" name="return_to" value="/admin/members/view/<?= (int)($member['id'] ?? 0) ?>">
+    <input type="hidden" name="return_to" value="<?= htmlspecialchars($memberProfileUrl) ?>">
     <input type="hidden" name="corporate_member_id" id="deleteCorporateMemberId">
 </form>
 
@@ -1168,7 +1272,7 @@ $formatRelation = static function ($value) {
                 <div class="mb-3">
                     <label for="adminPayAmount" class="form-label" style="font-weight: 600; color: #374151;">Amount (KES) <span style="color: #EF4444;">*</span></label>
                     <input type="number" id="adminPayAmount" class="form-control" placeholder="0.00" min="1" step="1"
-                        value="<?= (int)($member['monthly_contribution'] ?? 0) > 0 ? (int)$member['monthly_contribution'] : '' ?>"
+                        value="<?= (int)($account_monthly_amount ?? $member['monthly_contribution'] ?? 0) > 0 ? (int)($account_monthly_amount ?? $member['monthly_contribution']) : '' ?>"
                         style="border-radius: 8px; border: 1px solid #D1D5DB; padding: 10px 14px;">
                 </div>
                 <div class="mb-3">
@@ -1193,6 +1297,8 @@ $formatRelation = static function ($value) {
 
 <script>
 const profileMembershipPlanData = <?php echo json_encode($membershipPlanData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
+const platinumMigrationOptions = <?php echo json_encode($platinum_migration_options ?? [], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
+const currentAccountMonthlyAmount = <?= json_encode((float)($account_monthly_amount ?? $member['monthly_contribution'] ?? 0)) ?>;
 const activationRestrictions = <?php echo json_encode(array_values($activationRestrictions), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
 const dependantRestrictions = <?php echo json_encode(array_values($dependantRestrictions), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
 const adminDependants = <?php echo json_encode(array_values($beneficiaries), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
@@ -1211,7 +1317,78 @@ function money(amount) {
     return 'KES ' + Number(amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function platinumMigrationOption() {
+    const type = document.getElementById('platinumMigrateType')?.value || 'principal';
+    const personId = document.getElementById('platinumMigratePerson')?.value || '';
+    const optionKey = type === 'corporate_member' ? `corporate_${personId}` : 'principal';
+    return platinumMigrationOptions[optionKey];
+}
+
+function platinumMigrationFailureMessage() {
+    return 'Platinum was not activated. The selected coverage group needs a valid date of birth and a Basic package with Platinum pricing. Review the assigned Basic package and the coverage owner date of birth, then try again. No Platinum cover was activated and no SMS was sent.';
+}
+
+function updatePlatinumMigrationPreview() {
+    const type = document.getElementById('platinumMigrateType')?.value || 'principal';
+    const personWrap = document.getElementById('platinumMigratePersonWrap');
+    if (personWrap) personWrap.style.display = type === 'principal' ? 'none' : 'block';
+    const option = platinumMigrationOption();
+    const preview = document.getElementById('platinumMigrationPreview');
+    const token = document.getElementById('platinumReviewedQuote');
+    if (token) token.value = option?.token || '';
+    if (option?.active) {
+        preview.textContent = 'Platinum is already active for this cover. Saving again will not change its price or waiting period.';
+        return;
+    }
+    if (!preview || !option || !Number(option.quote || 0)) {
+        if (preview) preview.textContent = 'Cannot activate Platinum: add a valid date of birth and confirm the selected Basic package supports Platinum pricing.';
+        return;
+    }
+    const currentCharge = Number(option.current_charge || option.basic_amount || 0);
+    const newTotal = currentAccountMonthlyAmount - currentCharge + Number(option.quote || 0);
+    preview.textContent = `Account monthly contribution after migration: ${money(newTotal)}.`;
+}
+
+function validatePlatinumMigration(event) {
+    const option = platinumMigrationOption();
+    if (option && Number(option.quote || 0)) {
+        event.preventDefault();
+        if (event.target.dataset.submitting) return false;
+        ShenaApp.confirmAction(document.getElementById('platinumMigrationPreview').textContent + ' No SMS will be sent.', function() {
+            event.target.dataset.submitting = '1';
+            event.target.querySelector('button[type=submit]').disabled = true;
+            event.target.submit();
+        }, null, { textOnly: true, title: 'Save Platinum cover', confirmText: 'Save cover' });
+        return false;
+    }
+
+    event.preventDefault();
+    const message = platinumMigrationFailureMessage();
+    const preview = document.getElementById('platinumMigrationPreview');
+    if (preview) {
+        preview.textContent = message;
+        preview.focus();
+    }
+    if (window.ShenaApp && typeof ShenaApp.alert === 'function') {
+        ShenaApp.alert(message, 'error', 'Platinum activation not completed');
+    } else if (window.ShenaApp && typeof ShenaApp.showNotification === 'function') {
+        ShenaApp.showNotification(message, 'error', 8000);
+    }
+    return false;
+}
+
+function confirmPlatinumRevert(coverageId, groupName) {
+    const submit = function () { document.getElementById('platinumRevertForm' + coverageId)?.submit(); };
+    const message = 'Return the ' + groupName + ' Platinum coverage to Basic? No SMS will be sent. You can review and send one final account update after saving.';
+    if (window.ShenaApp && typeof ShenaApp.confirmAction === 'function') {
+        ShenaApp.confirmAction(message, submit, null, { textOnly: true, title: 'Return to Basic', confirmText: 'Return to Basic', type: 'warning' });
+        return;
+    }
+    return;
+}
+
 function profilePackageOptionsHtml(selectedKey) {
+    if (selectedKey === 'couple_children_parents_70_80') selectedKey = 'couple_children_parents_71_80';
     return Object.entries(profileMembershipPlanData).map(([key, plan]) => {
         const selected = key === selectedKey ? 'selected' : '';
         const label = `${plan.name || key} - KES ${Number(plan.monthly_contribution || 0).toLocaleString()}`;
@@ -1229,8 +1406,10 @@ function addCorporateProfileRow(item = {}) {
     const row = document.createElement('div');
     row.className = 'corporate-row';
     row.innerHTML = `
+        <input type="hidden" name="corporate_members[${index}][id]" value="${Number(item.id || 0)}">
         <input class="form-input corporate-label" name="corporate_members[${index}][label]" placeholder="Name / label" value="${String(item.label || '').replace(/"/g, '&quot;')}">
         <input class="form-input" name="corporate_members[${index}][relationship]" placeholder="Relationship" value="${String(item.relationship || 'corporate').replace(/"/g, '&quot;')}">
+        <input class="form-input" type="date" name="corporate_members[${index}][date_of_birth]" value="${String(item.date_of_birth || '')}">
         <select class="form-select corporate-package" name="corporate_members[${index}][package_key]" onchange="updateProfileContributionPreview()">
             ${profilePackageOptionsHtml(item.package_key || '')}
         </select>
@@ -1262,6 +1441,7 @@ function updateProfileContributionPreview() {
 
 document.getElementById('memberPackage')?.addEventListener('change', updateProfileContributionPreview);
 updateProfileContributionPreview();
+updatePlatinumMigrationPreview();
 
 function togglePanel(id) {
     const panel = document.getElementById(id);
@@ -1306,17 +1486,18 @@ function deleteDependant(dependantId, dependantName) {
     );
 }
 
-function editCorporateMember(rowIndex) {
-    switchProfileTab('overview');
-    const panel = document.getElementById('memberEditPanel');
-    if (panel && panel.style.display === 'none') {
-        panel.style.display = 'block';
+function openCorporateEditor(addNew = false) {
+    switchProfileTab('corporate');
+    const panel = document.getElementById('corporateEditPanel');
+    if (!panel) return;
+    if (panel.style.display === 'none' || panel.hidden) {
+        togglePanel('corporateEditPanel');
     }
-
-    const row = document.querySelectorAll('#profileCorporateRows .corporate-row')[rowIndex];
-    if (row) {
-        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        const input = row.querySelector('input, select');
+    if (addNew) {
+        addCorporateProfileRow();
+        const rows = document.querySelectorAll('#profileCorporateRows .corporate-row');
+        const row = rows[rows.length - 1];
+        const input = row?.querySelector('input, select');
         if (input) input.focus();
     }
 }

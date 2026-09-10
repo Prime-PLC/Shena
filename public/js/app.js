@@ -14,8 +14,51 @@ const ShenaApp = {
     // Initialize the application
     init: function() {
         this.setupEventListeners();
+        this.initializeConfirmationForms();
+        this.restoreClaimForms();
         this.initializeComponents();
         this.setupFormValidation();
+        this.initializeSmsComposers();
+        this.initializeSmsResponseFeedback();
+        if (window.location.hash.startsWith("#sms-review-") || window.location.hash === "#account-update-sms") this.focusSmsTarget(window.location.hash);
+    },
+
+    initializeSmsResponseFeedback: function() {
+        const showReview = data => {
+            if (!data || !data.sms_review) return;
+            const review = data.sms_review;
+            window.setTimeout(() => ShenaApp.feedback([{type: 'info', message: review.message, target: review.target}]), 0);
+        };
+        if (window.fetch) {
+            const originalFetch = window.fetch.bind(window);
+            window.fetch = async function(...args) {
+                const response = await originalFetch(...args);
+                if (response.url && new URL(response.url, window.location.href).origin === window.location.origin && (response.headers.get('content-type') || '').includes('application/json')) {
+                    const target = response.headers.get('X-Shena-Sms-Review');
+                    if (target) showReview({sms_review: {target, message: 'Your SMS draft is ready to edit and review. No SMS has been sent.'}});
+                    else response.clone().json().then(showReview).catch(() => {});
+                }
+                return response;
+            };
+        }
+        if (window.jQuery) window.jQuery(document).ajaxComplete((event, xhr) => {
+            const target = xhr.getResponseHeader('X-Shena-Sms-Review');
+            showReview(target ? {sms_review: {target, message: 'Your SMS draft is ready to edit and review. No SMS has been sent.'}} : xhr.responseJSON);
+        });
+    },
+
+    initializeConfirmationForms: function() {
+        document.addEventListener('submit', event => {
+            const form = event.target;
+            if (!form.dataset.confirmMessage) return;
+            if (form.dataset.confirmed === '1') { delete form.dataset.confirmed; return; }
+            event.preventDefault();
+            const button = event.submitter;
+            ShenaApp.confirmAction(form.dataset.confirmMessage, () => {
+                form.dataset.confirmed = '1';
+                form.requestSubmit(button || undefined);
+            }, null, {textOnly: true, title: 'Confirm changes', confirmText: 'Save changes'});
+        }, true);
     },
 
     // Setup event listeners
@@ -54,17 +97,6 @@ const ShenaApp = {
             }
         });
 
-        // Auto-hide alerts
-        setTimeout(function() {
-            const alerts = document.querySelectorAll('.alert.alert-dismissible');
-            alerts.forEach(function(alert) {
-                if (alert.classList.contains('show')) {
-                    const bsAlert = new bootstrap.Alert(alert);
-                    bsAlert.close();
-                }
-            });
-        }, 5000);
-
         // Mobile navigation
         const navToggler = document.querySelector('.navbar-toggler');
         const navCollapse = document.querySelector('.navbar-collapse');
@@ -74,6 +106,76 @@ const ShenaApp = {
                 navCollapse.classList.toggle('show');
             });
         }
+    },
+
+    restoreClaimForms: function() {
+        document.querySelectorAll('[data-claim-form-state]').forEach(node => {
+            const state = JSON.parse(node.textContent);
+            const form = document.getElementById(node.dataset.claimFormState);
+            if (!form) return;
+            const values = state.values || {};
+            if (form.id === 'adminInpatientForm') {
+                const picker = document.getElementById('inpatientMemberSelect');
+                const option = Array.from(picker.options).find(o => o.dataset.memberId === String(values.member_id));
+                if (option) { picker.value = option.value; PlatinumAdmin.onMemberChange(); }
+                const panel = document.getElementById('createRequestPanel');
+                if (!panel.classList.contains('open')) PlatinumAdmin.toggleCreatePanel();
+            }
+            Object.entries(values).forEach(([name, value]) => {
+                const input = form.elements.namedItem(name);
+                if (!input || input.type === 'file' || name === 'csrf_token') return;
+                if (input.type === 'checkbox') input.checked = String(value) === input.value;
+                else {
+                    if (input.tagName === 'SELECT' && !Array.from(input.options).some(o => o.value === String(value)) && value) {
+                        input.add(new Option((name === 'member_id' ? 'Member #' : 'Selected beneficiary #') + value, value));
+                        input.disabled = false;
+                    }
+                    input.value = value;
+                }
+            });
+            if (form.id === 'adminClaimForm') {
+                const beneficiary = document.getElementById('adminClaimBeneficiaryId');
+                beneficiary.dataset.restoreValue = values.beneficiary_id || '';
+                document.getElementById('adminClaimMemberId').dispatchEvent(new Event('change'));
+                document.getElementById('adminRequestCashAlternative').dispatchEvent(new Event('change'));
+            } else {
+                form.querySelector('[name="override_eligibility"]').dispatchEvent(new Event('change'));
+            }
+            const summary = document.createElement('div');
+            summary.className = 'alert alert-danger'; summary.tabIndex = -1; summary.setAttribute('role', 'alert');
+            summary.textContent = state.error || 'Review the details below.';
+            if (form.querySelector('input[type="file"]')) summary.append(document.createTextNode(' Please reselect any attachments before submitting.'));
+            const body = form.querySelector('.modal-body') || form;
+            body.prepend(summary);
+            const hints = {
+                member_id:['valid member','active members'], beneficiary_id:['beneficiary'],
+                deceased_name:['deceased name'], date_of_death:['date of death'],
+                place_of_death:['place of death'], cause_of_death:['cause of death'],
+                mortuary_name:['mortuary name'], mortuary_days_count:['days in mortuary'],
+                mortuary_bill_amount:['bill amount'], cash_alternative_reason:['cash alternative reason'],
+                patient_name:['patient name'], facility_name:['hospital name'],
+                facility_location:['hospital location'], admission_date:['admission date'],
+                requested_days:['requested days'], override_reason:['override reason']
+            };
+            const errorText = String(state.error || '').toLowerCase();
+            Object.entries(hints).forEach(([name, words]) => {
+                const input = form.elements.namedItem(name);
+                if (!input || !words.some(word => errorText.includes(word))) return;
+                input.classList.add('is-invalid'); input.setAttribute('aria-invalid', 'true');
+                const note = document.createElement('div'); note.className = 'invalid-feedback d-block';
+                note.id = form.id + '-' + name + '-error'; note.textContent = state.error;
+                input.setAttribute('aria-describedby', note.id); input.after(note);
+                input.addEventListener('input', () => { input.classList.remove('is-invalid'); input.removeAttribute('aria-invalid'); input.removeAttribute('aria-describedby'); note.remove(); }, {once:true});
+            });
+
+            if (form.id === 'adminClaimForm') {
+                const modal = document.getElementById('adminClaimModal');
+                if (window.bootstrap?.Modal) {
+                    modal.addEventListener('shown.bs.modal', () => summary.focus(), {once:true});
+                    bootstrap.Modal.getOrCreateInstance(modal).show();
+                } else { modal.classList.add('show'); modal.style.display = 'block'; summary.focus(); }
+            } else { summary.focus(); summary.scrollIntoView({block:'center'}); }
+        });
     },
 
     // Initialize components
@@ -194,6 +296,7 @@ const ShenaApp = {
 
     // Initialize tooltips
     initializeTooltips: function() {
+        if (!window.bootstrap || typeof window.bootstrap.Tooltip !== 'function') return;
         const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
         tooltipTriggerList.map(function(tooltipTriggerEl) {
             return new bootstrap.Tooltip(tooltipTriggerEl);
@@ -202,6 +305,7 @@ const ShenaApp = {
 
     // Initialize modals
     initializeModals: function() {
+        if (!window.bootstrap || typeof window.bootstrap.Modal !== 'function') return;
         const modalElements = document.querySelectorAll('.modal');
         modalElements.forEach(function(modalEl) {
             new bootstrap.Modal(modalEl);
@@ -335,6 +439,94 @@ const ShenaApp = {
         }
     },
 
+    focusSmsTarget: function(target) {
+        if (!target) return;
+        if (target.startsWith('/')) {
+            const url = new URL(target, window.location.origin);
+            if (url.origin !== window.location.origin) return;
+            if (url.pathname !== window.location.pathname || url.search !== window.location.search) { window.location.assign(url.href); return; }
+            target = url.hash;
+        }
+        if (!/^#(?:account-update-sms|sms-review-[a-z0-9-]+)$/.test(target)) return;
+        const element = document.getElementById(target.slice(1));
+        if (!element) return;
+        const focus = element.querySelector('textarea') || element;
+        focus.focus({preventScroll: true});
+        const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        element.scrollIntoView({behavior: reduced ? 'auto' : 'smooth', block: 'start'});
+    },
+
+    initializeSmsComposers: function() {
+        document.querySelectorAll('[data-sms-composer]').forEach(form => {
+            if (form.dataset.initialized) return;
+            form.dataset.initialized = '1';
+            const input = form.querySelector('[data-sms-message]');
+            const bubble = form.querySelector('[data-sms-bubble]');
+            const count = form.querySelector('[data-sms-count]');
+            const update = () => {
+                bubble.textContent = input.value;
+                const length = Array.from(input.value).length;
+                // Conservative estimate; provider encoding may use more segments.
+                const unicode = /[^\x20-\x7E\r\n]/.test(input.value);
+                const units = unicode ? input.value.length : input.value.length + (input.value.match(/[\^{}\\\[\]~|]/g) || []).length;
+                const single = unicode ? 70 : 160, multi = unicode ? 67 : 153;
+                const segments = units <= single ? (units ? 1 : 0) : Math.ceil(units / multi);
+                count.textContent = `${length}/${input.maxLength} characters - ${segments} SMS segment${segments === 1 ? '' : 's'}`;
+            };
+            input.addEventListener('input', update); update();
+            form.addEventListener('submit', event => {
+                if (form.dataset.submitting) { event.preventDefault(); return; }
+                const decision = event.submitter?.value || 'send';
+                if (decision === 'save') return;
+                event.preventDefault();
+                const message = decision === 'discard' ? 'Discard this unsent SMS? The saved action will remain.' : 'Send this message to the recipient shown above?\n\n' + input.value;
+                ShenaApp.confirmAction(message, () => {
+                    form.dataset.submitting = '1';
+                    const field = document.createElement('input'); field.type = 'hidden'; field.name = 'decision'; field.value = decision; form.append(field);
+                    form.querySelectorAll('button').forEach(button => button.disabled = true);
+                    form.submit();
+                }, null, {textOnly: true, title: decision === 'discard' ? 'Discard SMS' : 'Review SMS', confirmText: decision === 'discard' ? 'Discard' : 'Send SMS'});
+            });
+        });
+    },
+
+    // Persistent, text-only result dialog; native dialog provides keyboard focus containment.
+    feedback: function(messages) {
+        const target = [...messages].reverse().find(item => item.target)?.target || '';
+        let dialog = document.getElementById('shena-feedback-dialog');
+        if (dialog) {
+            if (target) dialog.dataset.feedbackTarget = target;
+            messages.forEach(item => {
+                const p = document.createElement('p'); p.textContent = item.message;
+                dialog.querySelector('[data-feedback-messages]').append(p);
+            });
+            return;
+        }
+        if (!document.getElementById('shena-feedback-style')) {
+            const style = document.createElement('style'); style.id = 'shena-feedback-style';
+            style.textContent = '#shena-feedback-dialog::backdrop{background:rgba(0,0,0,.5)} #shena-feedback-dialog button:focus-visible{outline:3px solid #7F3D9E;outline-offset:4px}';
+            document.head.append(style);
+        }
+        const previousFocus = document.activeElement;
+        dialog = document.createElement('dialog');
+        dialog.id = 'shena-feedback-dialog';
+        dialog.dataset.feedbackTarget = target;
+        dialog.setAttribute('aria-labelledby', 'shena-feedback-title');
+        dialog.style.cssText = 'position:fixed;inset:0;margin:auto;width:min(92vw,560px);max-height:85vh;overflow:auto;border:0;border-radius:12px;padding:24px;box-shadow:0 12px 60px #0005;';
+        const title = document.createElement('h2'); title.id = 'shena-feedback-title';
+        title.style.fontSize = '1.3rem';
+        title.textContent = messages.some(m => m.type === 'error') ? 'Please check this' : 'Update';
+        const body = document.createElement('div'); body.dataset.feedbackMessages = '';
+        messages.forEach(item => { const p = document.createElement('p'); p.textContent = item.message; p.style.whiteSpace = 'pre-wrap'; body.append(p); });
+        const close = document.createElement('button'); close.type = 'button'; close.textContent = 'Got it';
+        close.className = 'btn btn-primary'; close.style.minHeight = '44px';
+        close.addEventListener('click', () => { if (typeof dialog.close === 'function') dialog.close(); else dialog.remove(); });
+        dialog.append(title, body, close); document.body.append(dialog);
+        dialog.addEventListener('close', () => { const destination = dialog.dataset.feedbackTarget; dialog.remove(); if (destination) ShenaApp.focusSmsTarget(destination); else if (previousFocus && previousFocus.isConnected) previousFocus.focus(); });
+        if (typeof dialog.showModal === 'function') { dialog.showModal(); close.focus(); }
+        else { dialog.setAttribute('open', ''); close.addEventListener('click', () => { if (target) ShenaApp.focusSmsTarget(target); else if (previousFocus && previousFocus.isConnected) previousFocus.focus(); }); }
+    },
+
     // Modern Modal System
     confirmAction: function(message, onConfirm, onCancel = null, options = {}) {
         const title = options.title || 'Confirm Action';
@@ -349,7 +541,8 @@ const ShenaApp = {
             cancelText: cancelText,
             type: type,
             onConfirm: onConfirm,
-            onCancel: onCancel
+            onCancel: onCancel,
+            textOnly: options.textOnly === true
         });
     },
 
@@ -380,85 +573,50 @@ const ShenaApp = {
     },
 
     showModal: function(options) {
-        // Remove any existing custom modals
-        const existingModal = document.getElementById('shena-custom-modal');
-        if (existingModal) {
-            existingModal.remove();
+        const existing = document.getElementById('shena-custom-modal');
+        if (existing) { if (typeof existing.close === 'function') existing.close(); existing.remove(); }
+        const previousFocus = document.activeElement;
+        const dialog = document.createElement('dialog');
+        dialog.id = 'shena-custom-modal';
+        dialog.setAttribute('aria-labelledby', 'shena-confirm-title');
+        dialog.style.cssText = 'position:fixed;inset:0;margin:auto;border:0;padding:0;border-radius:12px;width:min(92vw,560px);max-height:85dvh;overflow:auto;overflow-wrap:anywhere;';
+        const header = document.createElement('div'); header.className = 'modal-header';
+        const title = document.createElement('h5'); title.id = 'shena-confirm-title'; title.className = 'modal-title'; title.textContent = options.title || 'Confirmation';
+        header.append(title);
+        const body = document.createElement('div'); body.className = 'modal-body';
+        const message = document.createElement('div'); message.style.whiteSpace = 'pre-wrap';
+        if (options.textOnly) message.textContent = String(options.message || '');
+        else message.innerHTML = String(options.message || '');
+        body.append(message);
+        const footer = document.createElement('div'); footer.className = 'modal-footer';
+        const cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'btn btn-secondary'; cancel.textContent = options.cancelText || 'Cancel';
+        const confirm = document.createElement('button'); confirm.type = 'button'; confirm.id = 'modal-confirm-btn';
+        const type = {primary:'primary',danger:'danger',warning:'warning',success:'success',info:'info',error:'danger'}[options.type] || 'primary';
+        confirm.className = 'btn btn-' + type; confirm.textContent = options.confirmText || 'Confirm';
+        let accepted = false;
+        if (options.showCancel !== false) footer.append(cancel);
+        footer.append(confirm); dialog.append(header, body, footer);
+        cancel.addEventListener('click', () => dialog.close());
+        confirm.addEventListener('click', () => {
+            if (accepted) return;
+            accepted = true; confirm.disabled = true; dialog.close();
+            if (typeof options.onConfirm === 'function') options.onConfirm();
+        });
+        dialog.addEventListener('close', () => {
+            dialog.remove();
+            if (previousFocus && previousFocus.isConnected) previousFocus.focus();
+            if (!accepted && typeof options.onCancel === 'function') options.onCancel();
+        });
+        if (typeof dialog.showModal !== 'function') {
+            const plain = options.textOnly ? String(options.message || '') : message.textContent;
+            if (options.showCancel !== false) {
+                if (window.confirm(plain)) { if (typeof options.onConfirm === 'function') options.onConfirm(); }
+                else if (typeof options.onCancel === 'function') options.onCancel();
+            } else { window.__shenaNativeAlert(plain); if (typeof options.onConfirm === 'function') options.onConfirm(); }
+            return;
         }
-
-        const {
-            title = 'Confirmation',
-            message = '',
-            icon = '',
-            confirmText = 'Confirm',
-            cancelText = 'Cancel',
-            showCancel = true,
-            type = 'primary',
-            onConfirm = function() {},
-            onCancel = function() {}
-        } = options;
-
-        const buttonColors = {
-            primary: 'btn-primary',
-            danger: 'btn-danger',
-            warning: 'btn-warning',
-            success: 'btn-success',
-            info: 'btn-info',
-            error: 'btn-danger'
-        };
-
-        const buttonClass = buttonColors[type] || buttonColors.primary;
-
-        const modalHTML = `
-            <div class="modal fade" id="shena-custom-modal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
-                <div class="modal-dialog modal-dialog-centered">
-                    <div class="modal-content shadow-lg border-0">
-                        <div class="modal-header border-0 pb-0">
-                            <h5 class="modal-title fw-bold">${title}</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                        </div>
-                        <div class="modal-body text-center py-4">
-                            ${icon ? `<div class="mb-3">${icon}</div>` : ''}
-                            <p class="mb-0 fs-6">${message}</p>
-                        </div>
-                        <div class="modal-footer border-0 justify-content-center pt-0">
-                            ${showCancel ? `<button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">${cancelText}</button>` : ''}
-                            <button type="button" class="btn ${buttonClass} px-4" id="modal-confirm-btn">${confirmText}</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        // Append modal to body
-        document.body.insertAdjacentHTML('beforeend', modalHTML);
-
-        const modalElement = document.getElementById('shena-custom-modal');
-        const modal = new bootstrap.Modal(modalElement);
-        const confirmBtn = document.getElementById('modal-confirm-btn');
-
-        // Handle confirm
-        confirmBtn.addEventListener('click', function() {
-            modal.hide();
-            if (typeof onConfirm === 'function') {
-                onConfirm();
-            }
-        });
-
-        // Handle cancel
-        modalElement.addEventListener('hidden.bs.modal', function() {
-            if (!confirmBtn.hasAttribute('data-confirmed') && typeof onCancel === 'function') {
-                onCancel();
-            }
-            modalElement.remove();
-        });
-
-        confirmBtn.addEventListener('click', function() {
-            this.setAttribute('data-confirmed', 'true');
-        });
-
-        // Show modal
-        modal.show();
+        document.body.append(dialog); dialog.showModal();
+        (options.showCancel !== false ? cancel : confirm).focus();
     },
 
     showNotification: function(message, type = 'info', duration = 3000) {
@@ -559,6 +717,7 @@ const ShenaApp = {
 // Override native alerts to use ShenaApp modal when available
 (function() {
     const nativeAlert = window.alert;
+    window.__shenaNativeAlert = nativeAlert;
 
     window.alert = function(message) {
         if (window.ShenaApp && typeof ShenaApp.alert === 'function') {

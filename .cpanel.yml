@@ -5,6 +5,7 @@ deployment:
     - /bin/cp -R ./app $DEPLOYPATH
     - /bin/cp -R ./config $DEPLOYPATH
     - /bin/cp -R ./database $DEPLOYPATH
+    - /bin/cp -R ./scripts $DEPLOYPATH
     - /bin/cp -R ./public $DEPLOYPATH
     - /bin/cp -R ./resources $DEPLOYPATH
     - /bin/cp -R ./storage $DEPLOYPATH

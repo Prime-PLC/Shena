@@ -663,6 +663,7 @@ $actionNeededCount = count(array_filter($all_claims, fn($c) =>
 <!-- Page Header -->
 <div class="page-header">
     <h1 class="page-title">Claims & Logistics Hub</h1>
+    <a class="btn btn-secondary" href="/admin/service-providers"><i class="fas fa-address-book"></i> Service providers</a>
     <p class="page-subtitle">Verification and funeral coordination management</p>
     <button type="button" class="btn btn-primary" style="margin-top:12px;" onclick="openAdminClaimModal()">
         <i class="fas fa-plus"></i> File Claim for Member
@@ -873,10 +874,11 @@ $actionNeededCount = count(array_filter($all_claims, fn($c) =>
     <div id="tab-rejected" class="tab-content" style="display:none;"></div>
 </div>
 
+<?php renderClaimFormState('claim_form', 'adminClaimForm'); ?>
 <div class="modal fade" id="adminClaimModal" tabindex="-1" aria-labelledby="adminClaimModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
-            <form method="POST" action="/admin/claims/submit" enctype="multipart/form-data">
+            <form id="adminClaimForm" method="POST" action="/admin/claims/submit" enctype="multipart/form-data">
                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
                 <div class="modal-header">
                     <h5 class="modal-title" id="adminClaimModalLabel">File Claim for Member</h5>
@@ -910,8 +912,8 @@ $actionNeededCount = count(array_filter($all_claims, fn($c) =>
                             <input class="form-control" id="adminClaimDeceasedName" name="deceased_name" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label" for="adminClaimDeceasedId">Deceased ID Number</label>
-                            <input class="form-control" id="adminClaimDeceasedId" name="deceased_id_number" required>
+                            <label class="form-label" for="adminClaimDeceasedId">Deceased ID Number (optional)</label>
+                            <input class="form-control" id="adminClaimDeceasedId" name="deceased_id_number">
                         </div>
                         <div class="col-md-6">
                             <label class="form-label" for="adminClaimPlaceOfDeath">Place of Death</label>
@@ -1050,6 +1052,7 @@ document.getElementById('adminClaimMemberId')?.addEventListener('change', functi
                 beneficiarySelect.innerHTML += `<option value="${beneficiary.id}">${label}</option>`;
             });
             beneficiarySelect.disabled = false;
+            if (beneficiarySelect.dataset.restoreValue) { beneficiarySelect.value = beneficiarySelect.dataset.restoreValue; delete beneficiarySelect.dataset.restoreValue; }
         })
         .catch(() => {
             beneficiarySelect.innerHTML = '<option value="">Failed to load beneficiaries</option>';

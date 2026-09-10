@@ -7,13 +7,17 @@ include_once __DIR__ . '/../layouts/admin-header.php';
 $oldValue = function ($field, $default = '') use ($old) {
     return htmlspecialchars((string)($old[$field] ?? $default), ENT_QUOTES);
 };
+require_once __DIR__ . '/../../../app/services/PlatinumPricingService.php';
 $membershipPlanData = [];
-foreach (($packages ?? []) as $packageKey => $package) {
+foreach (($packages ?? []) as $packageKey => $package) { if (!empty($package['legacy_alias'])) continue;
     $membershipPlanData[$packageKey] = [
         'name' => $package['name'] ?? $packageKey,
         'monthly_contribution' => (float)($package['monthly_contribution'] ?? 0),
+        'coverage_type' => $package['coverage_type'] ?? 'principal_only',
+        'platinum_amount' => (new PlatinumPricingService())->packageAmount($packageKey),
     ];
 }
+$platinumPriceData = $GLOBALS['platinum_config']['prices'] ?? [];
 ?>
 
 <style>
@@ -286,7 +290,7 @@ foreach (($packages ?? []) as $packageKey => $package) {
                     <label class="form-label">Package <span class="required">*</span></label>
                     <select name="package" class="form-select" id="packageSelect" required>
                         <option value="">Select Package</option>
-                        <?php foreach (($packages ?? []) as $packageKey => $package): ?>
+                        <?php foreach (($packages ?? []) as $packageKey => $package): if (!empty($package['legacy_alias'])) continue; ?>
                             <option value="<?php echo htmlspecialchars($packageKey); ?>" data-monthly-contribution="<?php echo htmlspecialchars((string)($package['monthly_contribution'] ?? 0)); ?>" <?php echo (($old['package'] ?? '') === $packageKey) ? 'selected' : ''; ?>>
                                 <?php echo htmlspecialchars(($package['name'] ?? $packageKey) . ' - KES ' . number_format((float)($package['monthly_contribution'] ?? 0), 0) . '/month'); ?>
                             </option>
@@ -301,11 +305,23 @@ foreach (($packages ?? []) as $packageKey => $package) {
                         </button>
                     </div>
                     <div id="registrationCorporateLineItems"></div>
-                    <small class="form-hint">Each corporate member uses their own selected package and amount.</small>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Expected Monthly Contribution</label>
                     <div class="form-input corporate-total-preview" id="corporateTotalPreview" aria-live="polite">KES 0/month</div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Product Tier <span class="required">*</span></label>
+                    <select name="platinum_opt_in" class="form-select" id="platinumOptIn" required>
+                        <option value="0" <?php echo (($old['platinum_opt_in'] ?? '0') !== '1') ? 'selected' : ''; ?>>SHENA Basic &mdash; funeral &amp; last-respect cover</option>
+                        <option value="1" <?php echo (($old['platinum_opt_in'] ?? '') === '1') ? 'selected' : ''; ?>>SHENA Platinum &mdash; inpatient and welfare cover</option>
+                    </select>
+                </div>
+                <div class="form-group full-width" id="platinumTierPanel" style="display:none;background:linear-gradient(135deg,#7F20B0 0%,#5E2B7A 100%);border-radius:10px;padding:14px 18px;color:#fff">
+                    <strong><i class="fas fa-gem"></i> SHENA Platinum &mdash; <span id="platinumOptInPrice">--</span>/month</strong>
+                    <div style="font-size:0.85rem;opacity:0.92;margin-top:6px;line-height:1.55">
+                        Includes up to <strong>20 inpatient bed-cover days per year</strong>.
+                    </div>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Referred By (Agent Number)</label>
@@ -362,6 +378,7 @@ foreach (($packages ?? []) as $packageKey => $package) {
     const storageKey = 'shena_admin_member_registration_draft';
     if (!form || !window.localStorage) return;
     const membershipPlanData = <?php echo json_encode($membershipPlanData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
+    const platinumPriceData = <?php echo json_encode($platinumPriceData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
     const packageSelect = document.getElementById('packageSelect');
     const corporateLineItems = document.getElementById('registrationCorporateLineItems');
     const corporateTotalPreview = document.getElementById('corporateTotalPreview');
@@ -412,22 +429,67 @@ foreach (($packages ?? []) as $packageKey => $package) {
         if (!packageSelect || !corporateTotalPreview) return;
         const selectedOption = packageSelect.options[packageSelect.selectedIndex];
         const packageKey = packageSelect.value;
-        let total = Number(selectedOption?.dataset.monthlyContribution || membershipPlanData[packageKey]?.monthly_contribution || 0);
+        const baseAmount = Number(selectedOption?.dataset.monthlyContribution || membershipPlanData[packageKey]?.monthly_contribution || 0);
+        let corporateTotal = 0;
         document.querySelectorAll('#registrationCorporateLineItems .corporate-row').forEach(function (row) {
             const corporatePackageKey = row.querySelector('.corporate-package')?.value || '';
             const amount = Number(membershipPlanData[corporatePackageKey]?.monthly_contribution || 0);
-            total += amount;
+            corporateTotal += amount;
             const amountEl = row.querySelector('.corporate-amount');
             if (amountEl) amountEl.textContent = 'KES ' + amount.toLocaleString();
         });
-        corporateTotalPreview.textContent = 'KES ' + total.toLocaleString() + '/month';
+
+        const total = baseAmount + corporateTotal;
+        const tierSelect = document.getElementById('platinumOptIn');
+        let platinumAmount = 0;
+        if (tierSelect && tierSelect.value === '1') {
+            const dobInput = document.querySelector('input[name="date_of_birth"]');
+            let age = null;
+            if (dobInput && dobInput.value) {
+                const dob = new Date(dobInput.value);
+                age = Math.floor((Date.now() - dob.getTime()) / (1000 * 60 * 60 * 24 * 365.25));
+            }
+            platinumAmount = platinumPriceForPackage(packageKey, age) || 0;
+        }
+
+        corporateTotalPreview.textContent = platinumAmount > 0
+            ? 'KES ' + (corporateTotal + platinumAmount).toLocaleString() + '/month'
+            : 'KES ' + total.toLocaleString() + '/month';
     }
+
+    function platinumPriceForPackage(packageKey, age) {
+        return Number(membershipPlanData[packageKey]?.platinum_amount || 0) || null;
+    }
+
+    function updatePlatinumOptInPrice() {
+        const priceEl = document.getElementById('platinumOptInPrice');
+        const panel = document.getElementById('platinumTierPanel');
+        const tierSelect = document.getElementById('platinumOptIn');
+        const dobInput = document.querySelector('input[name="date_of_birth"]');
+        const isPlatinum = tierSelect && tierSelect.value === '1';
+
+        if (panel) { panel.style.display = isPlatinum ? '' : 'none'; }
+        if (!priceEl) return;
+
+        let age = null;
+        if (dobInput && dobInput.value) {
+            const dob = new Date(dobInput.value);
+            age = Math.floor((Date.now() - dob.getTime()) / (1000 * 60 * 60 * 24 * 365.25));
+        }
+        const price = platinumPriceForPackage(packageSelect?.value || '', age);
+        priceEl.textContent = price
+            ? ('KES ' + price.toLocaleString())
+            : (dobInput && dobInput.value ? 'not available for this age' : 'set once date of birth is entered');
+        updateContributionPreview();
+    }
+    document.querySelector('input[name="date_of_birth"]')?.addEventListener('change', updatePlatinumOptInPrice);
+    document.getElementById('platinumOptIn')?.addEventListener('change', updatePlatinumOptInPrice);
 
     packageSelect?.addEventListener('change', updateContributionPreview);
     if (corporateLineItems) {
         corporateLineItems.innerHTML = '<div style="font-size:13px;color:#6b7280;padding:10px;border:1px dashed #d1d5db;border-radius:8px;">No corporate members attached.</div>';
     }
-    updateContributionPreview();
+    updatePlatinumOptInPrice();
 
     function showFlash(message, type) {
         if (!message) return;

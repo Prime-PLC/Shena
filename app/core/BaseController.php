@@ -26,6 +26,11 @@ abstract class BaseController
     
     protected function json($data, $code = 200)
     {
+        if (is_array($data) && !empty($_SESSION['sms_review_ids']) && in_array($_SESSION['user_role'] ?? '', ['super_admin', 'manager', 'agent'], true)) {
+            $draftId = (int)end($_SESSION['sms_review_ids']);
+            $data['sms_review'] = ['target' => '/sms-review?draft=' . $draftId . '#sms-review-' . $draftId,
+                'message' => 'Your action is saved. Review and edit the SMS before sending. No SMS has been sent.'];
+        }
         http_response_code($code);
         header('Content-Type: application/json');
         echo json_encode($data);
@@ -102,6 +107,20 @@ abstract class BaseController
         return htmlspecialchars(trim($data), ENT_QUOTES, 'UTF-8');
     }
     
+    /** Email is optional for member registration; never attach another account's email. */
+    protected function optionalMemberEmail($value): ?string
+    {
+        $email = trim((string)$value);
+        if ($email === '') return null;
+        try {
+            if (filter_var($email, FILTER_VALIDATE_EMAIL) && !$this->db->fetch('SELECT id FROM users WHERE email = :email', ['email' => $email])) return $email;
+        } catch (Throwable $e) {
+            error_log('Optional registration email lookup unavailable. Continuing without email.');
+        }
+        $_SESSION['warning'] = 'Registration can continue without email. The email entered could not be added; you can add a valid, unused email later.';
+        return null;
+    }
+
     protected function validateEmail($email)
     {
         return filter_var($email, FILTER_VALIDATE_EMAIL);

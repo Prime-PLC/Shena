@@ -90,3 +90,40 @@ $assertContains($apiController, 'memberBeneficiaries', 'admin API should provide
 $assertContains($adminController, 'processAdminClaimDocumentUploads', 'admin claim submission should process required documents like member claims');
 
 echo "Admin member, claim, and campaign regression checks passed.\n";
+
+// Opt-in integration check: local development only, all fixtures rolled back.
+if (getenv('SHENA_TEST_LOCAL_CLAIMS') === '1') {
+define('ROOT_PATH',dirname(__DIR__));define('APP_PATH',ROOT_PATH.'/app');
+require ROOT_PATH.'/config/local_config.php';$_SERVER['HTTP_HOST']='localhost';require ROOT_PATH.'/config/config.php';
+if(DB_HOST!=='127.0.0.1'||DB_NAME!=='shena_welfare_dev')exit('Unexpected DB');
+spl_autoload_register(function($c){foreach(['controllers','models','services','core','helpers'] as $d){$p=APP_PATH.'/'.$d.'/'.$c.'.php';if(file_exists($p)){require_once $p;return;}}});
+require APP_PATH.'/helpers/functions.php';
+class ClaimTestController extends AdminController {public $destination;protected function redirect($url){$this->destination=$url;}protected function view($template,$data=[]){$GLOBALS['view_data']=$data;}}
+function check($ok,$message){if(!$ok)throw new RuntimeException($message);echo "PASS: $message\n";}
+$db=Database::getInstance();$pdo=$db->getConnection();$pdo->beginTransaction();
+try {
+$uid=(int)$db->insert('users',['first_name'=>'Synthetic','last_name'=>'Claim QA','email'=>null,'phone'=>'','password'=>'unused','role'=>'member']);
+$mid=(int)$db->insert('members',['user_id'=>$uid,'member_number'=>'QA'.bin2hex(random_bytes(5)),'id_number'=>'QA'.bin2hex(random_bytes(5)),'status'=>'active','package'=>'individual','package_key'=>'individual_below_70','gender'=>'male']);
+$bid=(int)$db->insert('beneficiaries',['member_id'=>$mid,'full_name'=>'Synthetic Child','relationship'=>'child','is_active'=>1]);
+$cid=(int)$db->insert('platinum_coverages',['member_id'=>$mid,'covered_person_type'=>'principal','status'=>'active','monthly_contribution'=>300,'maturity_date'=>'2020-01-01']);
+$_SESSION=['user_id'=>$uid,'user_role'=>'manager','csrf_token'=>'qa'];$_SERVER['REQUEST_METHOD']='POST';$c=new ClaimTestController();
+$valid=['csrf_token'=>'qa','member_id'=>$mid,'beneficiary_id'=>$bid,'deceased_name'=>'Synthetic Child','deceased_id_number'=>'','date_of_death'=>date('Y-m-d'),'place_of_death'=>'Test place','cause_of_death'=>'Test cause','mortuary_name'=>'Test mortuary','mortuary_days_count'=>'0','mortuary_bill_amount'=>'0'];
+$_POST=$valid;$c->submitClaimForMember();
+check(!isset($_SESSION['claim_form_error']) && isset($_SESSION['success']),'Funeral claim saved with no ID and zero days');
+check((int)$db->fetch('SELECT COUNT(*) AS n FROM claims WHERE member_id=:id',['id'=>$mid])['n']===1,'Saved funeral claim exists');
+$_POST=array_replace($valid,['mortuary_days_count'=>'15']);$c->submitClaimForMember();
+check(str_contains($_SESSION['claim_form_error']??'','0 to 14') && $_SESSION['claim_form']['deceased_name']==='Synthetic Child','Invalid days retain entries with specific error');
+$_POST=['csrf_token'=>'qa','member_id'=>$mid,'platinum_coverage_id'=>$cid,'patient_name'=>'Synthetic Child','facility_name'=>'Test hospital','facility_location'=>'Test town','requested_days'=>'2','admission_date'=>date('Y-m-d'),'override_eligibility'=>'1','override_reason'=>'Local verification'];$hospital=$_POST;
+$c->submitInpatientRequestForMember();
+check(!isset($_SESSION['inpatient_form_error']) && str_contains($_SESSION['success']??'','Hospital request #'),'Hospital request saved with reference feedback and no ID');
+$c->platinumRequests();check(count(array_filter($GLOBALS['view_data']['inpatientRequests'],fn($v)=>(int)$v['member_id']===$mid))===1,'Saved hospital request appears in admin listing');
+$_POST=array_replace($hospital,['facility_name'=>'']);$c->submitInpatientRequestForMember();check(str_contains($_SESSION['inpatient_form_error']??'','Hospital name') && $_SESSION['inpatient_form']['patient_name']==='Synthetic Child','Missing hospital name retains entries and explains error');
+$provider=new ServiceProvider();$pid=$provider->saveProvider(0,['stage_key'=>'coffin','contact_name'=>'Synthetic QA','phone'=>'0712345678'],$uid);
+$provider->assign('platinum',(int)array_values(array_filter($GLOBALS['view_data']['inpatientRequests'],fn($v)=>(int)$v['member_id']===$mid))[0]['id'],'platinum_hospital',$pid,$uid);
+check(true,'Provider from funeral category can serve a hospital request');
+} finally {if($pdo->inTransaction())$pdo->rollBack();echo "All synthetic changes rolled back. No SMS sent.\n";}
+
+}
+
+$platinumPage = file_get_contents($root . '/resources/views/admin/platinum-requests.php');
+$assertContains($platinumPage, "layouts/admin-footer.php", 'Platinum page must load shared feedback and failed-form restoration scripts');

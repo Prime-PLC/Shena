@@ -236,8 +236,10 @@ class MembershipPricingService
             $amount = self::resolveSelectedPackageAmount($packageKey, $membershipPackages);
             $corporateTotal += $amount;
             $lineItems[] = [
+                'id' => max(0, (int)($item['id'] ?? 0)),
                 'label' => trim((string)($item['label'] ?? '')),
                 'relationship' => trim((string)($item['relationship'] ?? 'corporate')),
+                'date_of_birth' => !empty($item['date_of_birth']) ? $item['date_of_birth'] : null,
                 'package_key' => $packageKey,
                 'package_name' => $membershipPackages[$packageKey]['name'] ?? $packageKey,
                 'monthly_contribution' => $amount,

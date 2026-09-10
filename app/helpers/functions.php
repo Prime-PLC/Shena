@@ -64,40 +64,44 @@ function collectFlashMessages()
         unset($_SESSION['flash_message'], $_SESSION['flash_type']);
     }
 
+    $target = $_SESSION['sms_feedback_target'] ?? null;
+    unset($_SESSION['sms_feedback_target']);
+    if ($target) {
+        if (!$messages) $messages[] = ['type' => 'info', 'message' => 'Your action is saved. Review the SMS before sending.'];
+        foreach ($messages as &$message) $message['target'] = $target;
+        unset($message);
+    }
     return $messages;
 }
 
 /**
  * Render queued flash messages immediately in the current layout.
  */
-function renderFlashMessagesScript($duration = 5000)
+function renderFlashMessagesScript($duration = 0)
 {
     $messages = collectFlashMessages();
-    if (empty($messages)) {
-        return;
-    }
+    if (!$messages) return;
     ?>
+    <div class="shena-flash-fallback" role="status">
+        <?php foreach ($messages as $flash): ?>
+            <p><?= htmlspecialchars($flash['message'], ENT_QUOTES, 'UTF-8') ?></p>
+        <?php endforeach; ?>
+    </div>
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const flashMessages = <?php echo json_encode($messages); ?>;
-            window.__shenaFlashDispatched = window.__shenaFlashDispatched || {};
-
-            flashMessages.forEach(function(flash) {
-                const key = flash.type + ':' + flash.message;
-                if (window.__shenaFlashDispatched[key]) return;
-                window.__shenaFlashDispatched[key] = true;
-
-                if (window.ShenaApp && typeof ShenaApp.showNotification === 'function') {
-                    ShenaApp.showNotification(flash.message, flash.type, <?php echo (int)$duration; ?>);
-                    return;
-                }
-                if (window.ShenaApp && typeof ShenaApp.alert === 'function') {
-                    ShenaApp.alert(flash.message, flash.type);
-                    return;
-                }
-                console.warn(flash.message);
-            });
+    document.addEventListener('DOMContentLoaded', function() {
+        const messages = <?= json_encode($messages, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+        window.__shenaFlashDispatched = window.__shenaFlashDispatched || {};
+        const fresh = messages.filter(function(flash) {
+            const key = flash.type + ':' + flash.message;
+            if (window.__shenaFlashDispatched[key]) return false;
+            window.__shenaFlashDispatched[key] = true;
+            return true;
         });
+        if (fresh.length && window.ShenaApp && typeof ShenaApp.feedback === 'function') {
+            ShenaApp.feedback(fresh);
+            document.querySelectorAll('.shena-flash-fallback').forEach(el => el.remove());
+        }
+    });
     </script>
     <?php
 }

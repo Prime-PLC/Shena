@@ -4,13 +4,6 @@
  * Front Controller Pattern
  */
 
-// Start session with secure settings
-ini_set('session.cookie_httponly', 1);
-ini_set('session.use_only_cookies', 1);
-ini_set('session.cookie_secure', defined('DEBUG_MODE') && DEBUG_MODE ? 0 : 1); // Enforce secure cookie over HTTPS in production
-ini_set('session.cookie_samesite', 'Strict');
-session_start();
-
 // Define constants
 if (!defined('ROOT_PATH'))    define('ROOT_PATH',    __DIR__);
 if (!defined('APP_PATH'))     define('APP_PATH',     ROOT_PATH . '/app');
@@ -21,6 +14,14 @@ if (!defined('UPLOADS_PATH')) define('UPLOADS_PATH', ROOT_PATH . '/storage/uploa
 
 // Load configuration first
 require_once CONFIG_PATH . '/config.php';
+
+// Start the session after configuration so local HTTP uses non-secure cookies
+// while production continues to require HTTPS cookies.
+ini_set('session.cookie_httponly', 1);
+ini_set('session.use_only_cookies', 1);
+ini_set('session.cookie_secure', defined('LOCAL_OVERRIDE_APPLIED') ? 0 : 1);
+ini_set('session.cookie_samesite', 'Strict');
+session_start();
 
 // Set error reporting based on DEBUG_MODE
 if (defined('DEBUG_MODE') && DEBUG_MODE) {

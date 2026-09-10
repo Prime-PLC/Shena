@@ -4,6 +4,11 @@
  */
 require_once __DIR__ . '/../services/ReportService.php';
 require_once __DIR__ . '/../helpers/ReportDocumentTemplate.php';
+require_once __DIR__ . '/../models/PlatinumCoverage.php';
+require_once __DIR__ . '/../services/PlatinumEligibilityService.php';
+require_once __DIR__ . '/../services/SmsService.php';
+require_once __DIR__ . '/../services/PlatinumPricingService.php';
+require_once __DIR__ . '/../services/PlatinumBillingService.php';
 
 class MemberController extends BaseController
 {
@@ -51,6 +56,108 @@ class MemberController extends BaseController
 
         return $aliases[$value] ?? $value;
     }
+
+    private function findOwnedPlatinumPerson(array $member, string $type, int $personId): ?array
+    {
+        if ($type === 'principal') {
+            return ['date_of_birth' => $member['date_of_birth'] ?? null];
+        }
+        if ($type === 'dependent') {
+            foreach ($this->beneficiaryModel->getActiveBeneficiaries((int) $member['id']) as $person) {
+                if ((int) ($person['id'] ?? 0) === $personId) return $person;
+            }
+        }
+        if ($type === 'corporate_member') {
+            foreach ((new MemberCorporateMember())->getActiveForMember((int) $member['id']) as $person) {
+                if ((int) ($person['id'] ?? 0) === $personId) return $person;
+            }
+        }
+        return null;
+    }
+
+    private function platinumAge(?string $dateOfBirth): ?int
+    {
+        if (!$dateOfBirth) return null;
+        try {
+            return (new DateTimeImmutable($dateOfBirth))->diff(new DateTimeImmutable('today'))->y;
+        } catch (Throwable $e) {
+            return null;
+        }
+    }
+
+    private function platinumMaturityMonths(?int $age): int
+    {
+        global $platinum_config;
+        return $age !== null && $age < 60
+            ? (int) ($platinum_config['maturity_months']['under_60'] ?? 4)
+            : (int) ($platinum_config['maturity_months']['60_and_above'] ?? 7);
+    }
+
+    private function platinumMonthlyContribution(?int $age): ?float
+    {
+        global $platinum_config;
+        if ($age === null) return null;
+        $band = $age <= 70 ? 'under_70' : ($age <= 80 ? '71_80' : ($age <= 90 ? '81_90' : ($age <= 100 ? '91_100' : null)));
+        $price = $band === null ? null : ($platinum_config['prices']['individual'][$band] ?? null);
+        return $price === null ? null : (float) $price;
+    }
+
+    /** Return the owner and Basic package for one Platinum coverage group. */
+    private function platinumGroup(array $member, string $ownerType, int $ownerId = 0): ?array
+    {
+        if ($ownerType === 'principal') {
+            return [
+                'type' => 'principal', 'id' => null,
+                'label' => trim(($member['first_name'] ?? '') . ' ' . ($member['last_name'] ?? '')) ?: 'Principal package',
+                'package_key' => PlatinumPricingService::resolvePackageKey($member),
+                'date_of_birth' => $member['date_of_birth'] ?? null,
+            ];
+        }
+        if ($ownerType === 'corporate_member') {
+            foreach ((new MemberCorporateMember())->getActiveForMember((int) $member['id']) as $corporate) {
+                if ((int) $corporate['id'] === $ownerId) {
+                    return [
+                        'type' => 'corporate_member', 'id' => $ownerId,
+                        'label' => (string) ($corporate['label'] ?? 'Corporate package'),
+                        'package_key' => (string) ($corporate['package_key'] ?? ''),
+                        'date_of_birth' => $corporate['date_of_birth'] ?? null,
+                    ];
+                }
+            }
+        }
+        return null;
+    }
+
+    private function eligiblePeopleForCoverage(array $member, array $coverage): array
+    {
+        $people = [];
+        if (($coverage['covered_person_type'] ?? '') === 'principal') {
+            $people[] = ['type' => 'principal', 'id' => 0, 'name' => trim(($member['first_name'] ?? '') . ' ' . ($member['last_name'] ?? '')) ?: 'Principal member'];
+            foreach ($this->beneficiaryModel->getActiveBeneficiaries((int) $member['id']) as $beneficiary) {
+                if (($beneficiary['coverage_owner_type'] ?? 'principal') === 'principal') {
+                    $people[] = ['type' => 'dependent', 'id' => (int) $beneficiary['id'], 'name' => $beneficiary['full_name']];
+                }
+            }
+            return $people;
+        }
+        $corporateId = (int) ($coverage['covered_person_id'] ?? 0);
+        $corporate = (new MemberCorporateMember())->find($corporateId);
+        if ($corporate && (int) $corporate['member_id'] === (int) $member['id']) {
+            $people[] = ['type' => 'corporate_member', 'id' => $corporateId, 'name' => $corporate['label']];
+            foreach ($this->beneficiaryModel->getActiveBeneficiaries((int) $member['id']) as $beneficiary) {
+                if (($beneficiary['coverage_owner_type'] ?? '') === 'corporate_member' && (int) ($beneficiary['coverage_owner_id'] ?? 0) === $corporateId) {
+                    $people[] = ['type' => 'dependent', 'id' => (int) $beneficiary['id'], 'name' => $beneficiary['full_name']];
+                }
+            }
+        }
+        return $people;
+    }
+
+    private function validDate(string $date): bool
+    {
+        $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+        return $parsed !== false && $parsed->format('Y-m-d') === $date;
+    }
     
     public function dashboard()
     {
@@ -61,6 +168,7 @@ class MemberController extends BaseController
             $this->redirect('/login');
             return;
         }
+        $accountMonthlyAmount = (new PlatinumBillingService())->monthlyAmount($member);
         
         // Get recent payments
         $recentPayments = $this->paymentModel->getMemberPayments($member['id'], 5);
@@ -207,6 +315,186 @@ class MemberController extends BaseController
         ];
 
         $this->view('member.dashboard', $data);
+    }
+
+    public function platinum()
+    {
+        $member = $this->memberModel->findByUserId($_SESSION['user_id']);
+        if (!$member) {
+            $_SESSION['error'] = 'Member profile not found.';
+            $this->redirect('/dashboard');
+        }
+        $coverages = (new PlatinumCoverage())->forMember((int) $member['id']);
+        $heldGroups = [];
+        $eligibility = new PlatinumEligibilityService();
+        foreach ($coverages as &$coverage) {
+            if (in_array($coverage['status'] ?? '', ['pending_approval', 'active'], true)) {
+                $heldGroups[($coverage['covered_person_type'] ?? 'principal') . ':' . (int)($coverage['covered_person_id'] ?? 0)] = true;
+            }
+            $coverage['remaining_days'] = $coverage['status'] === 'active'
+                ? $eligibility->remainingDays((int) $coverage['id'])
+                : null;
+        }
+        unset($coverage);
+        $corporateMembers = (new MemberCorporateMember())->getActiveForMember((int) $member['id']);
+        $requestableCorporateMembers = array_values(array_filter($corporateMembers, static function (array $corporate) use ($heldGroups): bool {
+            return !isset($heldGroups['corporate_member:' . (int)($corporate['id'] ?? 0)]);
+        }));
+        $canRequestPrincipal = !isset($heldGroups['principal:0']);
+        $accountMonthlyAmount = (new PlatinumBillingService())->monthlyAmount($member);
+        $this->view('member.platinum', [
+            'member' => $member,
+            'account_monthly_amount' => $accountMonthlyAmount,
+            'coverages' => $coverages,
+            'beneficiaries' => $this->beneficiaryModel->getActiveBeneficiaries((int) $member['id']),
+            'corporate_members' => $corporateMembers,
+            'requestable_principal' => $canRequestPrincipal,
+            'requestable_corporate_members' => $requestableCorporateMembers,
+            'csrf_token' => $this->generateCsrfToken()
+        ]);
+    }
+
+    public function submitPlatinumRequest()
+    {
+        $this->validateCsrf();
+        $member = $this->memberModel->findByUserId($_SESSION['user_id']);
+        if (!$member) {
+            $_SESSION['error'] = 'Member profile not found.';
+            $this->redirect('/dashboard');
+        }
+        $type = $_POST['coverage_owner_type'] ?? 'principal';
+        $personId = $type === 'principal' ? null : (int) ($_POST['coverage_owner_id'] ?? 0);
+        if (!in_array($type, ['principal', 'corporate_member'], true) || ($type !== 'principal' && $personId < 1)) {
+            $_SESSION['error'] = 'Select a valid Basic coverage group.';
+            $this->redirect('/platinum');
+        }
+        $group = $this->platinumGroup($member, $type, $personId ?? 0);
+        $quote = $group ? (new PlatinumPricingService())->quote($group['package_key'], $group['date_of_birth']) : null;
+        if (!$group || !$quote) {
+            $_SESSION['error'] = 'This coverage group needs a valid package and owner date of birth before Platinum can be quoted.';
+            $this->redirect('/platinum');
+        }
+        $coverage = new PlatinumCoverage();
+        $existing = $coverage->getCoverage((int) $member['id'], $type, $personId);
+        if ($existing && in_array($existing['status'], ['pending_payment', 'pending_approval', 'active'], true)) {
+            $_SESSION['error'] = 'A Platinum request already exists for this person.';
+            $this->redirect('/platinum');
+        }
+        try {
+            $fields = [
+                'status' => 'pending_approval',
+                'monthly_contribution' => $quote['amount'],
+                'maturity_months' => $quote['maturity_months'],
+                'package_key' => $quote['package_key'],
+                'package_name' => $quote['package_name'],
+                'requested_at' => date('Y-m-d H:i:s'),
+                'approved_at' => null,
+                'approved_by' => null,
+                'effective_from' => null,
+                'maturity_date' => null,
+            ];
+            if ($existing) {
+                // Re-submitting after a previous rejection/cancellation reuses the row (unique constraint per person).
+                $this->db->update('platinum_coverages', $fields, 'id = :id', ['id' => $existing['id']]);
+            } else {
+                $this->db->insert('platinum_coverages', array_merge(['member_id' => $member['id'], 'covered_person_type' => $type, 'covered_person_id' => $personId], $fields));
+            }
+            $_SESSION['success'] = 'Platinum request sent for admin approval for the ' . $quote['package_name'] . ' group.';
+        } catch (Throwable $e) {
+            $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Unable to submit your Platinum request.');
+        }
+        $this->redirect('/platinum');
+    }
+
+    public function inpatientRequests()
+    {
+        $member = $this->memberModel->findByUserId($_SESSION['user_id']);
+        if (!$member) {
+            $_SESSION['error'] = 'Member profile not found.';
+            $this->redirect('/dashboard');
+        }
+        $coverage = new PlatinumCoverage();
+        $coverages = $coverage->forMember((int) $member['id']);
+        $eligiblePeopleByCoverage = [];
+        $claimableCoverages = [];
+        $nextMaturityDate = null;
+        foreach ($coverages as $coverageRow) {
+            if (($coverageRow['status'] ?? '') === 'active') {
+                $eligiblePeopleByCoverage[(int) $coverageRow['id']] = $this->eligiblePeopleForCoverage($member, $coverageRow);
+                $maturityDate = $coverageRow['maturity_date'] ?? null;
+                if ($maturityDate && $maturityDate <= date('Y-m-d')) {
+                    $claimableCoverages[] = $coverageRow;
+                } elseif ($maturityDate && ($nextMaturityDate === null || $maturityDate < $nextMaturityDate)) {
+                    $nextMaturityDate = $maturityDate;
+                }
+            }
+        }
+        $requests = $this->db->fetchAll('SELECT * FROM inpatient_requests WHERE member_id = :id ORDER BY created_at DESC', ['id' => $member['id']]);
+        $this->view('member.inpatient-requests', [
+            'coverages' => $coverages,
+            'claimable_coverages' => $claimableCoverages,
+            'maturity_blocked' => !empty($coverages) && empty($claimableCoverages) && $nextMaturityDate !== null,
+            'next_maturity_date' => $nextMaturityDate,
+            'eligible_people_by_coverage' => $eligiblePeopleByCoverage,
+            'requests' => $requests,
+            'csrf_token' => $this->generateCsrfToken(),
+        ]);
+    }
+
+    public function submitInpatientRequest()
+    {
+        $this->validateCsrf();
+        $member = $this->memberModel->findByUserId($_SESSION['user_id']);
+        if (!$member) {
+            $_SESSION['error'] = 'Member profile not found.';
+            $this->redirect('/dashboard');
+        }
+        $coverage = new PlatinumCoverage();
+        $selected = $coverage->find((int) ($_POST['platinum_coverage_id'] ?? 0));
+        if (!$selected || (int) $selected['member_id'] !== (int) $member['id'] || $selected['status'] !== 'active') {
+            $_SESSION['error'] = 'Select an active Platinum package group.';
+            $this->redirect('/inpatient-requests');
+        }
+        $admissionDate = trim((string) ($_POST['admission_date'] ?? ''));
+        $requestedDays = filter_var($_POST['requested_days'] ?? null, FILTER_VALIDATE_INT);
+        if (!$this->validDate($admissionDate) || $requestedDays === false || $requestedDays < 1 || $requestedDays > 20) {
+            $_SESSION['error'] = 'Enter a valid admission date and request between 1 and 20 days.';
+            $this->redirect('/inpatient-requests');
+        }
+        $eligibility = (new PlatinumEligibilityService())->eligibility((int) $selected['id'], $admissionDate, $requestedDays);
+        if (empty($eligibility['eligible'])) {
+            $_SESSION['error'] = $eligibility['reason'] ?? 'This Platinum request is not eligible.';
+            $this->redirect('/inpatient-requests');
+        }
+        $patientType = (string) ($_POST['patient_type'] ?? '');
+        $patientId = (int) ($_POST['patient_id'] ?? 0);
+        $patient = null;
+        foreach ($this->eligiblePeopleForCoverage($member, $selected) as $person) {
+            if ($person['type'] === $patientType && (int) $person['id'] === $patientId) { $patient = $person; break; }
+        }
+        $patientName = trim((string) ($patient['name'] ?? ''));
+        $facilityName = trim((string) ($_POST['facility_name'] ?? ''));
+        $facilityLocation = trim((string) ($_POST['facility_location'] ?? ''));
+        $facilityContact = trim((string) ($_POST['facility_contact'] ?? ''));
+        if ($patientName === '' || $facilityName === '' || $facilityLocation === '' || $facilityContact === '' || strlen($patientName) > 200 || strlen($facilityName) > 200 || strlen($facilityLocation) > 255) {
+            $_SESSION['error'] = 'Select an eligible patient and provide all facility details, including a facility contact.';
+            $this->redirect('/inpatient-requests');
+        }
+        try {
+            $this->db->insert('inpatient_requests', ['member_id' => $member['id'], 'platinum_coverage_id' => $selected['id'], 'covered_person_type' => $patient['type'], 'covered_person_id' => $patient['id'] ?: null, 'patient_name' => $patientName, 'facility_name' => $facilityName, 'facility_location' => $facilityLocation, 'facility_contact' => $facilityContact, 'admission_date' => $admissionDate, 'requested_days' => $requestedDays, 'admission_reference' => trim((string) ($_POST['admission_reference'] ?? ''))]);
+        } catch (Throwable $e) {
+            $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Unable to submit your inpatient request.');
+            $this->redirect('/inpatient-requests');
+        }
+        try {
+            $name = trim(($member['first_name'] ?? '') . ' ' . ($member['last_name'] ?? '')) ?: 'Member';
+            (new SmsService())->sendSms($member['phone'] ?? null, "Dear {$name}, SHENA received your inpatient support request for {$patientName}. Our team will review it and send confirmation. - Shena Companion");
+            (new SmsService())->sendSms($facilityContact, "SHENA received an inpatient support request for {$patientName} at {$facilityName}. Our team may contact you to verify admission details. - Shena Companion");
+        } catch (Throwable $exception) {
+            error_log('Inpatient request SMS failed: ' . $exception->getMessage());
+        }
+        $_SESSION['success'] = 'Inpatient request submitted for review.';
+        $this->redirect('/inpatient-requests');
     }
     
     public function profile()
@@ -512,13 +800,13 @@ class MemberController extends BaseController
 
             $package = $membership_packages[$packageId];
             $packageType = $this->memberModel->normalizePackageTier($packageId, $package);
-            $memberForCalc = [
-                'date_of_birth'         => $member['date_of_birth'],
-                'package'               => $packageId,
-                'package_key'           => $packageId,
-                'corporate_couple_count' => 0
-            ];
-            $monthlyContribution = $this->memberModel->calculateMonthlyContribution($memberForCalc, []);
+            $corporateMembers = (new MemberCorporateMember())->getActiveForMember((int)$member['id']);
+            $accountContribution = MembershipPricingService::calculateAccountMonthlyContribution(
+                $packageId,
+                $corporateMembers,
+                $membership_packages
+            );
+            $monthlyContribution = (float)$accountContribution['total_amount'];
 
             $this->memberModel->update($member['id'], [
                 'package'             => $packageType,
@@ -526,7 +814,44 @@ class MemberController extends BaseController
                 'monthly_contribution' => $monthlyContribution,
             ]);
 
-            echo json_encode(['success' => true, 'message' => 'Membership plan updated successfully.']);
+            // Platinum is always quoted from this selected package and the
+            // principal owner's age; it replaces only this package group.
+            $platinumInfo = null;
+            $coverage = new PlatinumCoverage();
+            $existing = $coverage->getCoverage((int) $member['id'], 'principal', null);
+            $hasCurrentPlatinum = $existing && in_array($existing['status'], ['pending_payment', 'pending_approval', 'active'], true);
+            if (($_POST['platinum_opt_in'] ?? '') === '1' || $hasCurrentPlatinum) {
+                $dobForAge = $member['date_of_birth'] ?? ($_POST['date_of_birth'] ?? null);
+                $quote = (new PlatinumPricingService())->quote($packageId, $dobForAge);
+                if ($quote) {
+                    $coverageFields = [
+                        'monthly_contribution' => $quote['amount'],
+                        'maturity_months' => $quote['maturity_months'],
+                        'package_key' => $quote['package_key'],
+                        'package_name' => $quote['package_name'],
+                    ];
+                    if (!$hasCurrentPlatinum) {
+                        $this->db->insert('platinum_coverages', [
+                            'member_id' => $member['id'],
+                            'covered_person_type' => 'principal',
+                            'covered_person_id' => null,
+                            'status' => 'pending_approval',
+                            'monthly_contribution' => $quote['amount'],
+                            'maturity_months' => $quote['maturity_months'],
+                            'package_key' => $quote['package_key'],
+                            'package_name' => $quote['package_name'],
+                            'requested_at' => date('Y-m-d H:i:s'),
+                        ]);
+                    } else {
+                        // A package change reprices an existing request/cover,
+                        // without resetting maturity on an active cover.
+                        $this->db->update('platinum_coverages', $coverageFields, 'id = :id', ['id' => $existing['id']]);
+                    }
+                    $platinumInfo = ['monthly_contribution' => $quote['amount']];
+                }
+            }
+
+            echo json_encode(['success' => true, 'message' => 'Membership plan updated successfully.', 'platinum' => $platinumInfo]);
 
         } catch (Exception $e) {
             error_log('updatePackageFromOnboarding error: ' . $e->getMessage());
@@ -675,6 +1000,7 @@ class MemberController extends BaseController
             $this->redirect('/dashboard');
             return;
         }
+        $accountMonthlyAmount = (new PlatinumBillingService())->monthlyAmount($member);
         
         $payments = $this->paymentModel->getContributions($member['id']);
         $statusFilter = $this->sanitizeInput($_GET['status'] ?? '');
@@ -698,6 +1024,7 @@ class MemberController extends BaseController
         $data = [
             'title' => 'Payment History - Shena Companion Welfare Association',
             'member' => $member,
+            'account_monthly_amount' => $accountMonthlyAmount,
             'payments' => $payments,
             'total_paid' => $total_paid,
             'pending_count' => $pending_count,
@@ -1081,30 +1408,9 @@ class MemberController extends BaseController
             $beneficiaryId = $this->beneficiaryModel->addBeneficiary($beneficiaryData);
             error_log('Beneficiary added with ID: ' . $beneficiaryId);
 
-            // Recalculate member's monthly contribution now that a beneficiary (dependent) was added
-            try {
-                $oldMonthly = (int)($member['monthly_contribution'] ?? 0);
-                $beneficiaries = $this->beneficiaryModel->getActiveBeneficiaries($member['id']);
-                $dependents = $beneficiaries ?: [];
-                $memberForCalc = [
-                    'date_of_birth' => $member['date_of_birth'] ?? null,
-                    'package_key' => $member['package_key'] ?? null,
-                    'package' => $member['package'] ?? null
-                ];
-                $newMonthly = $this->memberModel->calculateMonthlyContribution($memberForCalc, $dependents);
-                $this->memberModel->update($member['id'], ['monthly_contribution' => $newMonthly]);
-                error_log('Member monthly contribution updated to: ' . $newMonthly);
-
-                if ($newMonthly > $oldMonthly) {
-                    $increase = $newMonthly - $oldMonthly;
-                    $_SESSION['success'] = 'Beneficiary added successfully. Monthly contribution increased by KES ' . number_format($increase) . ' (new total: KES ' . number_format($newMonthly) . ').';
-                } else {
-                    $_SESSION['success'] = 'Beneficiary added successfully.';
-                }
-            } catch (Exception $e) {
-                error_log('Failed to recalc monthly contribution after adding beneficiary: ' . $e->getMessage());
-                $_SESSION['success'] = 'Beneficiary added successfully.';
-            }
+            // Dependants inherit their owner's selected package. They never
+            // change the principal/corporate contribution or Platinum price.
+            $_SESSION['success'] = 'Beneficiary added successfully.';
             
         } catch (Exception $e) {
             error_log('Add beneficiary error: ' . $e->getMessage());
@@ -1126,12 +1432,22 @@ class MemberController extends BaseController
         
         $claims = $this->claimModel->getMemberClaims($member['id']);
         $beneficiaries = $this->beneficiaryModel->getActiveBeneficiaries($member['id']);
-        
+
+        // Platinum gating: the hospital-cover entry point stays behind a blocking
+        // modal until the member holds at least one active Platinum coverage.
+        $platinumCoverages = (new PlatinumCoverage())->forMember((int) $member['id']);
+        $activePlatinum = array_values(array_filter($platinumCoverages, fn($c) => $c['status'] === 'active'));
+        $pendingPlatinum = array_values(array_filter($platinumCoverages, fn($c) => in_array($c['status'], ['pending_payment', 'pending_approval'], true)));
+
         $data = [
             'title' => 'Claims - Shena Companion Welfare Association',
             'member' => $member,
             'claims' => $claims,
             'beneficiaries' => $beneficiaries,
+            'has_active_platinum' => !empty($activePlatinum),
+            'platinum_pending' => !empty($pendingPlatinum),
+            'platinum_pending_status' => $pendingPlatinum[0]['status'] ?? null,
+            'active_platinum_count' => count($activePlatinum),
             'csrf_token' => $this->generateCsrfToken()
         ];
         
@@ -1246,7 +1562,7 @@ class MemberController extends BaseController
             error_log('Claim data prepared: ' . json_encode($claimData));
             
             // Validate required fields (no claim_amount required for service-based)
-            $required = ['beneficiary_id', 'deceased_name', 'deceased_id_number', 'date_of_death', 'place_of_death'];
+            $required = ['beneficiary_id', 'deceased_name', 'date_of_death', 'place_of_death'];
             foreach ($required as $field) {
                 if (empty($claimData[$field])) {
                     $_SESSION['error'] = 'Please fill in all required fields.';
@@ -1324,6 +1640,12 @@ class MemberController extends BaseController
             // Submit claim
             error_log('All eligibility checks passed. Submitting claim to database...');
             $claimId = $this->claimModel->submitClaim($claimData);
+            try {
+                $name = trim(($member['first_name'] ?? '') . ' ' . ($member['last_name'] ?? '')) ?: 'Member';
+                (new SmsService())->sendSms($member['phone'] ?? null, "Dear {$name}, SHENA received claim CLM-{$claimId}. We will confirm the next step after review. - Shena Companion");
+            } catch (Throwable $exception) {
+                error_log('Member claim acknowledgement SMS failed: ' . $exception->getMessage());
+            }
             error_log('Claim submitted successfully with ID: ' . $claimId);
 
             // Supporting documents may be supplied during filing or added later by staff.

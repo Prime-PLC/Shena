@@ -46,20 +46,15 @@ if (!function_exists('envConfig')) {
 define('DEBUG_MODE', getenv('DEBUG_MODE') === 'true'); // CRITICAL: Set to false in production
 define('APP_NAME', getenv('APP_NAME') ?: 'Shena Companion Welfare Association');
 
-// ── Local override (re-structure branch) ─────────────────────────────────────
-// config/local_config.php is only present in the re-structure branch.
-// It runs before any constants are defined, injects LOCAL_ env vars into
-// $_SERVER so envConfig() picks them up, and forces $isLocalEnvironment=true
-// even for plain CLI runs (php script.php).
-// SAFETY: Only load local_config.php on localhost web requests or cli-server.
-// On production (even CLI crons), the HTTP_HOST won't be localhost and
-// SAPI won't be cli-server, so local_config.php is never loaded.
+// ── Local override ────────────────────────────────────────────────────────────
+// A local override is intentionally loaded for every CLI invocation when the
+// file exists. Production deployments exclude this file, so migrations and
+// cron scripts cannot silently reuse production credentials from .env.
 $_httpHost = $_SERVER['HTTP_HOST'] ?? '';
 $_isDevServer = preg_match('/^(localhost|127\.0\.0\.1)(:\d+)?$/i', $_httpHost) === 1
              || PHP_SAPI === 'cli-server';
-// For bare CLI (crons, scripts): only load local_config if .env says DEBUG_MODE=true
 if (PHP_SAPI === 'cli') {
-    $_isDevServer = (getenv('DEBUG_MODE') === 'true' || ($_ENV['DEBUG_MODE'] ?? '') === 'true');
+    $_isDevServer = getenv('DEBUG_MODE') === 'true' || ($_ENV['DEBUG_MODE'] ?? '') === 'true';
 }
 if ($_isDevServer && file_exists(__DIR__ . '/local_config.php')) {
     require_once __DIR__ . '/local_config.php';
@@ -170,6 +165,14 @@ if (defined('ROOT_PATH') && file_exists(ROOT_PATH . '/config/packages.php')) {
     $membership_packages = require __DIR__ . '/packages.php';
 } else {
     $membership_packages = [];
+}
+
+// Platinum is an optional add-on and is intentionally configured separately
+// from the unchanged Basic membership packages.
+if (defined('ROOT_PATH') && file_exists(ROOT_PATH . '/config/platinum.php')) {
+    $platinum_config = require ROOT_PATH . '/config/platinum.php';
+} else {
+    $platinum_config = [];
 }
 
 // Core Services Available in All Packages

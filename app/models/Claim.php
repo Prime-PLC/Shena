@@ -91,7 +91,7 @@ class Claim extends BaseModel
     {
         // Service-based claim submission per SHENA Companion Policy 2026
         // Required fields: deceased details and mortuary information
-        $requiredFields = ['member_id', 'deceased_name', 'deceased_id_number', 'date_of_death', 'place_of_death'];
+        $requiredFields = ['member_id', 'deceased_name', 'date_of_death', 'place_of_death'];
         foreach ($requiredFields as $field) {
             if (!isset($data[$field])) {
                 throw new Exception("Missing required field: {$field}");

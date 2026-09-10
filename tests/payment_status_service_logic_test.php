@@ -69,7 +69,7 @@ $advancePayments = [
 $advancePayment = $service->buildMonthlyPaymentSnapshot($member, $advancePayments, new DateTime('2026-07-08'));
 $advanceCoverage = $service->buildContributionCoverageSnapshot($member, $advancePayments, new DateTime('2026-07-08'));
 
-$assertSame('defaulted', $advancePayment['payment_group'], 'Advance coverage must not change the existing Payment Breakdown grouping.');
+$assertSame('paid_current', $advancePayment['payment_group'], 'An advance payment must first satisfy its receipt month, then carry the excess forward.');
 $assertFloat(0.0, $advanceCoverage['coverage_balance_due'], 'Advance-paid members must not enter reminder audiences.');
 $assertFloat(300.0, $advanceCoverage['contribution_credit'], 'The unused amount should remain available for later months.');
 $assertSame('2026-10-31', $advanceCoverage['covered_through'], 'Advance credit should expose the last fully covered month.');
@@ -78,5 +78,12 @@ $futureCoveredMonth = $service->buildContributionCoverageSnapshot($member, $adva
 
 $assertFloat(0.0, $futureCoveredMonth['coverage_balance_due'], 'Carried contribution credit should continue covering later reminder months.');
 $assertFloat(0.0, $futureCoveredMonth['contribution_credit'], 'Credit should be consumed as each covered month becomes due.');
+
+$currentFirst = $service->buildMonthlyPaymentSnapshot($member, [
+    ['status' => 'completed', 'payment_type' => 'monthly', 'amount' => 100, 'payment_date' => '2026-06-05 10:00:00'],
+    ['status' => 'completed', 'payment_type' => 'monthly', 'amount' => 200, 'payment_date' => '2026-07-05 10:00:00'],
+], new DateTime('2026-07-08'));
+$assertSame('paid_current', $currentFirst['payment_group'], 'An excess current-month payment should backdate only its surplus to the oldest unpaid month.');
+$assertFloat(0.0, $currentFirst['balance_due'], 'The surplus should settle the earlier missed month without moving the receipt date.');
 
 exit($failed ? 1 : 0);

@@ -170,7 +170,7 @@ class EmailService
     
     public function sendClaimNotificationEmail($member, $claimData)
     {
-        $adminEmail = 'admin@shenacompanion.org'; // Configure this
+        $adminEmail = 'admin@shenacompanion.co.ke'; // Configure this
         $subject = 'New Claim Submitted - Member: ' . $member['member_number'];
         
         $body = $this->getEmailTemplate('claim_notification', [

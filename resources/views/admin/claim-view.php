@@ -665,4 +665,5 @@ $claimId = (int)($claim['id'] ?? 0);
 </div>
 <?php endif; ?>
 
+<div class="mb-4"><a class="btn btn-secondary" href="/admin/claims/track/<?= (int)$claim['id'] ?>"><i class="fas fa-address-book" aria-hidden="true"></i> Service providers and delivery stages</a></div>
 <?php include_once __DIR__ . '/../layouts/admin-footer.php'; ?>
