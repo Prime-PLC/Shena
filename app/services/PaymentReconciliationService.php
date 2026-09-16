@@ -184,20 +184,11 @@ class PaymentReconciliationService
                 $this->paymentModel->activateMemberAfterRegistrationPayment((int)$member['id']);
             }
 
-            // Send payment confirmation SMS
-            try {
-                require_once ROOT_PATH . '/app/services/SmsService.php';
-                $memberData = $this->memberModel->getMemberWithUser($member['id']);
-                if ($memberData && !empty($memberData['phone'])) {
-                    $smsService = new SmsService();
-                    $smsService->sendPaymentConfirmationSms($memberData['phone'], [
-                        'amount'         => $paymentData['amount'],
-                        'transaction_id' => $paymentData['trans_id'],
-                    ]);
-                }
-            } catch (Exception $notifEx) {
-                error_log('C2B auto-match SMS error: ' . $notifEx->getMessage());
-            }
+            // Transactional confirmation remains automatic and independent of
+            // reconciliation review or campaign approval.
+            $memberData = $this->memberModel->getMemberWithUser($member['id']);
+            $confirmationPhone = $memberData['phone'] ?? $paymentData['sender_phone'] ?? '';
+            $this->sendAutomaticPaymentConfirmation($confirmationPhone, $paymentData);
 
             // Log reconciliation
             $this->logReconciliation($paymentId, [
@@ -229,6 +220,10 @@ class PaymentReconciliationService
             // No match found - create unmatched payment
             $paymentData['bill_ref_number'] = $billRefNumber;
             $paymentId = $this->createUnmatchedPayment($paymentData);
+
+            // Receipt confirmation is transactional, not a reconciliation action.
+            // Send immediately to the payer even while allocation remains unresolved.
+            $this->sendAutomaticPaymentConfirmation($paymentData['sender_phone'] ?? '', $paymentData);
             
             return [
                 'success' => true,
@@ -236,6 +231,30 @@ class PaymentReconciliationService
                 'payment_id' => $paymentId,
                 'message' => 'Payment recorded as unmatched - requires manual reconciliation'
             ];
+        }
+    }
+
+    /**
+     * Send the immediate transactional receipt confirmation. This deliberately
+     * bypasses campaign draft/review/submit workflows.
+     */
+    private function sendAutomaticPaymentConfirmation($phone, array $paymentData)
+    {
+        $phone = trim((string)$phone);
+        if ($phone === '') {
+            return;
+        }
+
+        try {
+            require_once ROOT_PATH . '/app/services/SmsService.php';
+            $smsService = new SmsService();
+            $smsService->sendPaymentConfirmationSms($phone, [
+                'amount' => $paymentData['amount'],
+                'transaction_id' => $paymentData['trans_id'],
+            ]);
+        } catch (Exception $notifEx) {
+            // Payment processing must never be rolled back because an SMS provider failed.
+            error_log('Automatic payment confirmation SMS error: ' . $notifEx->getMessage());
         }
     }
 
