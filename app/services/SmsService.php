@@ -310,7 +310,7 @@ class SmsService
     public function sendPaymentConfirmationSms($phone, $data)
     {
         $message = "Payment confirmed! KES {$data['amount']} received. Transaction ID: {$data['transaction_id']}. Thank you. - Shena Companion";
-        return $this->sendSms($phone, $message, ['source' => 'Payment receipt']);
+        return $this->sendApprovedSms($phone, $message);
     }
     
     public function sendClaimStatusSms($phone, $data)
