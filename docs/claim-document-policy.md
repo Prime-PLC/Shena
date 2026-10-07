@@ -1,0 +1,15 @@
+# Claim document workflow
+
+Apply `database/migrations/029_claim_evidence.sql` before deploying this code. Back up the database first. No data is deleted or automatically rejected. The migration adds evidence and review tables; existing funeral documents count toward completeness. Existing open cases use their original filing/admission dates, so overdue cases need a recorded exception. Existing approved funeral cases do not need a new preliminary acceptance, but completion still requires proof.
+
+Funeral applications can be filed without attachments. The member and both office numbers receive a queued receipt with next steps. Preliminary acceptance is recorded on **Documents and next steps**; the seven-day deadline is measured from application time in Africa/Nairobi and is not reset by acceptance. Standard approval, cash approval, processing and completion share document checks. Admin-created cases have the same requirements.
+
+Hospital requests have a document link on both member and admin lists. The required evidence is admission proof identifying patient, hospital and admission date. It is due by 23:59:59 EAT on admission day. If unavailable, the member must contact the office; an admin can record the contact/circumstances and authorize late documents. No exception waives evidence or the existing inpatient eligibility/day allowance checks. No automatic rejection is introduced.
+
+Uploads accept PDF/JPG/PNG, maximum 5 MB, with matching MIME type and extension. New files have random names under `storage/private/claim-evidence`; download routes enforce claim ownership or manager/super-admin access. Ensure the PHP worker can write there. Apache must honor `storage/private/.htaccess`. For Nginx configure `location ^~ /storage/private/ { deny all; }` before enabling uploads. Back up private files together with the database. Existing public legacy uploads are not relocated by this migration.
+
+Set `CLAIM_ADMIN_PHONES=0748585067,0748585071` (two distinct valid Kenyan mobiles). Defaults are the two numbers published in the site footer. Receipts are transactional notifications: queue all recipients together, commit, then attempt immediate delivery using the existing SMS queue. Existing later business/facility messages retain SMS draft review. Gateway delivery is not guaranteed; monitor the existing queue/delivery reports, failed statuses, and application logs. Queue persistence failures are logged and shown as a saved-application notification warning; the application is retained. Existing queue recovery/worker configuration remains necessary for pending retries.
+
+## Validation before production
+
+Run all `tests/*_test.php` with installed Composer dependencies. Test migration on a staging copy, member/admin filing, private file permissions, upload/download ownership, preliminary acceptance, both approval modes, overdue exceptions, and hospital approval. Verify gateway credentials and delivery to both configured phones using staging recipients. No live SMS or production migration is performed by these tests.

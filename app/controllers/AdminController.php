@@ -2182,7 +2182,7 @@ class AdminController extends BaseController
             if (!$beneficiary) throw new InvalidArgumentException('Select an active beneficiary belonging to this member.');
             $claimId = $this->claimModel->submitClaim($claimData);
             unset($_SESSION['claim_form'], $_SESSION['claim_form_error']);
-            $this->sendClaimAcknowledgementSms($member, $claimId, $claimData);
+            (new ClaimReceiptService())->notify('funeral', (int)$claimId);
 
             $_SESSION['success'] = 'Claim CLM-' . date('Y') . '-' . str_pad((string)$claimId, 4, '0', STR_PAD_LEFT) . ' saved. It is now awaiting review.';
         } catch (Throwable $e) {
@@ -2285,16 +2285,6 @@ class AdminController extends BaseController
 
                         if ($today < $maturityDate) {
                             throw new Exception('Cannot approve claim. Maturity period not completed.');
-                        }
-                    }
-
-                    if (empty($claim['admin_created'])) {
-                        $claimDocumentModel = new ClaimDocument();
-                        $documents = $claimDocumentModel->getClaimDocuments($claimId);
-                        foreach (['id_copy', 'chief_letter', 'mortuary_invoice'] as $docType) {
-                            if (!in_array($docType, array_column($documents, 'document_type'), true)) {
-                                throw new Exception("Required document missing: {$docType}");
-                            }
                         }
                     }
 
@@ -4273,6 +4263,7 @@ class AdminController extends BaseController
                 'admission_reference' => trim((string) ($_POST['admission_reference'] ?? '')),
                 'eligibility_override_reason' => $override ? $overrideReason : null,
             ]);
+            (new ClaimReceiptService())->notify('inpatient', (int)$requestId);
             unset($_SESSION['inpatient_form'], $_SESSION['inpatient_form_error']);
             $_SESSION['success'] = 'Hospital request #' . $requestId . ' saved for ' . $patientName . '. It is now awaiting review.';
         } catch (Throwable $e) {
@@ -4446,7 +4437,7 @@ class AdminController extends BaseController
     {
         try {
             $request = $this->db->fetch(
-                "SELECT ir.*, m.phone, u.first_name FROM inpatient_requests ir
+                "SELECT ir.*, u.phone, u.first_name FROM inpatient_requests ir
                  JOIN members m ON m.id = ir.member_id
                  JOIN users u ON u.id = m.user_id
                  WHERE ir.id = :id",

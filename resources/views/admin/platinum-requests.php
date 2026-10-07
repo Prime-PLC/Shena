@@ -225,7 +225,7 @@ $decisionStyles = [
                                 <strong><?php echo htmlspecialchars($request['first_name'] . ' ' . $request['last_name']); ?></strong>
                                 <small><?php echo htmlspecialchars($request['member_number']); ?><?php echo !empty($request['admin_created']) ? ' &middot; admin-created' : ''; ?></small>
                             </td>
-                            <td><?php echo htmlspecialchars($request['patient_name']); ?></td>
+                            <td><?php echo htmlspecialchars($request['patient_name']); ?> <a href="/claim-documents/inpatient/<?= (int)$request['id'] ?>">Documents / deadline review</a></td>
                             <td class="member-cell">
                                 <strong><?php echo htmlspecialchars($request['facility_name']); ?></strong>
                                 <small><?php echo htmlspecialchars($request['facility_location']); ?><?php echo !empty($request['facility_contact']) ? ' &middot; ' . htmlspecialchars($request['facility_contact']) : ''; ?></small>

@@ -23,6 +23,8 @@ $statusConfig = [
 ];
 $currentStatus = $statusConfig[$status] ?? $statusConfig['submitted'];
 ?>
+<p class="alert alert-info"><a href="/claim-documents/funeral/<?= (int)$claim['id'] ?>">Documents and next steps: upload proof / review application</a>. Required within 7 days of filing, including admin-filed claims.</p>
+
 
 <style>
 main {

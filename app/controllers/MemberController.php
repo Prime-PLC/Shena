@@ -481,20 +481,20 @@ class MemberController extends BaseController
             $this->redirect('/inpatient-requests');
         }
         try {
-            $this->db->insert('inpatient_requests', ['member_id' => $member['id'], 'platinum_coverage_id' => $selected['id'], 'covered_person_type' => $patient['type'], 'covered_person_id' => $patient['id'] ?: null, 'patient_name' => $patientName, 'facility_name' => $facilityName, 'facility_location' => $facilityLocation, 'facility_contact' => $facilityContact, 'admission_date' => $admissionDate, 'requested_days' => $requestedDays, 'admission_reference' => trim((string) ($_POST['admission_reference'] ?? ''))]);
+            $requestId = $this->db->insert('inpatient_requests', ['member_id' => $member['id'], 'platinum_coverage_id' => $selected['id'], 'covered_person_type' => $patient['type'], 'covered_person_id' => $patient['id'] ?: null, 'patient_name' => $patientName, 'facility_name' => $facilityName, 'facility_location' => $facilityLocation, 'facility_contact' => $facilityContact, 'admission_date' => $admissionDate, 'requested_days' => $requestedDays, 'admission_reference' => trim((string) ($_POST['admission_reference'] ?? ''))]);
         } catch (Throwable $e) {
             $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Unable to submit your inpatient request.');
             $this->redirect('/inpatient-requests');
         }
         try {
             $name = trim(($member['first_name'] ?? '') . ' ' . ($member['last_name'] ?? '')) ?: 'Member';
-            (new SmsService())->sendSms($member['phone'] ?? null, "Dear {$name}, SHENA received your inpatient support request for {$patientName}. Our team will review it and send confirmation. - Shena Companion");
+            (new ClaimReceiptService())->notify('inpatient', (int)$requestId);
             (new SmsService())->sendSms($facilityContact, "SHENA received an inpatient support request for {$patientName} at {$facilityName}. Our team may contact you to verify admission details. - Shena Companion");
         } catch (Throwable $exception) {
             error_log('Inpatient request SMS failed: ' . $exception->getMessage());
         }
-        $_SESSION['success'] = 'Inpatient request submitted for review.';
-        $this->redirect('/inpatient-requests');
+        $_SESSION['success'] = 'Inpatient request received. Upload admission proof today, or call the office for guidance.';
+        $this->redirect('/claim-documents/inpatient/' . (int)$requestId);
     }
     
     public function profile()
@@ -1640,18 +1640,11 @@ class MemberController extends BaseController
             // Submit claim
             error_log('All eligibility checks passed. Submitting claim to database...');
             $claimId = $this->claimModel->submitClaim($claimData);
-            try {
-                $name = trim(($member['first_name'] ?? '') . ' ' . ($member['last_name'] ?? '')) ?: 'Member';
-                (new SmsService())->sendSms($member['phone'] ?? null, "Dear {$name}, SHENA received claim CLM-{$claimId}. We will confirm the next step after review. - Shena Companion");
-            } catch (Throwable $exception) {
-                error_log('Member claim acknowledgement SMS failed: ' . $exception->getMessage());
-            }
+            (new ClaimReceiptService())->notify('funeral', (int)$claimId);
             error_log('Claim submitted successfully with ID: ' . $claimId);
 
-            // Supporting documents may be supplied during filing or added later by staff.
+            // Supporting documents may be supplied now or later through the shared portal.
             error_log('Processing file uploads for claim ID: ' . $claimId);
-            $claimDocumentModel = new ClaimDocument();
-
             $documentFields = [
                 'id_copy' => 'ID/Birth Certificate Copy',
                 'chief_letter' => 'Chief Letter',
@@ -1668,36 +1661,13 @@ class MemberController extends BaseController
                 
                 error_log('Processing file upload: ' . $inputName . ' (size: ' . $_FILES[$inputName]['size'] . ' bytes)');
 
-                // Include the helper functions
-                require_once 'app/helpers/functions.php';
-
-                $uploadResult = uploadFile($_FILES[$inputName], 'claims/' . $claimId);
-                if ($uploadResult === false) {
-                    error_log('FILE UPLOAD FAILED: ' . $inputName . ' - uploadFile() returned false');
-                    $_SESSION['error'] = "Claim filed, but {$label} could not be uploaded. Staff can add it later.";
-                    error_log('Claim document upload deferred for claim ID: ' . $claimId);
-                    continue;
+                try {
+                    (new ClaimEvidenceService())->upload('funeral', (int)$claimId, $inputName, $_FILES[$inputName], (int)$_SESSION['user_id']);
+                } catch (Throwable $e) {
+                    $_SESSION['error'] = "Claim saved; {$label}: " . $e->getMessage() . ' Open Documents and next steps to retry.';
                 }
-                
-                /** @var string $uploadFileName */
-                $uploadFileName = $uploadResult['file_name'];
-                /** @var string $uploadFilePath */
-                $uploadFilePath = $uploadResult['file_path'];
-                /** @var string $uploadMimeType */
-                $uploadMimeType = $uploadResult['mime_type'];
-                error_log('File uploaded successfully: ' . $uploadFilePath);
-                $claimDocumentModel->addDocument([
-                    'claim_id' => $claimId,
-                    'document_type' => $inputName,
-                    'file_name' => $uploadFileName,
-                    'file_path' => $uploadFilePath,
-                    'file_size' => $uploadResult['file_size'],
-                    'mime_type' => $uploadMimeType,
-                    'uploaded_by' => $_SESSION['user_id'] ?? null
-                ]);
-                error_log('Document record saved: claim_id=' . $claimId . ', type=' . $inputName);
             }
-            
+
             error_log('All file uploads completed successfully for claim ID: ' . $claimId);
             
             // Send notification email to admin
@@ -1727,7 +1697,7 @@ class MemberController extends BaseController
                     $_SESSION['user_id'] ?? null
                 ], [
                     'subject' => 'Claim submitted successfully',
-                    'message' => "Your claim #{$claimId} has been received and is under review.",
+                    'message' => "Your claim #{$claimId} has been received. Upload required documents within 7 days of filing through Documents and next steps.",
                     'action_url' => '/claims',
                     'action_text' => 'View Claims'
                 ], $_SESSION['user_id'] ?? null);
@@ -1750,12 +1720,13 @@ class MemberController extends BaseController
                 }
             }
             
-            $successMessage = 'Claim submitted successfully. SHENA Companion will review your claim and contact you within 1-3 business days.';
+            $successMessage = 'Claim received. Open Documents and next steps to upload ID/birth certificate, chief letter and mortuary invoice within 7 days of filing. Initial verification does not restart this deadline.';
             if ($requestCashAlternative) {
                 $successMessage .= ' Your cash alternative request has been noted and will be reviewed by administration.';
             }
             $_SESSION['success'] = $successMessage;
             error_log('=== Claim Submission Completed Successfully ===');
+            $this->redirect('/claim-documents/funeral/' . (int)$claimId);
             
         } catch (Exception $e) {
             error_log('=== Submit claim error ===');

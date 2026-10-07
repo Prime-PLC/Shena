@@ -206,7 +206,7 @@ main { padding: 0 !important; margin: 0 !important; }
             <div class="info">
                 <h4><?php echo htmlspecialchars($r['patient_name']); ?></h4>
                 <p>
-                    <?php echo htmlspecialchars($r['facility_name']); ?><?php echo !empty($r['facility_location']) ? ' &middot; ' . htmlspecialchars($r['facility_location']) : ''; ?>
+                    <?php echo htmlspecialchars($r['facility_name']); ?> <a href="/claim-documents/inpatient/<?= (int)$r['id'] ?>">Upload admission proof / next steps</a><?php echo !empty($r['facility_location']) ? ' &middot; ' . htmlspecialchars($r['facility_location']) : ''; ?>
                     &middot; admitted <?php echo htmlspecialchars(date('d M Y', strtotime($r['admission_date']))); ?>
                 </p>
                 <?php if (!empty($r['admin_notes']) || !empty($r['rejection_reason'])): ?>
