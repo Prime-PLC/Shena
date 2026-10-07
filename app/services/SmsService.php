@@ -2,6 +2,8 @@
 /**
  * SMS Service - Handles SMS sending via HostPinnacle
  */
+require_once __DIR__ . '/CustomerServiceWeekSms.php';
+
 class SmsService
 {
     private $config;
@@ -289,15 +291,22 @@ class SmsService
         return null;
     }
     
+    protected function smsNow(): DateTimeImmutable
+    {
+        return new DateTimeImmutable('now', new DateTimeZone('Africa/Nairobi'));
+    }
+
     public function sendWelcomeSms($phone, $data)
     {
         $message = "Welcome to Shena Companion Welfare Association! Your member number is {$data['member_number']}. Thank you for joining us.";
+        $message = CustomerServiceWeekSms::appreciate($message, $this->smsNow());
         return $this->sendSms($phone, $message, ['source' => 'Membership welcome']);
     }
     
     public function sendActivationSms($phone, $data)
     {
         $message = "Your SHENA membership is now active. Member No: {$data['member_number']}. You can sign in to view your cover and payments.";
+        $message = CustomerServiceWeekSms::appreciate($message, $this->smsNow());
         return $this->sendSms($phone, $message, ['source' => 'Membership activation']);
     }
     
@@ -309,7 +318,7 @@ class SmsService
     
     public function sendPaymentConfirmationSms($phone, $data)
     {
-        $message = "Payment confirmed! KES {$data['amount']} received. Transaction ID: {$data['transaction_id']}. Thank you. - Shena Companion";
+        $message = CustomerServiceWeekSms::paymentConfirmation($data, $this->smsNow());
         return $this->sendApprovedSms($phone, $message);
     }
     
