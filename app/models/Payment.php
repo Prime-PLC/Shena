@@ -249,6 +249,8 @@ class Payment extends BaseModel
             $smsMsg = "Hi {$firstName}! Welcome to SHENA. Your monthly contribution is KES {$contribution} to be paid by the 7th of every month via Paybill 4163987, Acct: {$nationalId}. {$memberNo} is your member number.";
 
             $smsService = new SmsService();
+            require_once __DIR__ . '/../services/CustomerServiceWeekSms.php';
+            $smsMsg = CustomerServiceWeekSms::appreciate($smsMsg);
             $smsService->sendSms($member['phone'], $smsMsg);
         } catch (Exception $smsEx) {
             error_log('Registration welcome SMS error for member ' . $memberId . ': ' . $smsEx->getMessage());
