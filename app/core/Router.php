@@ -67,8 +67,8 @@ class Router
         $this->addRoute('POST', '/verify-transaction', 'AuthController@verifyTransaction');
         
         // Legacy Registration Routes (old form - kept for backward compatibility)
-        $this->addRoute('GET', '/register-old', 'AuthController@showRegister');
-        $this->addRoute('POST', '/register-old/submit', 'AuthController@register');
+        $this->addRoute('GET', '/register-old', 'AuthController@showPublicRegistration');
+        $this->addRoute('POST', '/register-old/submit', 'AuthController@processPublicRegistration');
         
         // Public Registration Routes (alias)
         $this->addRoute('GET', '/register-public', 'AuthController@showPublicRegistration');

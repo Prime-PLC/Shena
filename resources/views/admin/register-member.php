@@ -285,7 +285,16 @@ $platinumPriceData = $GLOBALS['platinum_config']['prices'] ?? [];
         <!-- Membership Details -->
         <div class="form-section" data-step="3">
             <h2 class="section-title">Membership Details</h2>
-            <div class="form-grid">
+            <div class="form-grid"><div class="form-group">
+                    <label class="form-label">Product Tier <span class="required">*</span></label>
+                    <select name="platinum_opt_in" class="form-select" id="platinumOptIn" required>
+<option value="">Choose Basic or Platinum</option>
+                        <option value="0" <?php echo (($old['platinum_opt_in'] ?? '') === '0') ? 'selected' : ''; ?>>SHENA Basic &mdash; funeral &amp; last-respect cover</option>
+                        <option value="1" <?php echo (($old['platinum_opt_in'] ?? '') === '1') ? 'selected' : ''; ?>>SHENA Platinum &mdash; inpatient and welfare cover</option>
+                    </select>
+                </div>
+<p class="text-muted">The selected tier applies to the principal member only. Corporate members always start on Basic; an admin can convert them to Platinum separately. Platinum benefits require approval and completion of the waiting period.</p>
+
                 <div class="form-group">
                     <label class="form-label">Package <span class="required">*</span></label>
                     <select name="package" class="form-select" id="packageSelect" required>
@@ -310,13 +319,7 @@ $platinumPriceData = $GLOBALS['platinum_config']['prices'] ?? [];
                     <label class="form-label">Expected Monthly Contribution</label>
                     <div class="form-input corporate-total-preview" id="corporateTotalPreview" aria-live="polite">KES 0/month</div>
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Product Tier <span class="required">*</span></label>
-                    <select name="platinum_opt_in" class="form-select" id="platinumOptIn" required>
-                        <option value="0" <?php echo (($old['platinum_opt_in'] ?? '0') !== '1') ? 'selected' : ''; ?>>SHENA Basic &mdash; funeral &amp; last-respect cover</option>
-                        <option value="1" <?php echo (($old['platinum_opt_in'] ?? '') === '1') ? 'selected' : ''; ?>>SHENA Platinum &mdash; inpatient and welfare cover</option>
-                    </select>
-                </div>
+
                 <div class="form-group full-width" id="platinumTierPanel" style="display:none;background:linear-gradient(135deg,#7F20B0 0%,#5E2B7A 100%);border-radius:10px;padding:14px 18px;color:#fff">
                     <strong><i class="fas fa-gem"></i> SHENA Platinum &mdash; <span id="platinumOptInPrice">--</span>/month</strong>
                     <div style="font-size:0.85rem;opacity:0.92;margin-top:6px;line-height:1.55">
@@ -408,11 +411,12 @@ $platinumPriceData = $GLOBALS['platinum_config']['prices'] ?? [];
         const index = corporateRowIndex++;
         const row = document.createElement('div');
         row.className = 'corporate-row';
-        row.style.cssText = 'display:grid;grid-template-columns:1fr 150px 1.4fr 110px 38px;gap:8px;align-items:center;margin-bottom:8px;';
+        row.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;align-items:center;margin-bottom:8px;';
         row.innerHTML = `
             <input class="form-input" name="corporate_members[${index}][label]" placeholder="Name / label" value="${String(item.label || '').replace(/"/g, '&quot;')}">
+            <label>Date of birth <input type="date" class="form-input" name="corporate_members[${index}][date_of_birth]" value="${String(item.date_of_birth || '').replace(/"/g, '&quot;')}"></label>
             <input class="form-input" name="corporate_members[${index}][relationship]" placeholder="Relationship" value="${String(item.relationship || 'corporate').replace(/"/g, '&quot;')}">
-            <select class="form-select corporate-package" name="corporate_members[${index}][package_key]">
+            <select class="form-select corporate-package" name="corporate_members[${index}][package_key]" required>
                 ${packageOptionsHtml(item.package_key || '')}
             </select>
             <div class="corporate-amount" style="font-weight:700;color:#111827;">KES 0</div>
@@ -426,35 +430,7 @@ $platinumPriceData = $GLOBALS['platinum_config']['prices'] ?? [];
     };
 
     function updateContributionPreview() {
-        if (!packageSelect || !corporateTotalPreview) return;
-        const selectedOption = packageSelect.options[packageSelect.selectedIndex];
-        const packageKey = packageSelect.value;
-        const baseAmount = Number(selectedOption?.dataset.monthlyContribution || membershipPlanData[packageKey]?.monthly_contribution || 0);
-        let corporateTotal = 0;
-        document.querySelectorAll('#registrationCorporateLineItems .corporate-row').forEach(function (row) {
-            const corporatePackageKey = row.querySelector('.corporate-package')?.value || '';
-            const amount = Number(membershipPlanData[corporatePackageKey]?.monthly_contribution || 0);
-            corporateTotal += amount;
-            const amountEl = row.querySelector('.corporate-amount');
-            if (amountEl) amountEl.textContent = 'KES ' + amount.toLocaleString();
-        });
-
-        const total = baseAmount + corporateTotal;
-        const tierSelect = document.getElementById('platinumOptIn');
-        let platinumAmount = 0;
-        if (tierSelect && tierSelect.value === '1') {
-            const dobInput = document.querySelector('input[name="date_of_birth"]');
-            let age = null;
-            if (dobInput && dobInput.value) {
-                const dob = new Date(dobInput.value);
-                age = Math.floor((Date.now() - dob.getTime()) / (1000 * 60 * 60 * 24 * 365.25));
-            }
-            platinumAmount = platinumPriceForPackage(packageKey, age) || 0;
-        }
-
-        corporateTotalPreview.textContent = platinumAmount > 0
-            ? 'KES ' + (corporateTotal + platinumAmount).toLocaleString() + '/month'
-            : 'KES ' + total.toLocaleString() + '/month';
+        window.ShenaRegistrationPlan?.refresh();
     }
 
     function platinumPriceForPackage(packageKey, age) {
@@ -462,25 +438,7 @@ $platinumPriceData = $GLOBALS['platinum_config']['prices'] ?? [];
     }
 
     function updatePlatinumOptInPrice() {
-        const priceEl = document.getElementById('platinumOptInPrice');
-        const panel = document.getElementById('platinumTierPanel');
-        const tierSelect = document.getElementById('platinumOptIn');
-        const dobInput = document.querySelector('input[name="date_of_birth"]');
-        const isPlatinum = tierSelect && tierSelect.value === '1';
-
-        if (panel) { panel.style.display = isPlatinum ? '' : 'none'; }
-        if (!priceEl) return;
-
-        let age = null;
-        if (dobInput && dobInput.value) {
-            const dob = new Date(dobInput.value);
-            age = Math.floor((Date.now() - dob.getTime()) / (1000 * 60 * 60 * 24 * 365.25));
-        }
-        const price = platinumPriceForPackage(packageSelect?.value || '', age);
-        priceEl.textContent = price
-            ? ('KES ' + price.toLocaleString())
-            : (dobInput && dobInput.value ? 'not available for this age' : 'set once date of birth is entered');
-        updateContributionPreview();
+        window.ShenaRegistrationPlan?.refresh();
     }
     document.querySelector('input[name="date_of_birth"]')?.addEventListener('change', updatePlatinumOptInPrice);
     document.getElementById('platinumOptIn')?.addEventListener('change', updatePlatinumOptInPrice);
@@ -587,4 +545,5 @@ $platinumPriceData = $GLOBALS['platinum_config']['prices'] ?? [];
 })();
 </script>
 
+<?php include __DIR__ . '/../partials/registration-plan-script.php'; ?>
 <?php include_once __DIR__ . '/../layouts/admin-footer.php'; ?>
