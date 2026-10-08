@@ -13,3 +13,7 @@ Set `CLAIM_ADMIN_PHONES=0748585067,0748585071` (two distinct valid Kenyan mobile
 ## Validation before production
 
 Run all `tests/*_test.php` with installed Composer dependencies. Test migration on a staging copy, member/admin filing, private file permissions, upload/download ownership, preliminary acceptance, both approval modes, overdue exceptions, and hospital approval. Verify gateway credentials and delivery to both configured phones using staging recipients. No live SMS or production migration is performed by these tests.
+
+## Published guidance
+
+The public Terms & Conditions, Policy Booklet page and downloadable DOCX now describe the same filing, evidence, preliminary acceptance and deadline-exception workflow. Membership summaries, privacy data descriptions, and member/admin filing guidance are aligned. The existing 30-day funeral filing window is kept separate from the seven-day evidence deadline; this PR does not add a new automated 30-day rejection rule. The funeral checklist remains ID/birth certificate, chief letter and mortuary invoice; the death certificate is optional. The DOCX revision preserves unrelated policy sections.

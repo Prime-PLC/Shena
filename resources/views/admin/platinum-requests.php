@@ -17,6 +17,7 @@ $decisionStyles = [
     'cancelled' => ['bg' => '#F3F4F6', 'color' => '#4B5563', 'label' => 'Cancelled'],
 ];
 ?>
+<p class="alert alert-info">Admission proof is due by 23:59:59 EAT on admission day, including admin-filed requests. Upload through Documents / deadline review. If the member contacted the office about late evidence, record the reason for an exception. Required proof and eligibility checks cannot be waived.</p>
 <style>
     .platinum-admin-container { padding: 24px; max-width: 1400px; margin: 0 auto; }
 

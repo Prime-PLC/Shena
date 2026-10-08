@@ -23,6 +23,7 @@ $actionNeededCount = count(array_filter($all_claims, fn($c) =>
 <!-- Tab Content -->
 <div id="claimsTabContent">
 
+<p class="alert alert-info">Funeral claims may be filed without attachments. Upload ID/birth certificate, chief letter and mortuary invoice within 7 days of filing through Documents and next steps. Record preliminary acceptance before final approval. Admin-filed claims require the same proof; late evidence needs a recorded deadline exception.</p>
 <style>
     /* Page Header */
     .page-header {

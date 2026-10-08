@@ -122,7 +122,7 @@ main { padding: 0 !important; margin: 0 !important; }
     <?php else: ?>
     <div class="request-card" style="position:relative;">
         <h3>Submit Inpatient Request</h3>
-        <p class="hint">Choose the Platinum-covered person and provide the admission facility details.</p>
+        <p class="hint">Choose the Platinum-covered person and provide the admission facility details. After filing, upload admission proof by 23:59:59 EAT on admission day. If unavailable, call 0748585067 or 0748585071 immediately. Admin-recorded late-evidence exceptions never waive proof.</p>
         <form method="post" action="/inpatient-requests" id="inpatientForm" onsubmit="return Inpatient.validate(this)">
             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
             <h4 class="form-legend"><i class="fas fa-user-injured"></i> Who was admitted</h4>
