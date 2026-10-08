@@ -254,7 +254,8 @@
                             </div>
                         </div>
 
-                        <a href="/policy-booklet" class="btn" style="background: white; color: #7F3D9E; border: 2px solid #7F3D9E; padding: 14px 0; border-radius: 10px; font-weight: 700; text-decoration: none; width: 100%; display: block; text-align: center;">Read Policy Booklet</a>
+                        <p>Claims: file first, then upload funeral proof within 7 days of filing. Hospital admission proof is due on admission day. See the policy booklet for required documents and late-evidence guidance.</p>
+<a href="/policy-booklet" class="btn" style="background: white; color: #7F3D9E; border: 2px solid #7F3D9E; padding: 14px 0; border-radius: 10px; font-weight: 700; text-decoration: none; width: 100%; display: block; text-align: center;">Read Policy Booklet</a>
                     </div>
                 </div>
             </div>

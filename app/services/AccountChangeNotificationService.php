@@ -12,7 +12,7 @@ class AccountChangeNotificationService
         if (!$package) throw new RuntimeException('Choose an exact Basic package before preparing an SMS.');
 
         $groups = $db->fetchAll("SELECT id, label, package_key FROM member_corporate_members WHERE member_id = :id AND status = 'active' ORDER BY id", ['id' => $member['id']]);
-        $coverages = $db->fetchAll("SELECT * FROM platinum_coverages WHERE member_id = :id AND status = 'active' ORDER BY id", ['id' => $member['id']]);
+        $coverages = $db->fetchAll("SELECT * FROM platinum_coverages WHERE member_id = :id AND (status = 'active' OR (status = 'pending_approval' AND registration_selected = 1)) ORDER BY id", ['id' => $member['id']]);
         $byOwner = [];
         foreach ($coverages as $coverage) {
             $owner = $coverage['covered_person_type'] . ':' . (int)($coverage['covered_person_id'] ?? 0);
@@ -39,6 +39,12 @@ class AccountChangeNotificationService
         }
         $parts[] = 'Your total monthly payment is KES ' . number_format($breakdown['total'], 2)
             . '.';
+        foreach ($coverages as $coverage) {
+            if (($coverage['status'] ?? '') === 'pending_approval') {
+                $parts[] = 'Platinum benefits require approval and completion of the waiting period.';
+                break;
+            }
+        }
         foreach ($coverages as $coverage) {
             if (!empty($coverage['maturity_date']) && $coverage['maturity_date'] > date('Y-m-d')) {
                 $owner = $coverage['covered_person_type'] . ':' . (int)($coverage['covered_person_id'] ?? 0);

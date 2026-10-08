@@ -31,7 +31,10 @@ $dateOfDeath = !empty($claim['date_of_death']) ? date('M d, Y', strtotime($claim
 $claimId = (int)($claim['id'] ?? 0);
 ?>
 
+
+
 <?php include_once __DIR__ . '/../layouts/admin-header.php'; ?>
+<p class="alert alert-info"><a href="/claim-documents/funeral/<?= (int)$claim['id'] ?>">Documents and next steps: upload proof / review application</a>. Required within 7 days of filing, including admin-filed claims.</p>
 
 <style>
     .page-header {

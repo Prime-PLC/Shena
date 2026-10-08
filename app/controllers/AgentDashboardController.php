@@ -78,6 +78,7 @@ class AgentDashboardController extends BaseController
             $items[] = [
                 'label' => $label !== '' ? $label : 'Corporate member',
                 'relationship' => $relationship !== '' ? $relationship : 'corporate',
+                'date_of_birth' => $this->sanitizeInput($row['date_of_birth'] ?? ''),
                 'package_key' => $packageKey,
             ];
         }
@@ -414,6 +415,7 @@ class AgentDashboardController extends BaseController
                 'address' => $_POST['address'] ?? '',
                 'next_of_kin' => $_POST['next_of_kin'] ?? '',
                 'next_of_kin_phone' => $_POST['next_of_kin_phone'] ?? '',
+                'platinum_opt_in' => $_POST['platinum_opt_in'] ?? '',
                 'package' => $_POST['package'] ?? '',
                 'corporate_members' => $_POST['corporate_members'] ?? []
             ];
@@ -522,25 +524,18 @@ class AgentDashboardController extends BaseController
             $memberId = (int)$this->db->getConnection()->lastInsertId();
             $this->corporateMemberModel->replaceForMember($memberId, $accountContribution['line_items']);
 
-            // Platinum replaces the Basic contribution for the selected package group.
-            $platinumMonthly = null;
-            if (($_POST['platinum_opt_in'] ?? '') === '1' && !empty($_POST['date_of_birth'])) {
-                require_once __DIR__ . '/../services/PlatinumPricingService.php';
-                $quote = (new PlatinumPricingService())->quote($packageKey, $_POST['date_of_birth']);
-                $platinumMonthly = $quote['amount'] ?? null;
-                if ($quote) {
-                    $this->db->insert('platinum_coverages', [
-                        'member_id' => $memberId,
-                        'covered_person_type' => 'principal',
-                        'covered_person_id' => null,
-                        'status' => 'pending_approval',
-                        'package_key' => $quote['package_key'],
-                        'package_name' => $quote['package_name'],
-                        'monthly_contribution' => $quote['amount'],
-                        'maturity_months' => $quote['maturity_months'],
-                        'requested_at' => date('Y-m-d H:i:s'),
-                    ]);
-                }
+            (new RegistrationPlanService())->apply((int)$memberId, (string)($_POST['platinum_opt_in'] ?? ''), $packageKey, (string)($_POST['date_of_birth'] ?? ''));
+
+            // Persist the invitation draft before registration commits.
+            try {
+                require_once __DIR__ . '/../services/SmsService.php';
+                require_once __DIR__ . '/../controllers/AuthController.php';
+                $inviteToken    = AuthController::generateInviteToken($userId);
+                $inviteLink     = APP_URL . '/set-password?token=' . urlencode($inviteToken);
+                (new RegistrationNotificationService())->send((int)$memberId, $inviteLink);
+            } catch (Exception $e) {
+                error_log('Agent register invite SMS failed: ' . $e->getMessage());
+                $_SESSION['warning'] = 'Member saved, but the invitation draft could not be prepared. Please check SMS review setup.';
             }
 
             $this->db->getConnection()->commit();
@@ -566,28 +561,6 @@ class AgentDashboardController extends BaseController
             // Clear form data on success
             unset($_SESSION['form_data']);
 
-            // Send invite SMS with set-password link
-            try {
-                require_once __DIR__ . '/../services/SmsService.php';
-                require_once __DIR__ . '/../controllers/AuthController.php';
-                $inviteToken    = AuthController::generateInviteToken($userId);
-                $inviteLink     = APP_URL . '/set-password?token=' . urlencode($inviteToken);
-                $inviteFirstName = $firstName ?? 'Member';
-                $inviteMemberNo  = $memberNumber ?? '';
-                $invitePhone     = $phoneInput ?? '';
-                $inviteAmount    = $monthlyContribution ?? '0';
-                $inviteId        = $this->sanitizeInput($_POST['id_number'] ?? '');
-                $smsMsg = "Hi {$inviteFirstName}! You've been registered with SHENA Companion. Member No: {$inviteMemberNo}. "
-                        . "Set your account password here: {$inviteLink}  (valid 48 hrs). "
-                        . "Monthly contribution: KES {$inviteAmount} via Paybill 4163987, Acct: {$inviteId}.";
-                if ($platinumMonthly) {
-                    $smsMsg .= " You selected SHENA Platinum (hospital and welfare cover): KES " . number_format($platinumMonthly, 2) . "/month. It replaces the Basic contribution for the selected package group once confirmed.";
-                }
-                $smsService = new SmsService();
-                $smsService->sendSms($invitePhone, $smsMsg);
-            } catch (Exception $e) {
-                error_log('Agent register invite SMS failed: ' . $e->getMessage());
-            }
 
             $this->redirect('/agent/members');
             return;
@@ -597,7 +570,7 @@ class AgentDashboardController extends BaseController
                 $this->db->getConnection()->rollBack();
             }
             error_log('Member registration error: ' . $e->getMessage());
-            $msg = 'Failed to register member. Please try again.';
+            $msg = $e instanceof InvalidArgumentException ? $e->getMessage() : 'Failed to register member. Please try again.';
             // If this was a duplicate key error, give a clearer message
             $errText = $e->getMessage();
             if (stripos($errText, 'Duplicate entry') !== false || stripos($errText, 'SQLSTATE[23000]') !== false) {

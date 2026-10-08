@@ -67,8 +67,8 @@ class Router
         $this->addRoute('POST', '/verify-transaction', 'AuthController@verifyTransaction');
         
         // Legacy Registration Routes (old form - kept for backward compatibility)
-        $this->addRoute('GET', '/register-old', 'AuthController@showRegister');
-        $this->addRoute('POST', '/register-old/submit', 'AuthController@register');
+        $this->addRoute('GET', '/register-old', 'AuthController@showPublicRegistration');
+        $this->addRoute('POST', '/register-old/submit', 'AuthController@processPublicRegistration');
         
         // Public Registration Routes (alias)
         $this->addRoute('GET', '/register-public', 'AuthController@showPublicRegistration');
@@ -96,6 +96,9 @@ class Router
         $this->addRoute('POST', '/beneficiaries', 'MemberController@addBeneficiary');
         $this->addRoute('POST', '/beneficiaries/delete', 'MemberController@deleteBeneficiary');
         $this->addRoute('POST', '/beneficiaries/update', 'MemberController@updateBeneficiary');
+        $this->addRoute('GET', '/claim-documents/{type}/{id}', 'ClaimEvidenceController@show');
+        $this->addRoute('POST', '/claim-documents/{type}/{id}', 'ClaimEvidenceController@save');
+        $this->addRoute('GET', '/claim-documents/{type}/{id}/download/{documentId}', 'ClaimEvidenceController@download');
         $this->addRoute('GET', '/claims', 'MemberController@claims');
         $this->addRoute('GET', '/claims/view/{id}', 'MemberController@viewClaim');
         $this->addRoute('POST', '/claims', 'MemberController@submitClaim');
