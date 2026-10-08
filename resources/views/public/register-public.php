@@ -134,7 +134,7 @@ foreach (($GLOBALS['membership_packages'] ?? []) as $key => $definition) $public
                             </select>
                             <small class="text-muted">Your selected product determines the monthly contribution. It provides up to 20 inpatient bed-cover days each calendar year after approval and maturity.</small>
                         </div>
-<p class="text-muted">The selected tier applies to every group added in this registration. Platinum benefits require approval and completion of the waiting period.</p>
+<p class="text-muted">The selected tier applies to the principal member only. Corporate members always start on Basic; an admin can convert them to Platinum separately. Platinum benefits require approval and completion of the waiting period.</p>
 <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label for="date_of_birth" class="form-label">Date of Birth <span class="required-star">*</span></label>

@@ -32,22 +32,19 @@ class RegistrationPlanService
         $db = Database::getInstance();
         $principal = self::validate($tier, $key, $dob);
         $groups = $db->fetchAll("SELECT * FROM member_corporate_members WHERE member_id = :id AND status = 'active'", ['id'=>$memberId]);
-        $selections = [['type'=>'principal', 'person_id'=>null, 'plan'=>$principal]];
+        // Corporate members always start on Basic. Only a separate admin conversion
+        // may enroll a corporate group in Platinum, regardless of the principal tier.
         foreach ($groups as $group) {
-            $groupDob = (string)($group['date_of_birth'] ?? '');
             $package = $GLOBALS['membership_packages'][$group['package_key']] ?? null;
-            if (!$package || !empty($package['legacy_alias'])) throw new InvalidArgumentException('Choose a valid package for each additional group.');
-            // Platinum maturity belongs to this group's adult, not the principal.
-            if ($tier === '1' || $groupDob !== '') $plan = self::validate($tier, $group['package_key'], $groupDob);
-            else $plan = ['quote'=>null]; // Basic corporate rows historically permit no DOB.
-            $selections[] = ['type'=>'corporate_member', 'person_id'=>$group['id'], 'plan'=>$plan];
+            if (!$package || !empty($package['legacy_alias'])) throw new InvalidArgumentException('Choose a valid Basic package for each corporate member.');
+            $groupDob = (string)($group['date_of_birth'] ?? '');
+            if ($groupDob !== '') self::validate('0', $group['package_key'], $groupDob);
         }
-        foreach ($selections as $selection) {
-            $quote = $selection['plan']['quote'];
-            if (!$quote) continue;
+        $quote = $principal['quote'];
+        if ($quote) {
             $db->insert('platinum_coverages', [
-                'member_id'=>$memberId, 'covered_person_type'=>$selection['type'],
-                'covered_person_id'=>$selection['person_id'], 'status'=>'pending_approval',
+                'member_id'=>$memberId, 'covered_person_type'=>'principal',
+                'covered_person_id'=>null, 'status'=>'pending_approval',
                 'registration_selected'=>1, 'package_key'=>$quote['package_key'],
                 'package_name'=>$quote['package_name'], 'monthly_contribution'=>$quote['amount'],
                 'maturity_months'=>$quote['maturity_months'], 'requested_at'=>date('Y-m-d H:i:s')

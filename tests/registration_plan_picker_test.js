@@ -24,12 +24,12 @@ function scenario(radioMode) {
     assert.equal(radioMode?radio.disabled:principal.disabled,true);
     tier.value='1';handlers.change();
     principal.value='individual';radio.checked=true;corporate.value='individual';handlers.change();
-    assert.match(summary.textContent,/Platinum total: KES 600/);
-    assert.equal(corporate.options[2].hidden,true);
-    assert.equal(dob.required,true);
+    assert.match(summary.textContent,/Platinum; corporate members: Basic. Total: KES 400/);
+    assert.equal(corporate.options[2].hidden,false);
+    assert.equal(dob.required,false);
     if(radioMode) assert.match(price.textContent,/Platinum - KES 300/);
     tier.value='0';handlers.change();
-    assert.match(summary.textContent,/Basic total: KES 200/);
+    assert.match(summary.textContent,/Basic; corporate members: Basic. Total: KES 200/);
     assert.equal(corporate.options[2].hidden,false);
     assert.equal(dob.required,false);
     corporate.value='';

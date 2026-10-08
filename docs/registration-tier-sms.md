@@ -2,9 +2,9 @@
 
 Public, agent and admin registration require an explicit Basic or Platinum choice. The picker shows the selected product's prices. Invalid/missing tier, package, DOB or Platinum pricing is rejected instead of silently registering Basic. Legacy registration URLs now use the current handler.
 
-Every additional group entered on a staff registration uses the same selected tier. Platinum requires each group's adult DOB for its own maturity period. Public registration does not accept a corporate count without person details; additional groups use the staff form.
+Corporate members always start on Basic, whether the principal registers as Basic or Platinum. Only the principal receives a Platinum registration selection. A separate admin conversion is required to move a corporate member to Platinum; that conversion retains its existing DOB and maturity checks. Public registration does not accept a corporate count without person details; additional groups use the staff form.
 
-New Platinum registrations save pending approval coverage with `registration_selected = 1`. Billing and account SMS use its Platinum rate immediately, replacing the corresponding Basic rate. Cover approval and maturity restrictions still apply. Existing pending conversions keep their previous billing behavior. This does not repair historical mismatches automatically.
+New Platinum principal registrations save pending approval coverage with `registration_selected = 1`. Billing and account SMS use its Platinum rate immediately, replacing the corresponding Basic rate. Cover approval and maturity restrictions still apply. Existing pending conversions keep their previous billing behavior. This does not repair historical mismatches automatically.
 
 ## SMS behavior
 

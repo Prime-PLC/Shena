@@ -598,7 +598,7 @@ $platinumPriceData = $GLOBALS['platinum_config']['prices'] ?? [];
                             <option value="1" <?php echo $getOldValue('platinum_opt_in') === '1' ? 'selected' : ''; ?>>SHENA Platinum &mdash; inpatient and welfare cover</option>
                         </select>
                     </div>
-<p class="text-muted">The selected tier applies to every group added in this registration. Platinum benefits require approval and completion of the waiting period.</p>
+<p class="text-muted">The selected tier applies to the principal member only. Corporate members always start on Basic; an admin can convert them to Platinum separately. Platinum benefits require approval and completion of the waiting period.</p>
 <div class="package-options">
                     <?php foreach (($packages ?? []) as $packageKey => $package): if (!empty($package['legacy_alias'])) continue; ?>
                         <div class="package-option">
