@@ -590,7 +590,16 @@ $platinumPriceData = $GLOBALS['platinum_config']['prices'] ?? [];
                     </div>
                 </div>
                 
-                <div class="package-options">
+                <div class="form-group">
+                        <label class="form-label">Product Tier <span style="color:#EF4444">*</span></label>
+                        <select name="platinum_opt_in" id="agentPlatinumOptIn" class="form-input" required>
+<option value="">Choose Basic or Platinum</option>
+                            <option value="0" <?php echo $getOldValue('platinum_opt_in') === '0' ? 'selected' : ''; ?>>SHENA Basic &mdash; funeral &amp; last-respect cover</option>
+                            <option value="1" <?php echo $getOldValue('platinum_opt_in') === '1' ? 'selected' : ''; ?>>SHENA Platinum &mdash; inpatient and welfare cover</option>
+                        </select>
+                    </div>
+<p class="text-muted">The selected tier applies to every group added in this registration. Platinum benefits require approval and completion of the waiting period.</p>
+<div class="package-options">
                     <?php foreach (($packages ?? []) as $packageKey => $package): if (!empty($package['legacy_alias'])) continue; ?>
                         <div class="package-option">
                             <input
@@ -630,13 +639,7 @@ $platinumPriceData = $GLOBALS['platinum_config']['prices'] ?? [];
                         <label class="form-label">Expected Monthly Contribution</label>
                         <div class="form-input corporate-total-preview" id="corporateTotalPreview" aria-live="polite">KES 0/month</div>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">Product Tier <span style="color:#EF4444">*</span></label>
-                        <select name="platinum_opt_in" id="agentPlatinumOptIn" class="form-input" required>
-                            <option value="0" selected>SHENA Basic &mdash; funeral &amp; last-respect cover</option>
-                            <option value="1">SHENA Platinum &mdash; inpatient and welfare cover</option>
-                        </select>
-                    </div>
+
                     <div class="form-group" id="agentPlatinumPanel" style="grid-column:1/-1;display:none;background:linear-gradient(135deg,#7F20B0 0%,#5E2B7A 100%);border-radius:10px;padding:14px 18px;color:#fff">
                         <strong><i class="fas fa-gem"></i> SHENA Platinum &mdash; <span id="agentPlatinumPrice">--</span>/month</strong>
                         <div style="font-size:0.85rem;opacity:0.92;margin-top:6px;line-height:1.55">
@@ -714,39 +717,16 @@ const memberCorporateTotalPreview = document.getElementById('corporateTotalPrevi
 let agentCorporateIndex = 0;
 
 function updateMemberContributionPreview() {
-    if (!memberCorporateTotalPreview) return;
-    const selectedPackage = memberForm.querySelector('input[name="package"]:checked');
-    const packageKey = selectedPackage ? selectedPackage.value : '';
-    const baseAmount = Number(selectedPackage?.dataset.monthlyContribution || membershipPlanData[packageKey]?.monthly_contribution || 0);
-    let corporateTotal = 0;
-    agentCorporateLineItems?.querySelectorAll('[data-corporate-package]').forEach(function(field) {
-        const selectedCorporatePackage = field.value;
-        corporateTotal += Number(membershipPlanData[selectedCorporatePackage]?.monthly_contribution || 0);
-    });
-    const total = baseAmount + corporateTotal;
-    const platinumSelect = document.getElementById('agentPlatinumOptIn');
-    const platinum = platinumSelect?.value === '1' ? agentPlatinumPriceForPackage(packageKey) : 0;
-    memberCorporateTotalPreview.textContent = platinum
-        ? 'KES ' + (corporateTotal + platinum).toLocaleString() + '/month'
-        : 'KES ' + total.toLocaleString() + '/month';
-}
+        window.ShenaRegistrationPlan?.refresh();
+    }
 
 function agentPlatinumPriceForPackage(packageKey) {
         return Number(membershipPlanData[packageKey]?.platinum_amount || 0) || null;
     }
 
 function updateAgentPlatinumPrice() {
-    const priceEl = document.getElementById('agentPlatinumPrice');
-    const dobInput = document.getElementById('date_of_birth');
-    const tierInput = document.getElementById('agentPlatinumOptIn');
-    const panel = document.getElementById('agentPlatinumPanel');
-    if (!priceEl) return;
-    const selectedPackage = memberForm.querySelector('input[name="package"]:checked');
-    const price = agentPlatinumPriceForPackage(selectedPackage?.value || '');
-    if (panel) panel.style.display = tierInput?.value === '1' ? '' : 'none';
-    priceEl.textContent = price ? ('KES ' + price.toLocaleString()) : 'choose a Basic package';
-    updateMemberContributionPreview();
-}
+        window.ShenaRegistrationPlan?.refresh();
+    }
 document.getElementById('date_of_birth')?.addEventListener('change', updateAgentPlatinumPrice);
 document.getElementById('agentPlatinumOptIn')?.addEventListener('change', updateAgentPlatinumPrice);
 updateAgentPlatinumPrice();
@@ -755,9 +735,10 @@ function addAgentCorporateRow() {
     if (!agentCorporateLineItems) return;
     const row = document.createElement('div');
     row.className = 'corporate-line-row';
-    row.style.cssText = 'display:grid; grid-template-columns:1fr 1fr auto; gap:10px; margin-top:10px;';
+    row.style.cssText = 'display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:10px; margin-top:10px;';
     row.innerHTML = `
         <input type="text" class="form-input" name="corporate_members[${agentCorporateIndex}][label]" placeholder="Name or label">
+        <label>Date of birth <input type="date" name="corporate_members[${agentCorporateIndex}][date_of_birth]" class="form-input"></label>
         <select class="form-select" name="corporate_members[${agentCorporateIndex}][package_key]" data-corporate-package required>
             <option value="">Select package</option>
             ${Object.keys(membershipPlanData).map(function(key) {
@@ -772,6 +753,7 @@ function addAgentCorporateRow() {
     agentCorporateLineItems.appendChild(row);
     row.querySelector('[data-corporate-package]').addEventListener('change', updateMemberContributionPreview);
     agentCorporateIndex++;
+    window.ShenaRegistrationPlan?.refresh();
 }
 
 memberForm.querySelectorAll('input[name="package"]').forEach(function (field) {
@@ -887,4 +869,5 @@ document.getElementById('next_of_kin_phone').addEventListener('input', function(
 })();
 </script>
 
+<?php include __DIR__ . '/../partials/registration-plan-script.php'; ?>
 <?php include __DIR__ . '/../layouts/agent-footer.php'; ?>

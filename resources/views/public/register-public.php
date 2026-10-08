@@ -125,15 +125,25 @@ foreach (($GLOBALS['membership_packages'] ?? []) as $key => $definition) $public
                             </div>
                         </div>
 
-                        <div class="row">
+                        <div class="mb-3">
+                            <label for="platinum_opt_in" class="form-label">Product tier <span class="required-star">*</span></label>
+                            <select class="form-select" id="platinum_opt_in" name="platinum_opt_in" required>
+<option value="">Choose Basic or Platinum</option>
+                                <option value="0" >SHENA Basic — funeral and last-respect cover</option>
+                                <option value="1">SHENA Platinum — inpatient and welfare cover</option>
+                            </select>
+                            <small class="text-muted">Your selected product determines the monthly contribution. It provides up to 20 inpatient bed-cover days each calendar year after approval and maturity.</small>
+                        </div>
+<p class="text-muted">The selected tier applies to every group added in this registration. Platinum benefits require approval and completion of the waiting period.</p>
+<div class="row">
                             <div class="col-md-6 mb-3">
                                 <label for="date_of_birth" class="form-label">Date of Birth <span class="required-star">*</span></label>
                                 <input type="date" class="form-control" id="date_of_birth" name="date_of_birth" required max="<?php echo date('Y-m-d'); ?>">
                             </div>
                             <div class="col-md-6 mb-3">
-                                <label for="package_id" class="form-label">Basic membership package <span class="required-star">*</span></label>
+                                <label for="package_id" class="form-label">Membership package <span class="required-star">*</span></label>
                                 <select class="form-select" id="package_id" name="package_id" required>
-                                    <option value="">Select a Basic package</option>
+                                    <option value="">Select a package</option>
                                     <?php foreach (($packages ?? []) as $packageKey => $package): if (!empty($package['legacy_alias'])) continue; ?>
                                         <option value="<?php echo e($packageKey); ?>" data-monthly="<?php echo (float) ($package['monthly_contribution'] ?? 0); ?>" data-coverage-type="<?php echo e($package['coverage_type'] ?? 'principal_only'); ?>">
                                             <?php echo e($package['name'] ?? $packageKey); ?> — KES <?php echo number_format((float) ($package['monthly_contribution'] ?? 0)); ?>/month
@@ -143,15 +153,8 @@ foreach (($GLOBALS['membership_packages'] ?? []) as $key => $definition) $public
                             </div>
                         </div>
 
-                        <div class="mb-3">
-                            <label for="platinum_opt_in" class="form-label">Product tier <span class="required-star">*</span></label>
-                            <select class="form-select" id="platinum_opt_in" name="platinum_opt_in" required>
-                                <option value="0" selected>SHENA Basic — funeral and last-respect cover</option>
-                                <option value="1">SHENA Platinum — inpatient and welfare cover</option>
-                            </select>
-                            <small class="text-muted">Platinum replaces the Basic monthly contribution for the selected package group. It provides up to 20 inpatient bed-cover days each calendar year after approval and maturity.</small>
-                        </div>
-                        <div class="product-summary" id="productSummary" aria-live="polite">Choose your date of birth and Basic package to see the monthly contribution.</div>
+
+                        <div class="product-summary" id="productSummary" aria-live="polite">Choose Basic or Platinum, then select your package.</div>
 
                         <div class="row">
                             <div class="col-md-8 mb-3">
@@ -199,24 +202,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function updateProductSummary() {
-        const option = packageInput.options[packageInput.selectedIndex];
-        const basic = Number(option?.dataset.monthly || 0);
-        let age = null;
-        if (dobInput.value) {
-            const dob = new Date(dobInput.value + 'T00:00:00');
-            age = Math.floor((Date.now() - dob.getTime()) / 31557600000);
-        }
-        const wantsPlatinum = tierInput.value === '1';
-        const platinum = wantsPlatinum ? platinumPrice(packageInput.value) : 0;
-        if (!basic) {
-            productSummary.textContent = 'Choose a Basic package to see the monthly contribution.';
-        } else if (wantsPlatinum && platinum === null) {
-            productSummary.textContent = 'Basic: KES ' + basic.toLocaleString() + '/month. Enter a valid date of birth to calculate the Platinum monthly contribution.';
-        } else if (wantsPlatinum) {
-            productSummary.textContent = 'Platinum monthly contribution: KES ' + platinum.toLocaleString() + '. This replaces the Basic rate of KES ' + basic.toLocaleString() + ' for this package group.';
-        } else {
-            productSummary.textContent = 'Basic monthly contribution: KES ' + basic.toLocaleString() + '.';
-        }
+        window.ShenaRegistrationPlan?.refresh();
     }
     [dobInput, packageInput, tierInput].forEach(function (input) { input.addEventListener('change', updateProductSummary); });
     updateProductSummary();
@@ -272,4 +258,5 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 
+<?php include __DIR__ . '/../partials/registration-plan-script.php'; ?>
 <?php include VIEWS_PATH . '/layouts/footer.php'; ?>

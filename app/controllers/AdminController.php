@@ -842,25 +842,19 @@ class AdminController extends BaseController
 
             $this->corporateMemberModel->replaceForMember((int)$memberId, $corporateMembers);
 
-            // Platinum replaces the Basic contribution for the selected package group.
-            $platinumMonthly = null;
-            if (($_POST['platinum_opt_in'] ?? '') === '1' && !empty($dateOfBirth)) {
-                require_once __DIR__ . '/../services/PlatinumPricingService.php';
-                $quote = (new PlatinumPricingService())->quote($packageKey, $dateOfBirth);
-                $platinumMonthly = $quote['amount'] ?? null;
-                if ($quote) {
-                    $this->db->insert('platinum_coverages', [
-                        'member_id' => $memberId,
-                        'covered_person_type' => 'principal',
-                        'covered_person_id' => null,
-                        'status' => 'pending_approval',
-                        'package_key' => $quote['package_key'],
-                        'package_name' => $quote['package_name'],
-                        'monthly_contribution' => $quote['amount'],
-                        'maturity_months' => $quote['maturity_months'],
-                        'requested_at' => date('Y-m-d H:i:s'),
-                    ]);
-                }
+            (new RegistrationPlanService())->apply((int)$memberId, (string)($_POST['platinum_opt_in'] ?? ''), $packageKey, $dateOfBirth);
+
+            // Persist the invitation draft before registration commits.
+            try {
+                require_once __DIR__ . '/../services/SmsService.php';
+                require_once __DIR__ . '/../controllers/AuthController.php';
+                $inviteToken = AuthController::generateInviteToken($userId);
+                $appUrl = defined('APP_URL') ? APP_URL : '';
+                $inviteLink  = $appUrl . '/set-password?token=' . urlencode($inviteToken);
+                (new RegistrationNotificationService())->send((int)$memberId, $inviteLink);
+            } catch (Throwable $e) {
+                error_log('Admin register invite SMS failed: ' . $e->getMessage());
+                $_SESSION['warning'] = 'Member saved, but the invitation draft could not be prepared. Please check SMS review setup.';
             }
 
             $this->db->getConnection()->commit();
@@ -879,24 +873,6 @@ class AdminController extends BaseController
                 error_log('Admin register email failed: ' . $e->getMessage());
             }
 
-            // Send invite SMS with set-password link
-            try {
-                require_once __DIR__ . '/../services/SmsService.php';
-                require_once __DIR__ . '/../controllers/AuthController.php';
-                $inviteToken = AuthController::generateInviteToken($userId);
-                $appUrl = defined('APP_URL') ? APP_URL : '';
-                $inviteLink  = $appUrl . '/set-password?token=' . urlencode($inviteToken);
-                $smsMsg = "Hi {$firstName}! You've been registered with SHENA Companion. Member No: {$memberNumber}. "
-                        . "Set your account password here: {$inviteLink}  (valid 48 hrs). "
-                        . "Monthly contribution: KES {$monthlyContribution} via Paybill 4163987, Acct: {$idNumber}.";
-                if ($platinumMonthly) {
-                    $smsMsg .= " You selected SHENA Platinum (hospital and welfare cover): KES " . number_format($platinumMonthly, 2) . "/month. It replaces the Basic contribution for the selected package group once confirmed.";
-                }
-                $smsService = new SmsService();
-                $smsService->sendSms($phone, $smsMsg);
-            } catch (Throwable $e) {
-                error_log('Admin register invite SMS failed: ' . $e->getMessage());
-            }
 
             $_SESSION['success'] = 'Member registered successfully.';
             unset($_SESSION['form_data']);

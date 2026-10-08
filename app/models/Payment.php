@@ -192,7 +192,6 @@ class Payment extends BaseModel
             return false;
         }
 
-        $wasActive = (($member['status'] ?? '') === 'active');
 
         if (($member['status'] ?? '') !== 'active') {
             $memberModel->update($memberId, [
@@ -208,9 +207,7 @@ class Payment extends BaseModel
 
         $this->cancelStaleRegistrationPaymentAttempts($memberId);
 
-        if (!$wasActive) {
-            $this->sendRegistrationWelcomeSms($memberId);
-        }
+        $this->sendRegistrationWelcomeSms($memberId);
 
         return true;
     }
@@ -234,26 +231,9 @@ class Payment extends BaseModel
     private function sendRegistrationWelcomeSms(int $memberId): void
     {
         try {
-            $memberModel = new Member();
-            $member = $memberModel->getMemberWithUser($memberId);
-
-            if (!$member || empty($member['phone'])) {
-                return;
-            }
-
-            $firstName = $member['first_name'] ?? 'Member';
-            $memberNo = $member['member_number'] ?? '';
-            $nationalId = $member['id_number'] ?? $memberNo;
-            $contribution = number_format((float)($member['monthly_contribution'] ?? 0), 0);
-
-            $smsMsg = "Hi {$firstName}! Welcome to SHENA. Your monthly contribution is KES {$contribution} to be paid by the 7th of every month via Paybill 4163987, Acct: {$nationalId}. {$memberNo} is your member number.";
-
-            $smsService = new SmsService();
-            require_once __DIR__ . '/../services/CustomerServiceWeekSms.php';
-            $smsMsg = CustomerServiceWeekSms::appreciate($smsMsg);
-            $smsService->sendSms($member['phone'], $smsMsg);
-        } catch (Exception $smsEx) {
-            error_log('Registration welcome SMS error for member ' . $memberId . ': ' . $smsEx->getMessage());
+            (new RegistrationNotificationService())->send($memberId);
+        } catch (Throwable $e) {
+            error_log('Registration welcome queue failed for member ' . $memberId . ': ' . $e->getMessage());
         }
     }
 
