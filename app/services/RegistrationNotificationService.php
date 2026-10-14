@@ -10,12 +10,12 @@ class RegistrationNotificationService
         $plan = $summary['breakdown'];
         $tier = $plan['principal_tier'];
         $name = $member['first_name'] ?: 'Member';
-        $message = "Hi {$name}! Welcome to SHENA {$tier}. Member No: {$member['member_number']}.";
-        if ($inviteLink) $message .= " Set your password: {$inviteLink} (valid 48 hrs).";
-        $message .= ' Total monthly contribution: KES ' . number_format($summary['total'], 2)
-            . ' by the 7th via Paybill 4163987, Acct: ' . ($member['id_number'] ?: $member['member_number']) . '.';
+        $message = "Hi {$name}, welcome to SHENA {$tier}. Your member number is {$member['member_number']}.";
+        if ($inviteLink) $message .= " Set your password within 48 hours: {$inviteLink}.";
+        $message .= ' Your monthly contribution is KES ' . number_format($summary['total'], 2)
+            . ', due by the 7th of every month via Paybill 4163987, account ' . ($member['id_number'] ?: $member['member_number']) . '.';
         if ($plan['corporate_count'] > 0) $message .= ' Includes ' . $plan['corporate_count'] . ' additional group(s) on ' . $plan['corporate_tier_label'] . '.';
-        if ($tier === 'Platinum') $message .= ' Platinum benefits require approval and completion of the waiting period.';
+        if ($tier === 'Platinum') $message .= ' Platinum benefits start after approval and the waiting period.';
         return CustomerServiceWeekSms::appreciate($message);
     }
 

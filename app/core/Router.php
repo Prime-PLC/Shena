@@ -67,8 +67,8 @@ class Router
         $this->addRoute('POST', '/verify-transaction', 'AuthController@verifyTransaction');
         
         // Legacy Registration Routes (old form - kept for backward compatibility)
-        $this->addRoute('GET', '/register-old', 'AuthController@showPublicRegistration');
-        $this->addRoute('POST', '/register-old/submit', 'AuthController@processPublicRegistration');
+        $this->addRoute('GET', '/register-old', 'AuthController@showRegister');
+        $this->addRoute('POST', '/register-old/submit', 'AuthController@register');
         
         // Public Registration Routes (alias)
         $this->addRoute('GET', '/register-public', 'AuthController@showPublicRegistration');
@@ -284,6 +284,7 @@ class Router
         $this->addRoute('GET', '/admin/payouts', 'AdminController@payoutRequests');
         $this->addRoute('GET', '/admin/platinum-requests', 'AdminController@platinumRequests');
         $this->addRoute('POST', '/admin/platinum-requests/{id}/process', 'AdminController@processPlatinumRequest');
+        $this->addRoute('GET', '/admin/inpatient-requests/view/{id}', 'AdminController@viewInpatientRequest');
         $this->addRoute('POST', '/admin/inpatient-requests/{id}/process', 'AdminController@processInpatientRequest');
         $this->addRoute('POST', '/admin/inpatient-requests/create', 'AdminController@submitInpatientRequestForMember');
         $this->addRoute('POST', '/admin/members/{id}/platinum/migrate', 'AdminController@migrateMemberToPlatinum');

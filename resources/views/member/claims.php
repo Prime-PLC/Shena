@@ -1125,7 +1125,7 @@ main {
                             <i class="fas fa-info-circle"></i>
                             <div class="next-step-content">
                                 <h4>Next Step:</h4>
-                                <p>Your claim has been submitted. Open Documents and next steps to upload proof within 7 days of filing. Preliminary admin acceptance does not restart the deadline or grant final approval.</p>
+                                <p>Upload the required documents within 7 days of filing.</p>
                             </div>
                         </div>
                     </a>
@@ -1179,7 +1179,7 @@ main {
                 <div class="document-icon unchecked"></div>
                 <span>Mortuary Invoice</span>
             </div>
-            <p class="document-note">File first without attachments if needed. Upload these within 7 days of filing through Documents and next steps. Admin acceptance does not restart the deadline.</p>
+            <p class="document-note">Upload within 7 days of filing.</p>
         </div>
     </div>
 </div>
@@ -1291,7 +1291,7 @@ main {
                     
                     <h6><i class="fas fa-paperclip"></i> Supporting Documents <span class="badge bg-secondary">Can be added later</span></h6>
                     <p class="text-muted small mb-3">
-                        <i class="fas fa-exclamation-circle text-warning"></i> You may file without attachments. Upload these 3 required documents within 7 days of filing through Documents and next steps. PDF/JPG/PNG, maximum 5 MB per file. Admin-filed claims have the same requirements; late evidence needs a recorded admin exception.
+                        <i class="fas fa-exclamation-circle text-warning" aria-hidden="true"></i> Optional while filing. Upload all three within 7 days. PDF, JPG or PNG; maximum 5 MB each.
                     </p>
                     <div class="mb-3">
                         <label class="form-label">1. Copy of ID / Birth Certificate <span class="text-danger">*</span></label>

@@ -54,7 +54,9 @@ $_httpHost = $_SERVER['HTTP_HOST'] ?? '';
 $_isDevServer = preg_match('/^(localhost|127\.0\.0\.1)(:\d+)?$/i', $_httpHost) === 1
              || PHP_SAPI === 'cli-server';
 if (PHP_SAPI === 'cli') {
-    $_isDevServer = getenv('DEBUG_MODE') === 'true' || ($_ENV['DEBUG_MODE'] ?? '') === 'true';
+    // local_config.php is excluded from deployment, so its presence is the
+    // authoritative signal that CLI tools should use the local database.
+    $_isDevServer = file_exists(__DIR__ . '/local_config.php');
 }
 if ($_isDevServer && file_exists(__DIR__ . '/local_config.php')) {
     require_once __DIR__ . '/local_config.php';

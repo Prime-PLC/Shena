@@ -107,5 +107,5 @@ $db->beginTransaction();$notify->send(4);
 check($db->inTransaction()&&BulkSmsService::$attempts===2,'Nested transaction never sends before commit');
 $db->rollBack();check(!isset($db->events[4])&&count($db->queue)===2,'Outer rollback removes welcome');
 $message=RegistrationNotificationService::message($member,['total'=>400,'breakdown'=>['principal_tier'=>'Platinum','corporate_count'=>1,'corporate_tier_label'=>'Basic']]);
-check(str_contains($message,'KES 400.00')&&str_contains($message,'approval')&&str_contains($message,'additional group(s) on Basic'),'Welcome states actual account total and benefit restriction');
+check(str_contains($message,'Your member number is SH-123456')&&str_contains($message,'Your monthly contribution is KES 400.00, due by the 7th of every month')&&str_contains($message,'benefits start after approval')&&str_contains($message,'additional group(s) on Basic'),'Welcome uses natural member wording and states the contribution, monthly deadline and benefit restriction');
 echo "$checks registration tier and notification checks passed; no provider or live DB used.\n";

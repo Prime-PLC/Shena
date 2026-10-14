@@ -9,6 +9,7 @@ require_once __DIR__ . '/../services/PlatinumEligibilityService.php';
 require_once __DIR__ . '/../services/SmsService.php';
 require_once __DIR__ . '/../services/PlatinumPricingService.php';
 require_once __DIR__ . '/../services/PlatinumBillingService.php';
+require_once __DIR__ . '/../services/PaymentStatusService.php';
 
 class MemberController extends BaseController
 {
@@ -170,11 +171,13 @@ class MemberController extends BaseController
         }
         $accountMonthlyAmount = (new PlatinumBillingService())->monthlyAmount($member);
         
-        // Get recent payments
-        $recentPayments = $this->paymentModel->getMemberPayments($member['id'], 5);
-
-        // Get all payments for stats
-        $allPayments = $this->paymentModel->getMemberPayments($member['id']);
+        // Contribution figures must exclude registration fees and use the same
+        // allocation rules as payment reporting and reminders.
+        $allPayments = $this->paymentModel->getContributions($member['id']);
+        $recentPayments = array_slice($allPayments, 0, 5);
+        $paymentStatusService = new PaymentStatusService();
+        $paymentSnapshot = $paymentStatusService->buildMonthlyPaymentSnapshot($member, $allPayments);
+        $coverageSnapshot = $paymentStatusService->buildContributionCoverageSnapshot($member, $allPayments);
 
         // Get beneficiaries
         $beneficiaries = $this->beneficiaryModel->getActiveBeneficiaries($member['id']);
@@ -182,53 +185,61 @@ class MemberController extends BaseController
         // Get recent claims
         $recentClaims = $this->claimModel->getMemberClaims($member['id']);
 
-        // Check payment status for current month
         $currentYear = date('Y');
-        $currentMonth = date('n');
-        $currentMonthPayment = $this->paymentModel->getMonthlyPaymentStatus($member['id'], $currentYear, $currentMonth);
-
         $completedPayments = array_filter($allPayments ?? [], fn($p) => ($p['status'] ?? '') === 'completed');
         $totalPaid = 0.0;
-        $monthsCovered = 0;
 
         foreach ($completedPayments as $payment) {
             $paymentDate = $payment['payment_date'] ?? $payment['created_at'] ?? null;
             if ($paymentDate && date('Y', strtotime($paymentDate)) === (string)$currentYear) {
                 $totalPaid += (float)($payment['amount'] ?? 0);
-                $monthsCovered++;
             }
         }
+        $currentMonthStatus = strtoupper((string)($paymentSnapshot['payment_group_label'] ?? 'Not paid'));
+        $deadline = new DateTimeImmutable(date('Y-m-') . PaymentStatusService::PAYMENT_DEADLINE_DAY);
+        if ((float)($paymentSnapshot['current_balance_due'] ?? 0) <= 0) {
+            $deadline = $deadline->modify('first day of next month')->setDate(
+                (int)$deadline->modify('first day of next month')->format('Y'),
+                (int)$deadline->modify('first day of next month')->format('n'),
+                PaymentStatusService::PAYMENT_DEADLINE_DAY
+            );
+        }
 
-        $lastCompletedPayment = null;
-        foreach ($allPayments as $payment) {
-            if (($payment['status'] ?? '') === 'completed') {
-                $lastCompletedPayment = $payment;
-                break;
+        $maturityItems = [];
+        $buildMaturityItem = static function (string $label, ?string $startValue, ?string $endValue): array {
+            try {
+                $start = $startValue ? new DateTimeImmutable(substr($startValue, 0, 10)) : null;
+                $end = $endValue ? new DateTimeImmutable(substr($endValue, 0, 10)) : null;
+            } catch (Throwable $e) {
+                $start = $end = null;
             }
+            if (!$start || !$end || $end < $start) {
+                return ['label'=>$label, 'valid'=>false, 'progress'=>0, 'completed'=>0, 'total'=>0, 'date'=>null];
+            }
+            $totalInterval = $start->diff($end);
+            $total = max(1, ($totalInterval->y * 12) + $totalInterval->m);
+            $today = new DateTimeImmutable('today');
+            $completed = $today <= $start ? 0 : min($total, (($start->diff($today)->y * 12) + $start->diff($today)->m));
+            return ['label'=>$label, 'valid'=>true, 'progress'=>(int)round(($completed / $total) * 100), 'completed'=>$completed, 'total'=>$total, 'date'=>$end->format('M j, Y')];
+        };
+        $maturityItems[] = $buildMaturityItem('Funeral cover', $member['created_at'] ?? null, $member['maturity_ends'] ?? null);
+        $activePlatinumCoverages = $this->db->fetchAll(
+            "SELECT pc.*, COALESCE(c.label, CONCAT(u.first_name, ' ', u.last_name)) AS coverage_name
+             FROM platinum_coverages pc
+             JOIN members m ON m.id = pc.member_id
+             JOIN users u ON u.id = m.user_id
+             LEFT JOIN member_corporate_members c ON pc.covered_person_type = 'corporate_member' AND c.id = pc.covered_person_id
+             WHERE pc.member_id = :member_id AND pc.status = 'active'
+             ORDER BY pc.id",
+            ['member_id' => $member['id']]
+        );
+        foreach ($activePlatinumCoverages as $coverage) {
+            $maturityItems[] = $buildMaturityItem(
+                'Platinum hospital cover — ' . ($coverage['coverage_name'] ?? 'package group'),
+                $coverage['effective_from'] ?? $coverage['approved_at'] ?? null,
+                $coverage['maturity_date'] ?? null
+            );
         }
-
-        $nextDueDate = null;
-        if ($lastCompletedPayment) {
-            $lastDate = new DateTime($lastCompletedPayment['payment_date'] ?? $lastCompletedPayment['created_at']);
-            $lastDate->modify('+1 month');
-            $nextDueDate = $lastDate;
-        } elseif (!empty($member['created_at'])) {
-            $createdDate = new DateTime($member['created_at']);
-            $createdDate->modify('+1 month');
-            $nextDueDate = $createdDate;
-        }
-
-        $currentMonthStatus = (!empty($currentMonthPayment) && (int)($currentMonthPayment['completed_payments'] ?? 0) > 0)
-            ? 'PAID'
-            : 'DUE';
-
-        if (($member['status'] ?? '') !== 'active') {
-            $currentMonthStatus = strtoupper($member['status'] ?? 'INACTIVE');
-        }
-
-        $maturityProgress = 0;
-        $maturityMonthsCompleted = 0;
-        $maturityMonthsTotal = 0;
 
         $missingProfileFields = [];
         $memberIdNumber = (string) ($member['id_number'] ?? '');
@@ -298,16 +309,18 @@ class MemberController extends BaseController
             'recent_payments' => $recentPayments,
             'beneficiaries' => $beneficiaries,
             'recent_claims' => $recentClaims,
-            'current_month_paid' => !empty($currentMonthPayment),
-            'current_month_payment' => $currentMonthPayment,
+            'account_monthly_amount' => $accountMonthlyAmount,
+            'payment_snapshot' => $paymentSnapshot,
+            'coverage_snapshot' => $coverageSnapshot,
+            'current_month_paid' => (float)($paymentSnapshot['current_balance_due'] ?? 0) <= 0,
+            'current_month_payment' => $paymentSnapshot,
             'stats' => $stats,
             'total_paid' => $totalPaid,
-            'months_covered' => $monthsCovered,
-            'next_due_date' => $nextDueDate ? $nextDueDate->format('M d') : 'N/A',
+            'current_month_paid_amount' => (float)($paymentSnapshot['paid_amount'] ?? 0),
+            'balance_due' => (float)($paymentSnapshot['balance_due'] ?? 0),
+            'next_due_date' => $deadline->format('M j'),
             'current_month_status' => $currentMonthStatus,
-            'maturity_progress' => $maturityProgress,
-            'maturity_months_completed' => $maturityMonthsCompleted,
-            'maturity_months_total' => $maturityMonthsTotal,
+            'maturity_items' => $maturityItems,
             'show_profile_completion_popup' => $showProfileCompletionPopup,
             'missing_profile_fields' => $missingProfileFields,
             'profile_completion_form_data' => $profileCompletionFormData,

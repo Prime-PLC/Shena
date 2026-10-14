@@ -683,17 +683,14 @@ class AuthController extends BaseController
     // Set-Password (invite link for admin/agent-registered members)
     // -------------------------------------------------------------------------
 
-    /**
-     * Generate a signed invite token for a newly-registered user.
-     * Token = base64url(userId|expiresUnix) + '.' + HMAC-SHA256 signature
-     */
+    /** Generate a compact, signed 48-hour invite token. */
     public static function generateInviteToken(int $userId): string
     {
         $expiresAt = time() + 48 * 3600; // 48 hours
-        $payload   = base64_encode($userId . '|' . $expiresAt);
-        $secret    = hash('sha256', DB_PASS . '|shena-invite-v1');
-        $sig       = hash_hmac('sha256', $payload, $secret);
-        return $payload . '.' . $sig;
+        $payload = '2.' . base_convert((string)$userId, 10, 36) . '.' . base_convert((string)$expiresAt, 10, 36);
+        $secret = hash('sha256', DB_PASS . '|shena-invite-v2');
+        $signature = substr(hash_hmac('sha256', $payload, $secret, true), 0, 16);
+        return $payload . '.' . rtrim(strtr(base64_encode($signature), '+/', '-_'), '=');
     }
 
     /**
@@ -701,6 +698,21 @@ class AuthController extends BaseController
      */
     private function verifyInviteToken(string $token)
     {
+        $compact = explode('.', $token);
+        if (count($compact) === 4 && $compact[0] === '2') {
+            [$version, $encodedUserId, $encodedExpiry, $signature] = $compact;
+            if (!preg_match('/^[0-9a-z]+$/', $encodedUserId) || !preg_match('/^[0-9a-z]+$/', $encodedExpiry)) return false;
+            $payload = $version . '.' . $encodedUserId . '.' . $encodedExpiry;
+            $secret = hash('sha256', DB_PASS . '|shena-invite-v2');
+            $expected = rtrim(strtr(base64_encode(substr(hash_hmac('sha256', $payload, $secret, true), 0, 16)), '+/', '-_'), '=');
+            if (!hash_equals($expected, $signature)) return false;
+            $userId = (int)base_convert($encodedUserId, 36, 10);
+            $expiresAt = (int)base_convert($encodedExpiry, 36, 10);
+            if ($userId < 1 || time() > $expiresAt) return false;
+            return $userId;
+        }
+
+        // Continue accepting previously issued v1 links until their 48-hour expiry.
         $parts = explode('.', $token, 2);
         if (count($parts) !== 2) return false;
         [$payload, $sig] = $parts;

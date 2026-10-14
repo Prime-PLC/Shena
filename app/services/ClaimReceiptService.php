@@ -18,13 +18,16 @@ class ClaimReceiptService
             $case = (new ClaimEvidenceService())->find($type, $id);
             $member = $db->fetch('SELECT u.phone, u.first_name FROM members m JOIN users u ON u.id = m.user_id WHERE m.id = :id', ['id'=>$case['member_id']]);
             $due = ClaimEvidenceService::deadline($type, $case)->format('d M Y H:i');
-            $instruction = $type === 'funeral' ? "Upload ID/birth certificate, chief letter and mortuary invoice by {$due} EAT (7 days from filing)." : "Upload admission proof on the admission day. If late, call 0748585067 or 0748585071 for guidance.";
+            $instruction = $type === 'funeral' ? "Please upload the ID/birth certificate, chief's letter and mortuary invoice by {$due} EAT. You can upload them under Claim Documents in your portal." : "Please upload admission proof on the admission day. If late, call 0748585067 or 0748585071 for guidance.";
+            $memberMessage = $type === 'funeral'
+                ? 'Dear ' . ($member['first_name'] ?? 'Member') . ", we are sorry for your loss and stand with you during this difficult time. We have received your funeral claim #{$id}. {$instruction}"
+                : 'Dear ' . ($member['first_name'] ?? 'Member') . ", we have received your hospital claim #{$id}. {$instruction}";
             $queue = new BulkSmsService();
             $ids = [];
             $connection = $db->getConnection();
             $connection->beginTransaction();
             try {
-                $ids = $queue->queueQuickSms([['phone'=>$member['phone'] ?? '']], 'Dear ' . ($member['first_name'] ?? 'Member') . ", SHENA received {$type} claim #{$id}. Application incomplete pending verification and documents. {$instruction} Open your portal claim documents page.");
+                $ids = $queue->queueQuickSms([['phone'=>$member['phone'] ?? '']], $memberMessage);
                 $recipients = array_map(function ($phone) { return ['phone'=>$phone]; }, self::adminPhones());
                 $ids = array_merge($ids, $queue->queueQuickSms($recipients, "SHENA: New {$type} claim #{$id} received. Review the application and required documents in the admin portal. Deadline: {$due} EAT."));
                 $connection->commit();

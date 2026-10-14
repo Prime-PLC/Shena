@@ -2266,7 +2266,7 @@ class AdminController extends BaseController
 
                     // Approve for standard service delivery
                     $this->claimModel->approveClaimForServices($claimId, $deliveryDate, $notes);
-                    $this->sendClaimLifecycleSms($claimId, 'approved');
+                    $this->sendClaimLifecycleSms($claimId, 'approved_services');
 
                     // Send notification to member
                     if (class_exists('EmailService')) {
@@ -2340,7 +2340,7 @@ class AdminController extends BaseController
                         $requestedBy,
                         $_SESSION['user_id']
                     );
-                    $this->sendClaimLifecycleSms($claimId, 'approved');
+                    $this->sendClaimLifecycleSms($claimId, 'approved_cash');
 
                     $message = 'Claim approved for KSH 20,000 cash alternative. Agreement must be signed before payment.';
 
@@ -2647,12 +2647,24 @@ class AdminController extends BaseController
             }
 
             $claimRef = 'CLM-' . date('Y') . '-' . str_pad($claimId, 4, '0', STR_PAD_LEFT);
-            $statusText = ucwords(str_replace('_', ' ', $status));
-            $message = "Claim Update: Your claim {$claimRef} has been {$statusText}.";
-            if ($notes !== '') {
-                $message .= " Notes: " . trim($notes);
+            if ($status === 'approved_services') {
+                $message = "Your funeral claim {$claimRef} has been approved. A SHENA team member will contact you to arrange the approved funeral services. Please keep your phone available.";
+            } elseif ($status === 'approved_cash') {
+                $message = "Your funeral claim {$claimRef} has been approved for the KES 20,000 cash alternative. The next step is to review and sign the agreement before payment. SHENA will contact you to arrange this.";
+            } elseif ($status === 'completed') {
+                $isCashAlternative = ($claimDetails['service_delivery_type'] ?? '') === 'cash_alternative'
+                    || ($claimDetails['settlement_type'] ?? '') === 'cash';
+                $message = $isCashAlternative
+                    ? "Your funeral claim {$claimRef} is complete, and the KES 20,000 cash alternative has been recorded as paid. If you have not received it, please contact SHENA."
+                    : "Your funeral claim {$claimRef} is complete. All approved funeral services have been recorded as delivered. If anything remains unresolved, please contact SHENA.";
+            } else {
+                $statusText = ucwords(str_replace('_', ' ', $status));
+                $message = "Claim Update: Your claim {$claimRef} has been {$statusText}.";
+                if ($notes !== '') {
+                    $message .= " Notes: " . trim($notes);
+                }
+                $message .= " Please check your dashboard or contact SHENA for assistance.";
             }
-            $message .= " Please check your dashboard or contact SHENA for assistance.";
 
             $smsService = new SmsService();
             $smsService->sendSms($claimDetails['phone'], $message . " - Shena Companion");
@@ -4110,37 +4122,48 @@ class AdminController extends BaseController
                 $coverage->reject((int) $id, (int) $_SESSION['user_id']);
                 $_SESSION['success'] = 'Platinum coverage rejected.';
             }
-            $this->notifyPlatinumDecision((int) $id, $action === 'approve' ? 'active' : 'rejected');
+            $draftId = $this->notifyPlatinumDecision((int) $id, $action === 'approve' ? 'active' : 'rejected');
+            if ($draftId) {
+                $_SESSION['sms_review_return'] = '/admin/platinum-requests?section=coverage#coverage-requests';
+                $this->redirect('/sms-review?draft=' . $draftId);
+                return;
+            }
         } catch (Throwable $e) {
             error_log('Platinum request processing failed: ' . $e->getMessage());
             $_SESSION['error'] = 'Unable to process this Platinum request. Please try again.';
         }
-        $this->redirect('/admin/platinum-requests');
+        $this->redirect('/admin/platinum-requests?section=coverage#coverage-requests');
     }
 
     /**
      * Notify a member by SMS/email once their Platinum coverage request has been decided.
      */
-    private function notifyPlatinumDecision(int $coverageId, string $decision): void
+    private function notifyPlatinumDecision(int $coverageId, string $decision): ?int
     {
         try {
             $coverage = $this->db->fetch(
-                "SELECT pc.*, m.phone, m.email, u.first_name FROM platinum_coverages pc
+                "SELECT pc.*, u.phone, u.email, u.first_name FROM platinum_coverages pc
                  JOIN members m ON m.id = pc.member_id
                  JOIN users u ON u.id = m.user_id
                  WHERE pc.id = :id",
                 ['id' => $coverageId]
             );
             if (!$coverage) {
-                return;
+                return null;
             }
             $name = $coverage['first_name'] ?: 'Member';
+            $maturityDate = !empty($coverage['maturity_date']) ? date('d M Y', strtotime($coverage['maturity_date'])) : '';
             $message = $decision === 'active'
-                ? "Dear {$name}, your SHENA Platinum cover request has been APPROVED and is now active. Maturity date: {$coverage['maturity_date']}. - Shena Companion"
-                : "Dear {$name}, your SHENA Platinum cover request was not approved. Contact us for details or submit a new request. - Shena Companion";
-            (new SmsService())->sendSms($coverage['phone'], $message);
+                ? "Dear {$name}, your SHENA Platinum cover is approved. Your waiting period ends on {$maturityDate}. Your hospital benefits become available after this date. - Shena Companion"
+                : "Dear {$name}, your SHENA Platinum request was not approved. You may submit a new request from your portal or contact SHENA for clarification. - Shena Companion";
+            $result = (new SmsService())->sendSms($coverage['phone'], $message, [
+                'source' => 'Platinum coverage decision',
+                'key' => 'platinum-decision:' . $coverageId . ':' . $decision,
+            ]);
+            return !empty($result['draft_id']) ? (int) $result['draft_id'] : null;
         } catch (Throwable $exception) {
             error_log('Platinum decision notification failed: ' . $exception->getMessage());
+            return null;
         }
     }
 
@@ -4149,7 +4172,11 @@ class AdminController extends BaseController
         $this->requireAdmin();
         $this->validateCsrf();
         try {
-            $approvedDays = filter_var($_POST['approved_days'] ?? null, FILTER_VALIDATE_INT);
+            $approvedDays = ($_POST['decision'] ?? '') === 'reject'
+                ? null
+                : filter_var($_POST['approved_days'] ?? null, FILTER_VALIDATE_INT);
+            $adminNotes = trim((string) ($_POST['admin_notes'] ?? ''));
+            $authorizeLateDocuments = ($_POST['authorize_late_documents'] ?? '') === '1';
             $overrideBalance = ($_POST['override_balance'] ?? '') === '1';
             $overrideReason = trim((string) ($_POST['override_reason'] ?? ''));
             if ($overrideBalance && $overrideReason === '') {
@@ -4157,13 +4184,54 @@ class AdminController extends BaseController
                 $this->redirect('/admin/platinum-requests');
                 return;
             }
-            $result = (new PlatinumEligibilityService())->approveInpatientRequest((int) $id, (int) $_SESSION['user_id'], $approvedDays ?: null, trim((string) ($_POST['admin_notes'] ?? '')), $overrideBalance, $overrideReason);
+            if ($approvedDays && $authorizeLateDocuments) {
+                (new ClaimEvidenceService())->recordReview('inpatient', (int) $id, (int) $_SESSION['user_id'], 'exception', $adminNotes);
+            }
+            $result = (new PlatinumEligibilityService())->approveInpatientRequest((int) $id, (int) $_SESSION['user_id'], $approvedDays ?: null, $adminNotes, $overrideBalance, $overrideReason);
             $_SESSION['success'] = 'Inpatient request ' . $result['status'] . '.';
             $this->notifyInpatientDecision((int) $id, (string) $result['status'], (int) ($result['approved_days'] ?? 0));
         } catch (Throwable $exception) {
-            $_SESSION['error'] = $exception->getMessage();
+            $message = $exception->getMessage();
+            if (str_contains($message, 'claim documents page')) {
+                $_SESSION['evidence_message'] = str_replace(' Open the claim documents page.', '.', $message);
+                $this->redirect('/claim-documents/inpatient/' . (int) $id);
+                return;
+            }
+            $_SESSION['error'] = $message;
         }
-        $this->redirect('/admin/platinum-requests');
+        $this->redirect('/admin/inpatient-requests/view/' . (int) $id);
+    }
+
+    public function viewInpatientRequest($id)
+    {
+        $this->requireAdmin();
+        $requestId = (int) $id;
+        $request = $this->db->fetch(
+            "SELECT ir.*, m.member_number, u.phone AS member_phone, u.first_name, u.last_name
+             FROM inpatient_requests ir
+             JOIN members m ON m.id = ir.member_id
+             JOIN users u ON u.id = m.user_id
+             WHERE ir.id = :id",
+            ['id' => $requestId]
+        );
+        if (!$request) {
+            $_SESSION['error'] = 'Hospital request not found.';
+            $this->redirect('/admin/platinum-requests?section=inpatient#inpatient-requests');
+            return;
+        }
+        $evidence = new ClaimEvidenceService();
+        $documents = $evidence->documents('inpatient', $requestId);
+        $documentReview = $evidence->review('inpatient', $requestId);
+        $this->view('admin.inpatient-request-view', [
+            'request' => $request,
+            'documents' => $documents,
+            'missing_documents' => ClaimEvidenceService::missing('inpatient', $documents),
+            'deadline' => ClaimEvidenceService::deadline('inpatient', $request),
+            'documents_late' => !ClaimEvidenceService::submittedOnTime('inpatient', $request, $documents),
+            'document_review' => $documentReview,
+            'remaining_days' => (new PlatinumEligibilityService())->remainingDays((int) $request['platinum_coverage_id']),
+            'csrf_token' => $this->generateCsrfToken(),
+        ]);
     }
 
     /**
@@ -4423,10 +4491,11 @@ class AdminController extends BaseController
                 return;
             }
             $name = $request['first_name'] ?: 'Member';
-            $statusLabel = str_replace('_', ' ', $status);
-            $message = "Dear {$name}, your inpatient request for {$request['patient_name']} was {$statusLabel}.";
             if (in_array($status, ['approved', 'partially_approved'], true)) {
-                $message .= " Approved days: {$approvedDays}.";
+                $dayLabel = $approvedDays === 1 ? 'day' : 'days';
+                $message = "Dear {$name}, SHENA has approved {$approvedDays} inpatient support {$dayLabel} for {$request['patient_name']} at {$request['facility_name']}. Next, call 0748585067 to confirm the hospital's payment instructions and contact person. SHENA will then coordinate the approved support with the hospital.";
+            } else {
+                $message = "Dear {$name}, your inpatient request for {$request['patient_name']} was not approved. Please call 0748585067 for the reason and guidance on what to do next.";
             }
             $message .= " - Shena Companion";
             (new SmsService())->sendSms($request['phone'], $message);
@@ -4880,10 +4949,10 @@ class AdminController extends BaseController
         }
         if ($draftId && !isset($_SESSION['error'])) {
             $_SESSION['sms_feedback_target'] = '#sms-review-' . $draftId;
-            $_SESSION['sms_review_return'] = $type === 'funeral' ? '/admin/claims/track/' . $caseId : '/admin/platinum-requests';
+            $_SESSION['sms_review_return'] = $type === 'funeral' ? '/admin/claims/track/' . $caseId : '/admin/inpatient-requests/view/' . $caseId;
             $this->redirect('/sms-review?draft=' . $draftId);
         }
-        $this->redirect($type === 'funeral' && $caseId > 0 ? '/admin/claims/track/' . $caseId : '/admin/platinum-requests');
+        $this->redirect($type === 'funeral' && $caseId > 0 ? '/admin/claims/track/' . $caseId : '/admin/inpatient-requests/view/' . $caseId);
     }
 
 }

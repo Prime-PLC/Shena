@@ -17,7 +17,7 @@ $decisionStyles = [
     'cancelled' => ['bg' => '#F3F4F6', 'color' => '#4B5563', 'label' => 'Cancelled'],
 ];
 ?>
-<p class="alert alert-info">Admission proof is due by 23:59:59 EAT on admission day, including admin-filed requests. Upload through Documents / deadline review. If the member contacted the office about late evidence, record the reason for an exception. Required proof and eligibility checks cannot be waived.</p>
+<p class="alert alert-info"><i class="fas fa-circle-info" aria-hidden="true"></i> Admission proof is due on the admission date.</p>
 <style>
     .platinum-admin-container { padding: 24px; max-width: 1400px; margin: 0 auto; }
 
@@ -145,7 +145,7 @@ $decisionStyles = [
     </div>
 
     <!-- Platinum coverage approvals -->
-    <div class="data-table-card">
+    <div class="data-table-card" id="coverage-requests">
         <div class="card-header">
             <span class="card-title"><i class="fas fa-shield-alt"></i> Platinum Coverage Requests</span>
             <span class="card-hint">Approval activates cover and starts the maturity clock</span>
@@ -195,7 +195,7 @@ $decisionStyles = [
     </div>
 
     <!-- Inpatient request queue -->
-    <div class="data-table-card">
+    <div class="data-table-card" id="inpatient-requests">
         <div class="card-header">
             <span class="card-title"><i class="fas fa-notes-medical"></i> Inpatient Requests</span>
             <span class="card-hint">Approving reserves days from the covered person's annual balance</span>
@@ -210,7 +210,7 @@ $decisionStyles = [
                         <th>Admitted</th>
                         <th>Requested</th>
                         <th>Balance</th>
-                        <th>Decision</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -226,7 +226,7 @@ $decisionStyles = [
                                 <strong><?php echo htmlspecialchars($request['first_name'] . ' ' . $request['last_name']); ?></strong>
                                 <small><?php echo htmlspecialchars($request['member_number']); ?><?php echo !empty($request['admin_created']) ? ' &middot; admin-created' : ''; ?></small>
                             </td>
-                            <td><?php echo htmlspecialchars($request['patient_name']); ?> <a href="/claim-documents/inpatient/<?= (int)$request['id'] ?>">Documents / deadline review</a></td>
+                            <td><?php echo htmlspecialchars($request['patient_name']); ?></td>
                             <td class="member-cell">
                                 <strong><?php echo htmlspecialchars($request['facility_name']); ?></strong>
                                 <small><?php echo htmlspecialchars($request['facility_location']); ?><?php echo !empty($request['facility_contact']) ? ' &middot; ' . htmlspecialchars($request['facility_contact']) : ''; ?></small>
@@ -235,12 +235,9 @@ $decisionStyles = [
                             <td><strong><?php echo (int) $request['requested_days']; ?></strong> days</td>
                             <td><span class="days-pill <?php echo $pillClass; ?>"><?php echo $remaining; ?> left this year</span></td>
                             <td>
-                                <button type="button" class="btn btn-primary" onclick="PlatinumAdmin.openInpatientModal(<?php echo (int) $request['id']; ?>, <?php echo (int) $request['requested_days']; ?>, <?php echo $remaining; ?>, <?php echo htmlspecialchars(json_encode($request['patient_name']), ENT_QUOTES); ?>)"><i class="fas fa-gavel"></i> Decide</button>
+                                <a class="btn btn-primary" href="/admin/inpatient-requests/view/<?= (int)$request['id'] ?>"><i class="fas fa-eye" aria-hidden="true"></i> View</a>
                             </td>
                         </tr>
-                        <tr><td colspan="7"><details><summary class="py-2"><i class="fas fa-address-book" aria-hidden="true"></i> Service provider for hospital request #<?= (int)$request['id'] ?></summary>
-                        <?php $providerCaseType = 'platinum'; $providerCaseId = (int)$request['id']; $providerStage = 'platinum_hospital'; include __DIR__ . '/../partials/claim-provider.php'; ?>
-                        </details></td></tr>
                         <?php endforeach; ?>
                     <?php endif; ?>
                 </tbody>
@@ -353,7 +350,7 @@ $decisionStyles = [
                         <th>Facility</th>
                         <th>Days</th>
                         <th>Outcome</th>
-                        <th>Reviewed</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -369,11 +366,8 @@ $decisionStyles = [
                         <td><?php echo htmlspecialchars($d['facility_name']); ?></td>
                         <td><?php echo $d['approved_days'] === null ? '—' : (int) $d['approved_days']; ?> / <?php echo (int) $d['requested_days']; ?></td>
                         <td><span class="status-badge" style="background:<?php echo $style['bg']; ?>;color:<?php echo $style['color']; ?>"><?php echo htmlspecialchars($style['label']); ?></span></td>
-                        <td><?php echo htmlspecialchars(!empty($d['reviewed_at']) ? date('d M Y', strtotime($d['reviewed_at'])) : '—'); ?></td>
+                        <td><a href="/admin/inpatient-requests/view/<?= (int)$d['id'] ?>">View request</a></td>
                     </tr>
-                    <tr><td colspan="6"><details><summary class="py-2"><i class="fas fa-address-book" aria-hidden="true"></i> Service provider for hospital request #<?= (int)$d['id'] ?></summary>
-                        <?php $providerCaseType = 'platinum'; $providerCaseId = (int)$d['id']; $providerStage = 'platinum_hospital'; include __DIR__ . '/../partials/claim-provider.php'; ?>
-                        </details></td></tr>
                         <?php endforeach; ?>
                 </tbody>
             </table>
@@ -508,8 +502,8 @@ window.PlatinumAdmin = (function () {
             var approving = action === 'approve';
             confirmThen(
                 approving
-                    ? 'Activate SHENA Platinum cover for ' + personName + '? This starts the maturity clock and notifies the member by SMS.'
-                    : 'Reject the Platinum cover request for ' + personName + '? The member will be notified by SMS and may re-apply.',
+                    ? 'Activate SHENA Platinum cover for ' + personName + '? This starts the maturity clock and creates an SMS draft for review.'
+                    : 'Reject the Platinum cover request for ' + personName + '? An SMS draft will be created for review before sending.',
                 {
                     title: approving ? 'Approve Platinum cover' : 'Reject Platinum cover',
                     confirmText: approving ? 'Yes, approve' : 'Yes, reject',
@@ -519,60 +513,7 @@ window.PlatinumAdmin = (function () {
                     submitAction('/admin/platinum-requests/' + coverageId + '/process', { action: action });
                 }
             );
-        },
-
-        openInpatientModal: function (requestId, requestedDays, remainingDays, patientName) {
-            closeModal('inpatient-modal');
-            var suggested = Math.max(0, Math.min(requestedDays, remainingDays));
-            var overBalance = remainingDays < requestedDays;
-            var html = '' +
-                '<div id="inpatient-modal" class="modal-overlay">' +
-                '  <div class="modal-box" role="dialog" aria-modal="true">' +
-                '    <h3><i class="fas fa-notes-medical" style="color:#7F20B0"></i> Decide: ' + escapeHtml(patientName) + '</h3>' +
-                '    <p style="margin:0 0 18px 0;color:#6B7280;font-size:14px">Requested <strong>' + requestedDays + '</strong> days. Balance remaining this calendar year: <strong>' + remainingDays + '</strong> days.</p>' +
-                '    <form method="post" action="/admin/inpatient-requests/' + requestId + '/process" onsubmit="return PlatinumAdmin.validateDecision(this, ' + requestedDays + ', ' + remainingDays + ')">' +
-                '      <input type="hidden" name="csrf_token" value="' + escapeHtml(CSRF) + '">' +
-                '      <label>Approved days (0 rejects the request)</label>' +
-                '      <input type="number" name="approved_days" min="0" max="' + requestedDays + '" value="' + suggested + '" required>' +
-                '      <label>Admin notes / rejection reason</label>' +
-                '      <textarea name="admin_notes" rows="3" placeholder="Shared with the audit trail"></textarea>' +
-                (overBalance
-                    ? '      <label class="checkbox-row" style="text-transform:none;letter-spacing:0;font-weight:500;color:#374151;margin-bottom:10px">' +
-                      '        <input type="checkbox" name="override_balance" value="1" style="width:auto;margin:0" onchange="document.getElementById(\'override_balance_reason\').style.display = this.checked ? \'block\' : \'none\'">' +
-                      '        <span>Override the annual day balance for this request</span>' +
-                      '      </label>' +
-                      '      <textarea id="override_balance_reason" name="override_reason" rows="2" placeholder="Reason for exceeding the remaining balance (required)" style="display:none"></textarea>'
-                    : '') +
-                '      <div class="modal-actions">' +
-                '        <button type="button" class="btn btn-secondary" onclick="PlatinumAdmin.closeInpatientModal()">Cancel</button>' +
-                '        <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Save decision</button>' +
-                '      </div>' +
-                '    </form>' +
-                '  </div>' +
-                '</div>';
-            document.body.insertAdjacentHTML('beforeend', html);
-        },
-
-        /** Block the obvious mistakes client-side; the service re-validates server-side regardless. */
-        validateDecision: function (form, requestedDays, remainingDays) {
-            var days = Number(form.approved_days.value);
-            var override = form.override_balance && form.override_balance.checked;
-            if (isNaN(days) || days < 0 || days > requestedDays) {
-                feedback('Approved days must be between 0 and ' + requestedDays + '.', 'warning');
-                return false;
-            }
-            if (days > remainingDays && !override) {
-                feedback('Only ' + remainingDays + ' days remain this calendar year. Reduce the approved days or tick the balance override.', 'warning');
-                return false;
-            }
-            if (override && !String(form.override_reason.value || '').trim()) {
-                feedback('An override reason is required when exceeding the remaining balance.', 'warning');
-                return false;
-            }
-            return true;
-        },
-
-        closeInpatientModal: function () { closeModal('inpatient-modal'); }
+        }
     };
 })();
 
@@ -582,11 +523,6 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // Close modals on Escape / backdrop click.
-document.addEventListener('keydown', function (event) {
-    if (event.key === 'Escape') {
-        PlatinumAdmin.closeInpatientModal();
-    }
-});
 document.addEventListener('click', function (event) {
     if (event.target.classList && event.target.classList.contains('modal-overlay')) {
         event.target.remove();

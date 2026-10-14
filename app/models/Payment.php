@@ -36,7 +36,7 @@ class Payment extends BaseModel
                 FROM {$this->table} p
                 JOIN members m ON p.member_id = m.id
                 WHERE p.member_id = :member_id
-                  AND p.payment_type != 'registration'
+                  AND COALESCE(p.payment_type, '') != 'registration'
                 ORDER BY p.created_at DESC";
 
         if ($limit) {

@@ -117,7 +117,6 @@ abstract class BaseController
         } catch (Throwable $e) {
             error_log('Optional registration email lookup unavailable. Continuing without email.');
         }
-        $_SESSION['warning'] = 'Registration can continue without email. The email entered could not be added; you can add a valid, unused email later.';
         return null;
     }
 
