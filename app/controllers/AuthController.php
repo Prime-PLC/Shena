@@ -683,17 +683,14 @@ class AuthController extends BaseController
     // Set-Password (invite link for admin/agent-registered members)
     // -------------------------------------------------------------------------
 
-    /**
-     * Generate a signed invite token for a newly-registered user.
-     * Token = base64url(userId|expiresUnix) + '.' + HMAC-SHA256 signature
-     */
+    /** Generate a compact, signed 48-hour invite token. */
     public static function generateInviteToken(int $userId): string
     {
         $expiresAt = time() + 48 * 3600; // 48 hours
-        $payload   = base64_encode($userId . '|' . $expiresAt);
-        $secret    = hash('sha256', DB_PASS . '|shena-invite-v1');
-        $sig       = hash_hmac('sha256', $payload, $secret);
-        return $payload . '.' . $sig;
+        $payload = '2.' . base_convert((string)$userId, 10, 36) . '.' . base_convert((string)$expiresAt, 10, 36);
+        $secret = hash('sha256', DB_PASS . '|shena-invite-v2');
+        $signature = substr(hash_hmac('sha256', $payload, $secret, true), 0, 16);
+        return $payload . '.' . rtrim(strtr(base64_encode($signature), '+/', '-_'), '=');
     }
 
     /**
@@ -701,6 +698,21 @@ class AuthController extends BaseController
      */
     private function verifyInviteToken(string $token)
     {
+        $compact = explode('.', $token);
+        if (count($compact) === 4 && $compact[0] === '2') {
+            [$version, $encodedUserId, $encodedExpiry, $signature] = $compact;
+            if (!preg_match('/^[0-9a-z]+$/', $encodedUserId) || !preg_match('/^[0-9a-z]+$/', $encodedExpiry)) return false;
+            $payload = $version . '.' . $encodedUserId . '.' . $encodedExpiry;
+            $secret = hash('sha256', DB_PASS . '|shena-invite-v2');
+            $expected = rtrim(strtr(base64_encode(substr(hash_hmac('sha256', $payload, $secret, true), 0, 16)), '+/', '-_'), '=');
+            if (!hash_equals($expected, $signature)) return false;
+            $userId = (int)base_convert($encodedUserId, 36, 10);
+            $expiresAt = (int)base_convert($encodedExpiry, 36, 10);
+            if ($userId < 1 || time() > $expiresAt) return false;
+            return $userId;
+        }
+
+        // Continue accepting previously issued v1 links until their 48-hour expiry.
         $parts = explode('.', $token, 2);
         if (count($parts) !== 2) return false;
         [$payload, $sig] = $parts;
@@ -1366,7 +1378,8 @@ class AuthController extends BaseController
             $address = $this->sanitizeInput($_POST['address']);
             $county = $this->sanitizeInput($_POST['county']);
             $postalCode = $this->sanitizeInput($_POST['postal_code'] ?? '');
-            $corporateCoupleCount = max(0, min(5, (int)($_POST['corporate_couple_count'] ?? 0)));
+            $corporateCoupleCount = 0;
+            if (!empty($_POST['corporate_couple_count'])) throw new InvalidArgumentException('Please contact an agent to register additional groups with their details.');
             $paymentMethod = $this->sanitizeInput($_POST['payment_method'] ?? 'mpesa');
             
             // Normalize payment method - STK push is a type of M-Pesa payment
@@ -1393,69 +1406,10 @@ class AuthController extends BaseController
                 $phone = '254' . substr($phone, 1);
             }
             
-            // Validate age only when date of birth is provided
-            $age = null;
-            if (!empty($dateOfBirth)) {
-                $age = floor((time() - strtotime($dateOfBirth)) / 31557600); // Seconds in a year
-                if ($age < 18) {
-                    throw new Exception('You must be at least 18 years old to register');
-                }
-            }
-            
-            // Get package details (auto-select individual package by age if not explicitly chosen)
             global $membership_packages;
-            $package = null;
+            RegistrationPlanService::validate((string)($_POST['platinum_opt_in'] ?? ''), $packageId, (string)$dateOfBirth);
+            $package = $membership_packages[$packageId];
 
-            if (!empty($packageId) && isset($membership_packages[$packageId])) {
-                $package = $membership_packages[$packageId];
-            } else {
-                $autoPackageKey = null;
-                if ($age !== null) {
-                    $autoPackageKey = $this->findAutoPackageByAge($age, $membership_packages);
-                }
-                if (!$autoPackageKey && isset($membership_packages['individual_below_70'])) {
-                    $autoPackageKey = 'individual_below_70';
-                }
-                if (!$autoPackageKey && !empty($membership_packages)) {
-                    $keys = array_keys($membership_packages);
-                    $autoPackageKey = $keys[0] ?? null;
-                }
-                if ($autoPackageKey && isset($membership_packages[$autoPackageKey])) {
-                    $packageId = $autoPackageKey;
-                    $package = $membership_packages[$autoPackageKey];
-                }
-            }
-            
-            if (!$package) {
-                echo json_encode([
-                    'success' => false,
-                    'message' => 'Invalid package selected',
-                    'old_values' => $_POST
-                ]);
-                return;
-            }
-            
-            // Validate age against package limits
-            if ($age !== null && isset($package['age_max']) && $age > $package['age_max']) {
-                echo json_encode([
-                    'success' => false,
-                    'message' => "This package is for members aged {$package['age_min']}-{$package['age_max']} years. You are {$age} years old. Please select an appropriate package for your age group.",
-                    'field' => 'package',
-                    'old_values' => $_POST
-                ]);
-                return;
-            }
-            
-            if ($age !== null && isset($package['age_min']) && $age < $package['age_min']) {
-                echo json_encode([
-                    'success' => false,
-                    'message' => "This package is for members aged {$package['age_min']}-{$package['age_max']} years. You are {$age} years old. Please select an appropriate package for your age group.",
-                    'field' => 'package',
-                    'old_values' => $_POST
-                ]);
-                return;
-            }
-            
             $email = $this->optionalMemberEmail($email);
 
             $existingPhone = $this->userModel->findByPhone($phone);
@@ -1520,13 +1474,7 @@ class AuthController extends BaseController
                 
                 // Map configured package to allowed members.package enum value
                 $packageType = $this->memberModel->normalizePackageTier($packageId, $package);
-                $memberForCalc = [
-                    'date_of_birth' => $safeDateOfBirth,
-                    'package' => $packageId,
-                    'package_key' => $packageId,
-                    'corporate_couple_count' => $corporateCoupleCount
-                ];
-                $monthlyContribution = $this->memberModel->calculateMonthlyContribution($memberForCalc, []);
+                $monthlyContribution = MembershipPricingService::resolveSelectedPackageAmount($packageId, $membership_packages);
                 
                 $memberData = [
                     'user_id' => $userId,
@@ -1546,26 +1494,7 @@ class AuthController extends BaseController
 
                 $memberId = $this->memberModel->create($memberData);
 
-                // Platinum replaces the Basic contribution for the selected package group.
-                $platinumOptIn = ($_POST['platinum_opt_in'] ?? '') === '1';
-                if ($platinumOptIn && $age !== null) {
-                    require_once __DIR__ . '/../models/PlatinumCoverage.php';
-                    require_once __DIR__ . '/../services/PlatinumPricingService.php';
-                    $quote = (new PlatinumPricingService())->quote($packageId, $dateOfBirth);
-                    if ($quote) {
-                        $this->db->insert('platinum_coverages', [
-                            'member_id' => $memberId,
-                            'covered_person_type' => 'principal',
-                            'covered_person_id' => null,
-                            'status' => 'pending_approval',
-                            'package_key' => $quote['package_key'],
-                            'package_name' => $quote['package_name'],
-                            'monthly_contribution' => $quote['amount'],
-                            'maturity_months' => $quote['maturity_months'],
-                            'requested_at' => date('Y-m-d H:i:s'),
-                        ]);
-                    }
-                }
+                (new RegistrationPlanService())->apply((int)$memberId, (string)($_POST['platinum_opt_in'] ?? ''), $packageId, (string)$dateOfBirth);
 
                 // Handle payment based on method
                 $paymentModel = new Payment();
@@ -2068,4 +1997,3 @@ class AuthController extends BaseController
         return preg_match('/^(localhost|127\.0\.0\.1)(:\\d+)?$/i', $host) === 1 || PHP_SAPI === 'cli-server';
     }
 }
-

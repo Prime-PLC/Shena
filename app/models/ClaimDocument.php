@@ -8,7 +8,9 @@ class ClaimDocument extends BaseModel
     
     public function getClaimDocuments($claimId)
     {
-        return $this->findAll(['claim_id' => $claimId], 'created_at ASC');
+        $legacy = $this->findAll(['claim_id' => $claimId], 'created_at ASC');
+        $new = $this->db->fetchAll("SELECT * FROM claim_evidence WHERE case_type = 'funeral' AND case_id = :id ORDER BY created_at", ['id'=>$claimId]);
+        return array_merge($legacy, $new);
     }
     
     public function addDocument($data)

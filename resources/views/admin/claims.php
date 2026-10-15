@@ -23,6 +23,7 @@ $actionNeededCount = count(array_filter($all_claims, fn($c) =>
 <!-- Tab Content -->
 <div id="claimsTabContent">
 
+<p class="alert alert-info"><i class="fas fa-circle-info" aria-hidden="true"></i> Required documents are due within 7 days of filing.</p>
 <style>
     /* Page Header */
     .page-header {

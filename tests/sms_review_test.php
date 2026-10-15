@@ -34,6 +34,7 @@ $checks=0;
 function check($condition, $label) { global $checks; if (!$condition) throw new RuntimeException($label); $checks++; }
 function rejects($fn, $label) { try {$fn();} catch (RuntimeException $e) {check(true,$label); return;} throw new RuntimeException($label); }
 $db=Database::$instance=new Database(); $service=new SmsReviewService();
+$_SERVER['REQUEST_METHOD']='POST'; $_SERVER['REQUEST_URI']='/admin/members/register';
 $_SESSION=['user_id'=>9,'user_role'=>'manager'];
 $result=(new SmsService())->sendSms('0712345678','Your payment is received.');
 check($result['status']==='draft' && !$result['submitted'] && !$db->queue,'Business trigger only drafts');

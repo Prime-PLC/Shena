@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . "/SmsTriggerContext.php";
 
 /** Business events create review drafts. Only an explicit staff review queues delivery. */
 class SmsReviewService
@@ -24,6 +25,7 @@ class SmsReviewService
 
     public function create(string $phone, string $message, array $context = []): int
     {
+        if (!SmsTriggerContext::isStaffAction()) throw new RuntimeException('SMS drafts require a staff-triggered action.');
         $db = Database::getInstance();
         $phone = self::phone($phone);
         $message = self::validateMessage($message);

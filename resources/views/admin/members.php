@@ -1449,9 +1449,6 @@ $buildMemberTierUrl = function (string $targetTier) use ($search, $status, $pack
     <a class="tier-pill tier-platinum <?php echo $tier === 'platinum' ? 'active' : ''; ?>" href="<?php echo htmlspecialchars($buildMemberTierUrl('platinum')); ?>">
         <i class="fas fa-gem"></i> SHENA Platinum <span class="tier-count"><?php echo (int) ($tierCounts['platinum'] ?? 0); ?></span>
     </a>
-    <?php if ($tier === 'platinum'): ?>
-        <a class="tier-pill tier-link" href="/admin/platinum-requests"><i class="fas fa-hospital"></i> Platinum approvals &amp; inpatient desk</a>
-    <?php endif; ?>
 </div>
 
 <?php if ($tier !== 'all'): ?>
@@ -1461,13 +1458,6 @@ $buildMemberTierUrl = function (string $targetTier) use ($search, $status, $pack
         <?php else: ?>
             <i class="fas fa-shield-alt"></i> Showing Basic-only members. These accounts have no Platinum add-on &mdash; open a member to add one.
         <?php endif; ?>
-    </div>
-<?php endif; ?>
-
-<?php if ($tier === 'platinum' && !empty($pending_platinum_approvals)): ?>
-    <div style="margin:0 0 16px;padding:13px 16px;border:1px solid #DDD6FE;border-left:4px solid #7F3D9E;border-radius:10px;background:#FAF5FF;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap">
-        <span style="color:#4C1D95;font-weight:600"><i class="fas fa-hourglass-half"></i> <?= count($pending_platinum_approvals) ?> Platinum request<?= count($pending_platinum_approvals) === 1 ? '' : 's' ?> awaiting approval<?= count($pending_platinum_approvals) > 1 ? ' — including ' . htmlspecialchars($pending_platinum_approvals[0]['covered_person_name'] ?? 'a member') : '' ?>.</span>
-        <a href="/admin/platinum-requests" class="btn btn-primary btn-sm"><i class="fas fa-check-circle"></i> Review requests</a>
     </div>
 <?php endif; ?>
 

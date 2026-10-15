@@ -52,6 +52,7 @@ class Database {
 $checks=0;
 function verify($ok,$label) {global $checks;if (!$ok) throw new RuntimeException($label);$checks++;}
 function rejects($fn,$label) {try {$fn();}catch(RuntimeException $e){verify(true,$label);return;}throw new RuntimeException($label);}
+$_SERVER['REQUEST_METHOD']='POST'; $_SERVER['REQUEST_URI']='/admin/members/register';
 $_SESSION=['user_id'=>9,'user_role'=>'manager'];$db=Database::$instance=new Database();$model=new ServiceProvider();
 foreach (ServiceProvider::STAGES as $stage=>$label) foreach (ServiceProvider::STAGES as $other=>$unused) {
     $type=$stage==='platinum_hospital'?'platinum':'funeral';

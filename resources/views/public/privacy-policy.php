@@ -114,8 +114,8 @@
                         </ul>
                         <p><strong>d) Claims &amp; Document Data</strong></p>
                         <ul>
-                            <li>Death certificates, burial permits, and other legally required documents uploaded during claims</li>
-                            <li>Hospital admission letters and mortuary records</li>
+                            <li>ID or birth certificate copies, chief letters, mortuary invoices and optional death certificates uploaded during funeral claims</li>
+                            <li>Hospital admission proof identifying the patient, hospital and admission date; claim review and deadline-exception records</li>
                         </ul>
                         <p><strong>e) Technical Data</strong></p>
                         <ul>

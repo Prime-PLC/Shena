@@ -30,7 +30,7 @@ if (!$invalidPackageAge || (float)$invalidPackageAge['amount'] !== 550.0) {
 $checks = [
     'app/controllers/AuthController.php' => [
         "'packages' => \$membership_packages",
-        "\$platinumOptIn = (\$_POST['platinum_opt_in'] ?? '') === '1'",
+        "RegistrationPlanService::validate",
     ],
     'resources/views/public/register-public.php' => [
         'name="package_id"',
@@ -40,7 +40,7 @@ $checks = [
     ],
     'resources/views/agent/register-member.php' => [
         'agentPlatinumPanel',
-        "agentPlatinumPanel');",
+        "registration-plan-script.php",
         "agentPlatinumOptIn')?.addEventListener('change', updateAgentPlatinumPrice)",
         'agentPlatinumPriceForPackage(packageKey)',
     ],
@@ -103,10 +103,10 @@ $checks = [
         'MembershipPricingService::resolveSelectedPackageAmount',
         'Platinum replaces the Basic contribution for each selected coverage group.',
         "return \$this->accountSummary(\$member)['total'];",
-        "status = 'active' ORDER BY id ASC",
+        "registration_selected = 1",
     ],
     'resources/views/admin/register-member.php' => [
-        'let corporateTotal = 0;',
+        'window.ShenaRegistrationPlan?.refresh();',
         'platinumPriceForPackage(packageKey, age)',
         "document.getElementById('platinumOptIn')?.addEventListener('change', updatePlatinumOptInPrice)",
     ],

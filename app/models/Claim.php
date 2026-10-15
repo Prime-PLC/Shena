@@ -157,6 +157,7 @@ class Claim extends BaseModel
      */
     public function approveClaimForServices($claimId, $deliveryDate = null, $notes = null)
     {
+        (new ClaimEvidenceService())->assertReady('funeral', (int)$claimId);
         $data = [
             'status' => 'approved',
             'service_delivery_type' => 'standard_services',
@@ -178,6 +179,7 @@ class Claim extends BaseModel
      */
     public function approveClaimForCashAlternative($claimId, $reason, $requestedBy, $approvedBy)
     {
+        (new ClaimEvidenceService())->assertReady('funeral', (int)$claimId);
         // Validate request
         $cashAltModel = new ClaimCashAlternative();
         $validation = $cashAltModel->validateRequest($claimId, $reason, $requestedBy);
@@ -248,6 +250,7 @@ class Claim extends BaseModel
      */
     public function completeClaim($claimId, $completionNotes = null)
     {
+        (new ClaimEvidenceService())->assertReady('funeral', (int)$claimId);
         $claim = $this->find($claimId);
         
         if (!$claim) {
@@ -316,6 +319,7 @@ class Claim extends BaseModel
     
     public function processClaim($claimId, $paymentReference = null)
     {
+        (new ClaimEvidenceService())->assertReady('funeral', (int)$claimId);
         $data = [
             'status' => 'processed',
             'processed_at' => date('Y-m-d H:i:s'),

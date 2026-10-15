@@ -23,7 +23,6 @@ $statusConfig = [
 ];
 $currentStatus = $statusConfig[$status] ?? $statusConfig['submitted'];
 ?>
-
 <style>
 main {
     padding: 0 !important;
@@ -62,7 +61,73 @@ main {
 .claim-id {
     color: #6B7280;
     font-size: 0.9rem;
-    margin-bottom: 30px;
+    margin-bottom: 20px;
+}
+
+.documents-action {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 18px;
+    margin-bottom: 24px;
+    background: #FFFFFF;
+    border: 1px solid #E9D8F1;
+    border-left: 4px solid #7F20B0;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(74, 20, 104, 0.08);
+}
+
+.documents-action-copy {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.documents-action-icon {
+    display: grid;
+    place-items: center;
+    flex: 0 0 40px;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: #F3E8F8;
+    color: #7F20B0;
+}
+
+.documents-action-copy strong,
+.documents-action-copy span {
+    display: block;
+}
+
+.documents-action-copy strong { color: #321044; }
+.documents-action-copy span { margin-top: 2px; color: #6B7280; font-size: 0.875rem; }
+
+.documents-action-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 10px 16px;
+    border-radius: 8px;
+    background: #7F20B0;
+    color: #FFFFFF;
+    font-weight: 700;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.documents-action-link:hover,
+.documents-action-link:focus-visible {
+    background: #641789;
+    color: #FFFFFF;
+}
+
+.documents-action-link:focus-visible {
+    outline: 3px solid rgba(127, 32, 176, 0.25);
+    outline-offset: 2px;
 }
 
 .status-card {
@@ -302,6 +367,8 @@ main {
         grid-template-columns: 1fr !important;
     }
     .claim-view-container { padding: 16px !important; }
+    .documents-action { align-items: stretch; flex-direction: column; }
+    .documents-action-link { width: 100%; }
 }
 </style>
 
@@ -312,6 +379,17 @@ main {
     
     <h1 class="page-title">Claim Details</h1>
     <p class="claim-id">Claim ID: #<?php echo htmlspecialchars($claim['id'] ?? 'N/A'); ?></p>
+
+    <div class="documents-action">
+        <div class="documents-action-copy">
+            <span class="documents-action-icon"><i class="fas fa-file-arrow-up" aria-hidden="true"></i></span>
+            <div>
+                <strong>Claim documents</strong>
+                <span>Required documents are due within 7 days of filing.</span>
+            </div>
+        </div>
+        <a class="documents-action-link" href="/claim-documents/funeral/<?= (int)$claim['id'] ?>">Upload documents <i class="fas fa-arrow-right" aria-hidden="true"></i></a>
+    </div>
     
     <!-- Status Card -->
     <div class="status-card">

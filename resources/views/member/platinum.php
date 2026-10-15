@@ -95,7 +95,11 @@ main { padding: 0 !important; margin: 0 !important; }
 }
 .submit-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(127, 32, 176, 0.4); }
 
-.section-title { font-size: 1.3rem; font-weight: 700; color: #1F2937; margin: 0 0 20px 0; }
+.coverage-section-heading { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin:0 0 20px; }
+.section-title { font-size: 1.3rem; font-weight: 700; color: #1F2937; margin: 0; }
+.account-monthly-total { text-align:right; }
+.account-monthly-total span { display:block; font-size:.75rem; color:#6B7280; margin-bottom:4px; }
+.account-monthly-total strong { display:block; color:#1F2937; font-size:1.05rem; }
 
 .coverage-card {
     background: #fff;
@@ -140,6 +144,11 @@ main { padding: 0 !important; margin: 0 !important; }
 .hospital-action-card .hospital-action-button { background:#fff; color:#6B218D; text-decoration:none; padding:11px 17px; border-radius:10px; font-weight:700; white-space:nowrap; }
 
 .empty-state { background: #fff; border-radius: 16px; padding: 40px; text-align: center; color: #6B7280; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+
+@media (max-width: 640px) {
+    .coverage-section-heading { align-items:flex-start; }
+    .account-monthly-total { text-align:left; }
+}
 </style>
 
 <div class="platinum-container">
@@ -205,7 +214,13 @@ main { padding: 0 !important; margin: 0 !important; }
     </div>
     <?php endif; ?>
 
-    <h3 class="section-title">Your Platinum coverage</h3>
+    <div class="coverage-section-heading">
+        <h3 class="section-title">Your Platinum coverage</h3>
+        <div class="account-monthly-total">
+            <span>Total monthly contribution</span>
+            <strong>KES <?php echo number_format((float) $account_monthly_amount, 2); ?></strong>
+        </div>
+    </div>
     <?php if (empty($coverages)): ?>
         <div class="empty-state">
             <i class="fas fa-shield-alt" style="font-size:32px;color:#D1D5DB;margin-bottom:12px;display:block"></i>
@@ -222,12 +237,8 @@ main { padding: 0 !important; margin: 0 !important; }
             </div>
             <div class="coverage-meta">
                 <div class="meta-block">
-                    <span>Monthly</span>
-                    <strong>KES <?php echo number_format((float) $coverage['monthly_contribution'], 2); ?></strong>
-                </div>
-                <div class="meta-block">
                     <span>Maturity</span>
-                    <strong><?php echo htmlspecialchars($coverage['maturity_date'] ?? 'Pending approval'); ?></strong>
+                    <strong><?php echo htmlspecialchars($coverage['maturity_date'] ?? 'Starts after approval'); ?></strong>
                 </div>
                 <?php if ($coverage['status'] === 'active'): ?>
                 <div class="meta-block">

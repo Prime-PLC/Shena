@@ -10,6 +10,7 @@
             <button onclick="window.print()" style="background: #C9A659; color: #1A1A1A; border: none; padding: 12px 32px; border-radius: 8px; font-weight: 700; font-size: 1rem; cursor: pointer; display: inline-flex; align-items: center; gap: 10px;">
                 <i class="fas fa-print"></i> Print / Save as PDF
             </button>
+            <a href="/public/SHENA_Companion_Policy_Booklet.docx" download style="display:inline-block;margin:12px;color:white;text-decoration:underline;">Download Word booklet</a>
         </div>
     </div>
 </section>
@@ -178,6 +179,7 @@
                     <p>SHENA Basic cover follows the waiting period applicable to the selected Basic package. For SHENA Platinum, maturity is <strong>4 months when the selected package owner is below age 60</strong> and <strong>7 months when the owner is aged 60 and above</strong>, calculated from the effective date of that package group\'s approved Platinum cover.</p>
                     <p>Platinum inpatient requests are considered only after the selected person\'s cover is active and mature, contributions are current, and the request passes eligibility and administrative review. Newly added or changed covered people may have a new waiting period from their effective date.</p>
                     <p>To request Platinum inpatient support, the member must identify the covered person and provide the facility name and location or contact, admission date, requested number of days, and any available admission or doctor reference. SHENA may approve fewer days than requested when the annual balance is lower.</p>
+<p><strong>Hospital and bed-cover evidence:</strong> Upload admission proof identifying the patient, hospital and admission date through the member portal by <strong>23:59:59 EAT on the admission day</strong>. If proof cannot be uploaded that day, call <strong>0748585067 or 0748585071</strong> immediately for guidance. An administrator must record any deadline exception; a phone call alone does not waive proof. Approval, including partial approval, requires the proof and the existing eligibility and available-day checks. The same requirements apply to admin-filed requests. PDF, JPG or PNG, up to 5 MB per file.</p>
                     <p>A request may be declined where the person is not selected for Platinum, the admission is not an inpatient case, the annual 20-day balance is exhausted, the facility details cannot be verified, the admission falls outside the active cover period, contributions are overdue, or false information has been provided. Unused days expire at year-end and do not carry forward.</p>
                 '],
                 ['id' => 'pb-benefits', 'num' => '5', 'title' => 'Benefits — Last Respect Services', 'body' => '
@@ -227,18 +229,14 @@
                     <p>A dependent who reaches an age bracket threshold (e.g., turns 70) will automatically move to the applicable higher contribution rate at the next billing cycle.</p>
                 '],
                 ['id' => 'pb-claims', 'num' => '7', 'title' => 'Claims Procedure', 'body' => '
-                    <p><strong>Step 1 — Notify SHENA immediately</strong><br>Contact SHENA as soon as possible after a death occurs. Our team is available on <strong>0748 585 067 / 0748 585 071</strong> (24/7 emergency line).</p>
-                    <p><strong>Step 2 — Submit required documents</strong><br>Provide the following within <strong>30 days</strong> of the date of death:</p>
-                    <ul>
-                        <li>Certified copy of <strong>Death Certificate</strong></li>
-                        <li>Copy of the <strong>deceased\'s National ID</strong></li>
-                        <li>Copy of the <strong>member\'s National ID</strong></li>
-                        <li><strong>Burial Permit</strong></li>
-                        <li>Completed <strong>SHENA Claim Form</strong> (available on the member portal)</li>
-                    </ul>
-                    <p><strong>Step 3 — Verification</strong><br>SHENA management will verify documents and confirm the deceased\'s registration status. This process typically takes <strong>1–3 business days</strong>.</p>
-                    <p><strong>Step 4 — Service Authorization</strong><br>Upon approval, SHENA will coordinate directly with service providers (mortuary, hearse operator, casket supplier) to fulfill the claim. The family will be informed of all arrangements.</p>
-                    <p style="background: #FEF3C7; border-left: 4px solid #D97706; padding: 12px 16px; border-radius: 6px; margin-top: 16px;"><strong>Note:</strong> Claims submitted beyond 30 days of the date of death may be declined at SHENA\'s discretion.</p>
+                    <p>Call SHENA on <strong>0748585067 or 0748585071</strong> to report the loss, then file through the member portal. An administrator may file on your behalf. The existing claim-filing window is <strong>30 days from the date of death</strong>; this is separate from the document deadline.</p>
+<p>You may file without attachments. The application remains incomplete for final approval. A receipt with next steps is queued for the member and both configured office phones, with an immediate delivery attempt.</p>
+<p>An administrator verifies and accepts the initial funeral application for document review. This is preliminary acceptance, not final approval. Return to <strong>Documents and next steps</strong> to upload proof within <strong>7 days from the original application date and time</strong>, in East Africa Time (EAT). Acceptance does not restart or extend the deadline; documents may be uploaded before acceptance.</p>
+<ul><li>Copy of the deceased person&#39;s National ID or birth certificate</li><li>Chief&#39;s letter</li><li>Mortuary invoice</li></ul>
+<p>A death certificate is optional supporting evidence. PDF, JPG and PNG files are accepted, up to <strong>5 MB per file</strong>. The member or administrator must upload the required proof, including when an administrator filed the claim.</p>
+<p>Final approval for services or a cash alternative, processing and completion require all proof documents. Uploading files does not itself approve the claim. SHENA still verifies eligibility, authenticity and coverage before authorizing services.</p>
+<p>If evidence is late, upload it and contact the office. An administrator must record the reason for a deadline exception before processing can proceed. An exception permits late evidence; it never waives required proof or eligibility. A missed document deadline does not automatically reject the claim.</p>
+<p><strong>Hospital and bed-cover evidence:</strong> Upload admission proof identifying the patient, hospital and admission date through the member portal by <strong>23:59:59 EAT on the admission day</strong>. If proof cannot be uploaded that day, call <strong>0748585067 or 0748585071</strong> immediately for guidance. An administrator must record any deadline exception; a phone call alone does not waive proof. Approval, including partial approval, requires the proof and the existing eligibility and available-day checks. The same requirements apply to admin-filed requests. PDF, JPG or PNG, up to 5 MB per file.</p>
                 '],
                 ['id' => 'pb-suspension', 'num' => '8', 'title' => 'Suspension, Lapsing & Reinstatement', 'body' => '
                     <p><strong>Suspension</strong> occurs when contributions fall <strong>3 or more months</strong> in arrears. Suspended members may not file new claims until arrears are fully cleared.</p>
