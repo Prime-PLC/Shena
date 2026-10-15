@@ -140,7 +140,11 @@ if ($controller->email('member@example.com') !== 'member@example.com') $failed =
 $emailDb->duplicate = true;
 if ($controller->email('member@example.com') !== null) $failed = true;
 $emailDb->duplicate = false; $emailDb->unavailable = true;
-if ($controller->email('member@example.com') !== null || empty($_SESSION['warning'])) $failed = true;
+unset($_SESSION['warning']);
+if ($controller->email('member@example.com') !== null || isset($_SESSION['warning'])) {
+    fwrite(STDERR, "Failed optional email lookup must continue without email or a registration warning.\n");
+    $failed = true;
+}
 echo "Optional member email checks completed: empty, valid, duplicate and failed lookup.\n";
 
 $emailMigration = file_get_contents($root . '/database/migrations/027_optional_member_email.sql');
