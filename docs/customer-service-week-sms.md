@@ -20,3 +20,5 @@ Example receipt (149 ASCII characters with these example values):
 Existing reminders, grace/suspension notices, claims, hospital messages, OTP/reset codes, account-invitation links, upgrade messages, admin/provider alerts and custom/bulk campaigns are unchanged. No standalone appreciation campaign or additional send is introduced. Previously generated drafts/queued messages are not edited. Drafts created during the week retain their text; review/remove the greeting if sending them after 9 October.
 
 The regular wording returns automatically for messages generated from 10 October. This is a one-off 2026 window, not an annually recurring greeting. Existing lengthy welcomes and receipts with long field values may use multiple SMS segments; no transaction, payment or membership details are truncated. No schema migration or scheduler is needed. No messages are sent by the tests.
+
+Registration now uses a shared tier-aware welcome for staff invitations and paid public registrations. See [registration tier and SMS delivery](registration-tier-sms.md) for the updated automatic-versus-review routing. The appreciation date window is unchanged.

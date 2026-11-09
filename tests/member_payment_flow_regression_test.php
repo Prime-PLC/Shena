@@ -9,6 +9,9 @@ $checks = [
             'let registrationCheckoutRequestId',
             "registrationCheckoutRequestId = data.checkout_request_id",
             "checkout_request_id: registrationCheckoutRequestId",
+            'PAID THIS MONTH',
+            'Balance due:',
+            '$maturity_items',
         ],
     ],
     [
@@ -23,6 +26,9 @@ $checks = [
             'wantsJsonResponse',
             "\$requestedWith === 'xmlhttprequest'",
             "Payment verified successfully",
+            'buildMonthlyPaymentSnapshot',
+            'buildContributionCoverageSnapshot',
+            "'account_monthly_amount' => \$accountMonthlyAmount",
         ],
     ],
     [

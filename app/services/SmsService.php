@@ -24,6 +24,10 @@ class SmsService
     public function sendSms($to, $message, array $context = [])
     {
         require_once __DIR__ . '/SmsReviewService.php';
+        require_once __DIR__ . '/SmsTriggerContext.php';
+        if (!SmsTriggerContext::isStaffAction()) {
+            return $this->sendApprovedSms($to, $message);
+        }
         try {
             $id = (new SmsReviewService())->create((string)$to, (string)$message, $context);
             return ['success' => true, 'submitted' => false, 'status' => 'draft', 'requires_review' => true, 'draft_id' => $id];
@@ -34,7 +38,7 @@ class SmsService
         }
     }
 
-    /** Only authentication challenges and explicitly reviewed/scheduled sends use transport directly. */
+    /** Automatic/member transactions and explicitly reviewed/scheduled sends use transport directly. */
     public function sendApprovedSms($to, $message)
     {
         try {

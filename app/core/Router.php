@@ -96,6 +96,9 @@ class Router
         $this->addRoute('POST', '/beneficiaries', 'MemberController@addBeneficiary');
         $this->addRoute('POST', '/beneficiaries/delete', 'MemberController@deleteBeneficiary');
         $this->addRoute('POST', '/beneficiaries/update', 'MemberController@updateBeneficiary');
+        $this->addRoute('GET', '/claim-documents/{type}/{id}', 'ClaimEvidenceController@show');
+        $this->addRoute('POST', '/claim-documents/{type}/{id}', 'ClaimEvidenceController@save');
+        $this->addRoute('GET', '/claim-documents/{type}/{id}/download/{documentId}', 'ClaimEvidenceController@download');
         $this->addRoute('GET', '/claims', 'MemberController@claims');
         $this->addRoute('GET', '/claims/view/{id}', 'MemberController@viewClaim');
         $this->addRoute('POST', '/claims', 'MemberController@submitClaim');
@@ -281,6 +284,7 @@ class Router
         $this->addRoute('GET', '/admin/payouts', 'AdminController@payoutRequests');
         $this->addRoute('GET', '/admin/platinum-requests', 'AdminController@platinumRequests');
         $this->addRoute('POST', '/admin/platinum-requests/{id}/process', 'AdminController@processPlatinumRequest');
+        $this->addRoute('GET', '/admin/inpatient-requests/view/{id}', 'AdminController@viewInpatientRequest');
         $this->addRoute('POST', '/admin/inpatient-requests/{id}/process', 'AdminController@processInpatientRequest');
         $this->addRoute('POST', '/admin/inpatient-requests/create', 'AdminController@submitInpatientRequestForMember');
         $this->addRoute('POST', '/admin/members/{id}/platinum/migrate', 'AdminController@migrateMemberToPlatinum');

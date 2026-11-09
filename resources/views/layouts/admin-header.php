@@ -919,7 +919,7 @@ if ($notificationCount === null) {
 
                     <!-- Claims -->
                     <li class="nav-item">
-                        <a class="nav-link has-submenu <?php echo (strpos($_SERVER['REQUEST_URI'], '/admin/claims') !== false || strpos($_SERVER['REQUEST_URI'], '/admin/platinum-requests') !== false || strpos($_SERVER['REQUEST_URI'], '/admin/inpatient-requests') !== false) ? 'active' : ''; ?>" href="#" onclick="toggleSubmenu(event, 'claims-submenu')">
+                        <a class="nav-link has-submenu <?php echo (strpos($_SERVER['REQUEST_URI'], '/admin/claims') !== false || strpos($_SERVER['REQUEST_URI'], '/admin/platinum-requests?section=inpatient') !== false || strpos($_SERVER['REQUEST_URI'], '/admin/inpatient-requests') !== false) ? 'active' : ''; ?>" href="#" onclick="toggleSubmenu(event, 'claims-submenu')">
                             <i class="fas fa-file-medical"></i>
                             <span>Claims</span>
                         </a>
@@ -931,7 +931,7 @@ if ($notificationCount === null) {
                                 </a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link <?php echo (strpos($_SERVER['REQUEST_URI'], '/admin/platinum-requests') !== false || strpos($_SERVER['REQUEST_URI'], '/admin/inpatient-requests') !== false) ? 'active' : ''; ?>" href="/admin/platinum-requests">
+                                <a class="nav-link <?php echo (strpos($_SERVER['REQUEST_URI'], '/admin/platinum-requests?section=inpatient') !== false || strpos($_SERVER['REQUEST_URI'], '/admin/inpatient-requests') !== false) ? 'active' : ''; ?>" href="/admin/platinum-requests?section=inpatient#inpatient-requests">
                                     <i class="fas fa-hospital"></i>
                                     <span>Hospital Cover</span>
                                 </a>

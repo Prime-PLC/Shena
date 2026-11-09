@@ -9,12 +9,12 @@ include __DIR__ . '/../layouts/member-header.php';
 
 $memberData = is_array($member ?? null) ? $member : (is_object($member ?? null) ? get_object_vars($member) : []); 
 $totalPaid = $total_paid ?? 0;
-$monthsCovered = $months_covered ?? 0;
 $nextDueDate = $next_due_date ?? 'N/A';
 $currentMonthStatus = $current_month_status ?? 'DUE';
-$maturityProgress = $maturity_progress ?? 0;
-$maturityMonthsCompleted = $maturity_months_completed ?? 0;
-$maturityMonthsTotal = $maturity_months_total ?? 0;
+$currentMonthIsPaid = !empty($current_month_paid);
+$currentMonthPaidAmount = (float)($current_month_paid_amount ?? 0);
+$balanceDue = (float)($balance_due ?? 0);
+$maturityItems = $maturity_items ?? [];
 $beneficiaryList = $beneficiaries ?? [];
 $memberStatus = strtoupper($memberData['status'] ?? 'ACTIVE');
 $statusLabel = ($memberData['status'] ?? '') === 'active' ? 'ACTIVE MEMBER' : $memberStatus;
@@ -187,6 +187,7 @@ $missingFields = $missing_profile_fields ?? [];
     font-size: 0.85rem;
     font-weight: 700;
 }
+.status-indicator.is-due { background:#FEE2E2; color:#B91C1C; }
 
 .next-due-card {
     background: #7F3D9E;
@@ -558,8 +559,8 @@ $missingFields = $missing_profile_fields ?? [];
                     <h2>KES <?php echo number_format($totalPaid, 2); ?></h2>
                 </div>
                 <div class="contribution-item">
-                    <h4>MONTHS COVERED</h4>
-                    <h2><?php echo $monthsCovered; ?>/12</h2>
+                    <h4>PAID THIS MONTH</h4>
+                    <h2>KES <?php echo number_format($currentMonthPaidAmount, 2); ?></h2>
                 </div>
                 <div class="contribution-item">
                     <h4>MONTHLY PAYABLE</h4>
@@ -567,15 +568,18 @@ $missingFields = $missing_profile_fields ?? [];
                 </div>
                 <div class="contribution-item">
                     <h4>CURRENT MONTH</h4>
-                    <span class="status-indicator">
-                        <i class="fas fa-check-circle"></i> <?php echo $currentMonthStatus; ?>
+                    <span class="status-indicator <?php echo $currentMonthIsPaid ? '' : 'is-due'; ?>">
+                        <i class="fas <?php echo $currentMonthIsPaid ? 'fa-check-circle' : 'fa-exclamation-circle'; ?>"></i> <?php echo htmlspecialchars($currentMonthStatus); ?>
                     </span>
                 </div>
                 <div class="next-due-card">
-                    <h4>NEXT DUE</h4>
+                    <h4><?php echo $balanceDue > 0 ? 'PAYMENT DEADLINE' : 'NEXT DUE'; ?></h4>
                     <h2><?php echo $nextDueDate; ?></h2>
                 </div>
             </div>
+            <?php if ($balanceDue > 0): ?>
+                <p style="margin:16px 0 0;color:#991B1B;font-weight:600;">Balance due: KES <?php echo number_format($balanceDue, 2); ?></p>
+            <?php endif; ?>
         </div>
 
         <!-- Maturity Progress -->
@@ -583,23 +587,32 @@ $missingFields = $missing_profile_fields ?? [];
             <h3>
                 <i class="fas fa-trophy"></i> Maturity Progress
             </h3>
-            <p>Waiting period completion status for full funeral benefit coverage.</p>
-            <div class="progress-info">
-                <span>
-                    <?php echo $maturityMonthsTotal > 0 ? $maturityMonthsCompleted . ' OF ' . $maturityMonthsTotal . ' MONTHS' : 'NOT STARTED'; ?>
-                </span>
-                <strong><?php echo $maturityProgress; ?>%</strong>
-            </div>
-            <div class="progress-bar-container">
-                <div class="progress-bar-fill" style="width: <?php echo $maturityProgress; ?>%"></div>
-            </div>
-            <div class="coverage-date">
-                <i class="fas fa-calendar-check"></i>
-                <div>
-                    <h5>Full Coverage Effective</h5>
-                    <p><?php echo isset($memberData['maturity_ends']) ? date('M j, Y', strtotime($memberData['maturity_ends'])) : 'Pending'; ?></p>
+            <p>Waiting periods are shown separately for each cover.</p>
+            <?php foreach ($maturityItems as $item): ?>
+                <div style="margin-top:18px;">
+                    <div class="progress-info">
+                        <span><?php echo htmlspecialchars($item['label']); ?></span>
+                        <strong><?php echo !empty($item['valid']) ? (int)$item['progress'] . '%' : 'Unavailable'; ?></strong>
+                    </div>
+                    <?php if (!empty($item['valid'])): ?>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar-fill" style="width: <?php echo (int)$item['progress']; ?>%"></div>
+                        </div>
+                        <div class="coverage-date">
+                            <i class="fas fa-calendar-check"></i>
+                            <div>
+                                <h5><?php echo (int)$item['completed']; ?> of <?php echo (int)$item['total']; ?> months</h5>
+                                <p>Benefits available from <?php echo htmlspecialchars($item['date']); ?></p>
+                            </div>
+                        </div>
+                    <?php else: ?>
+                        <div class="coverage-date">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <div><p>Contact SHENA to confirm this cover's start date.</p></div>
+                        </div>
+                    <?php endif; ?>
                 </div>
-            </div>
+            <?php endforeach; ?>
         </div>
     </div>
 

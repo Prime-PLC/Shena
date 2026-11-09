@@ -137,6 +137,7 @@ class PlatinumEligibilityService
                 $connection->commit();
                 return ['status' => 'rejected', 'approved_days' => 0];
             }
+            (new ClaimEvidenceService())->assertReady('inpatient', $requestId);
             $approvedDays = min($approvedDays, (int) $request['requested_days']);
             $year = (int) date('Y', strtotime($request['admission_date']));
             $ledger = $this->wrapper->fetch('SELECT * FROM platinum_day_ledgers WHERE platinum_coverage_id = :coverage_id AND calendar_year = :year FOR UPDATE', ['coverage_id' => $request['platinum_coverage_id'], 'year' => $year]);

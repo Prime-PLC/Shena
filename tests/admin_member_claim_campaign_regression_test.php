@@ -44,6 +44,8 @@ $assertContains($adminController, 'submitClaimForMember', 'admin should submit c
 $assertContains($adminController, 'sendClaimAcknowledgementSms', 'claim submission should trigger acknowledgement SMS');
 $assertContains($adminController, 'SHENA has received your claim', 'acknowledgement SMS should be consoling and explicit');
 $assertContains($adminController, 'sendClaimLifecycleSms', 'claim lifecycle changes should notify members by SMS');
+$assertContains($adminController, 'All approved funeral services have been recorded as delivered', 'completed service claim SMS should explain what completion means');
+$assertContains($adminController, 'cash alternative has been recorded as paid', 'completed cash claim SMS should explain what completion means');
 
 $assertContains($membersView, 'Monthly payable amount', 'member view/manage should show monthly payable amount');
 $assertNotContains($membersView, 'Daily payable amount', 'member UI must not derive or display a daily amount');

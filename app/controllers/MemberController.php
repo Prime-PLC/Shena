@@ -9,6 +9,7 @@ require_once __DIR__ . '/../services/PlatinumEligibilityService.php';
 require_once __DIR__ . '/../services/SmsService.php';
 require_once __DIR__ . '/../services/PlatinumPricingService.php';
 require_once __DIR__ . '/../services/PlatinumBillingService.php';
+require_once __DIR__ . '/../services/PaymentStatusService.php';
 
 class MemberController extends BaseController
 {
@@ -170,11 +171,13 @@ class MemberController extends BaseController
         }
         $accountMonthlyAmount = (new PlatinumBillingService())->monthlyAmount($member);
         
-        // Get recent payments
-        $recentPayments = $this->paymentModel->getMemberPayments($member['id'], 5);
-
-        // Get all payments for stats
-        $allPayments = $this->paymentModel->getMemberPayments($member['id']);
+        // Contribution figures must exclude registration fees and use the same
+        // allocation rules as payment reporting and reminders.
+        $allPayments = $this->paymentModel->getContributions($member['id']);
+        $recentPayments = array_slice($allPayments, 0, 5);
+        $paymentStatusService = new PaymentStatusService();
+        $paymentSnapshot = $paymentStatusService->buildMonthlyPaymentSnapshot($member, $allPayments);
+        $coverageSnapshot = $paymentStatusService->buildContributionCoverageSnapshot($member, $allPayments);
 
         // Get beneficiaries
         $beneficiaries = $this->beneficiaryModel->getActiveBeneficiaries($member['id']);
@@ -182,53 +185,61 @@ class MemberController extends BaseController
         // Get recent claims
         $recentClaims = $this->claimModel->getMemberClaims($member['id']);
 
-        // Check payment status for current month
         $currentYear = date('Y');
-        $currentMonth = date('n');
-        $currentMonthPayment = $this->paymentModel->getMonthlyPaymentStatus($member['id'], $currentYear, $currentMonth);
-
         $completedPayments = array_filter($allPayments ?? [], fn($p) => ($p['status'] ?? '') === 'completed');
         $totalPaid = 0.0;
-        $monthsCovered = 0;
 
         foreach ($completedPayments as $payment) {
             $paymentDate = $payment['payment_date'] ?? $payment['created_at'] ?? null;
             if ($paymentDate && date('Y', strtotime($paymentDate)) === (string)$currentYear) {
                 $totalPaid += (float)($payment['amount'] ?? 0);
-                $monthsCovered++;
             }
         }
+        $currentMonthStatus = strtoupper((string)($paymentSnapshot['payment_group_label'] ?? 'Not paid'));
+        $deadline = new DateTimeImmutable(date('Y-m-') . PaymentStatusService::PAYMENT_DEADLINE_DAY);
+        if ((float)($paymentSnapshot['current_balance_due'] ?? 0) <= 0) {
+            $deadline = $deadline->modify('first day of next month')->setDate(
+                (int)$deadline->modify('first day of next month')->format('Y'),
+                (int)$deadline->modify('first day of next month')->format('n'),
+                PaymentStatusService::PAYMENT_DEADLINE_DAY
+            );
+        }
 
-        $lastCompletedPayment = null;
-        foreach ($allPayments as $payment) {
-            if (($payment['status'] ?? '') === 'completed') {
-                $lastCompletedPayment = $payment;
-                break;
+        $maturityItems = [];
+        $buildMaturityItem = static function (string $label, ?string $startValue, ?string $endValue): array {
+            try {
+                $start = $startValue ? new DateTimeImmutable(substr($startValue, 0, 10)) : null;
+                $end = $endValue ? new DateTimeImmutable(substr($endValue, 0, 10)) : null;
+            } catch (Throwable $e) {
+                $start = $end = null;
             }
+            if (!$start || !$end || $end < $start) {
+                return ['label'=>$label, 'valid'=>false, 'progress'=>0, 'completed'=>0, 'total'=>0, 'date'=>null];
+            }
+            $totalInterval = $start->diff($end);
+            $total = max(1, ($totalInterval->y * 12) + $totalInterval->m);
+            $today = new DateTimeImmutable('today');
+            $completed = $today <= $start ? 0 : min($total, (($start->diff($today)->y * 12) + $start->diff($today)->m));
+            return ['label'=>$label, 'valid'=>true, 'progress'=>(int)round(($completed / $total) * 100), 'completed'=>$completed, 'total'=>$total, 'date'=>$end->format('M j, Y')];
+        };
+        $maturityItems[] = $buildMaturityItem('Funeral cover', $member['created_at'] ?? null, $member['maturity_ends'] ?? null);
+        $activePlatinumCoverages = $this->db->fetchAll(
+            "SELECT pc.*, COALESCE(c.label, CONCAT(u.first_name, ' ', u.last_name)) AS coverage_name
+             FROM platinum_coverages pc
+             JOIN members m ON m.id = pc.member_id
+             JOIN users u ON u.id = m.user_id
+             LEFT JOIN member_corporate_members c ON pc.covered_person_type = 'corporate_member' AND c.id = pc.covered_person_id
+             WHERE pc.member_id = :member_id AND pc.status = 'active'
+             ORDER BY pc.id",
+            ['member_id' => $member['id']]
+        );
+        foreach ($activePlatinumCoverages as $coverage) {
+            $maturityItems[] = $buildMaturityItem(
+                'Platinum hospital cover — ' . ($coverage['coverage_name'] ?? 'package group'),
+                $coverage['effective_from'] ?? $coverage['approved_at'] ?? null,
+                $coverage['maturity_date'] ?? null
+            );
         }
-
-        $nextDueDate = null;
-        if ($lastCompletedPayment) {
-            $lastDate = new DateTime($lastCompletedPayment['payment_date'] ?? $lastCompletedPayment['created_at']);
-            $lastDate->modify('+1 month');
-            $nextDueDate = $lastDate;
-        } elseif (!empty($member['created_at'])) {
-            $createdDate = new DateTime($member['created_at']);
-            $createdDate->modify('+1 month');
-            $nextDueDate = $createdDate;
-        }
-
-        $currentMonthStatus = (!empty($currentMonthPayment) && (int)($currentMonthPayment['completed_payments'] ?? 0) > 0)
-            ? 'PAID'
-            : 'DUE';
-
-        if (($member['status'] ?? '') !== 'active') {
-            $currentMonthStatus = strtoupper($member['status'] ?? 'INACTIVE');
-        }
-
-        $maturityProgress = 0;
-        $maturityMonthsCompleted = 0;
-        $maturityMonthsTotal = 0;
 
         $missingProfileFields = [];
         $memberIdNumber = (string) ($member['id_number'] ?? '');
@@ -298,16 +309,18 @@ class MemberController extends BaseController
             'recent_payments' => $recentPayments,
             'beneficiaries' => $beneficiaries,
             'recent_claims' => $recentClaims,
-            'current_month_paid' => !empty($currentMonthPayment),
-            'current_month_payment' => $currentMonthPayment,
+            'account_monthly_amount' => $accountMonthlyAmount,
+            'payment_snapshot' => $paymentSnapshot,
+            'coverage_snapshot' => $coverageSnapshot,
+            'current_month_paid' => (float)($paymentSnapshot['current_balance_due'] ?? 0) <= 0,
+            'current_month_payment' => $paymentSnapshot,
             'stats' => $stats,
             'total_paid' => $totalPaid,
-            'months_covered' => $monthsCovered,
-            'next_due_date' => $nextDueDate ? $nextDueDate->format('M d') : 'N/A',
+            'current_month_paid_amount' => (float)($paymentSnapshot['paid_amount'] ?? 0),
+            'balance_due' => (float)($paymentSnapshot['balance_due'] ?? 0),
+            'next_due_date' => $deadline->format('M j'),
             'current_month_status' => $currentMonthStatus,
-            'maturity_progress' => $maturityProgress,
-            'maturity_months_completed' => $maturityMonthsCompleted,
-            'maturity_months_total' => $maturityMonthsTotal,
+            'maturity_items' => $maturityItems,
             'show_profile_completion_popup' => $showProfileCompletionPopup,
             'missing_profile_fields' => $missingProfileFields,
             'profile_completion_form_data' => $profileCompletionFormData,
@@ -481,20 +494,20 @@ class MemberController extends BaseController
             $this->redirect('/inpatient-requests');
         }
         try {
-            $this->db->insert('inpatient_requests', ['member_id' => $member['id'], 'platinum_coverage_id' => $selected['id'], 'covered_person_type' => $patient['type'], 'covered_person_id' => $patient['id'] ?: null, 'patient_name' => $patientName, 'facility_name' => $facilityName, 'facility_location' => $facilityLocation, 'facility_contact' => $facilityContact, 'admission_date' => $admissionDate, 'requested_days' => $requestedDays, 'admission_reference' => trim((string) ($_POST['admission_reference'] ?? ''))]);
+            $requestId = $this->db->insert('inpatient_requests', ['member_id' => $member['id'], 'platinum_coverage_id' => $selected['id'], 'covered_person_type' => $patient['type'], 'covered_person_id' => $patient['id'] ?: null, 'patient_name' => $patientName, 'facility_name' => $facilityName, 'facility_location' => $facilityLocation, 'facility_contact' => $facilityContact, 'admission_date' => $admissionDate, 'requested_days' => $requestedDays, 'admission_reference' => trim((string) ($_POST['admission_reference'] ?? ''))]);
         } catch (Throwable $e) {
             $_SESSION['error'] = $this->friendlyErrorMessage($e, 'Unable to submit your inpatient request.');
             $this->redirect('/inpatient-requests');
         }
         try {
             $name = trim(($member['first_name'] ?? '') . ' ' . ($member['last_name'] ?? '')) ?: 'Member';
-            (new SmsService())->sendSms($member['phone'] ?? null, "Dear {$name}, SHENA received your inpatient support request for {$patientName}. Our team will review it and send confirmation. - Shena Companion");
+            (new ClaimReceiptService())->notify('inpatient', (int)$requestId);
             (new SmsService())->sendSms($facilityContact, "SHENA received an inpatient support request for {$patientName} at {$facilityName}. Our team may contact you to verify admission details. - Shena Companion");
         } catch (Throwable $exception) {
             error_log('Inpatient request SMS failed: ' . $exception->getMessage());
         }
-        $_SESSION['success'] = 'Inpatient request submitted for review.';
-        $this->redirect('/inpatient-requests');
+        $_SESSION['success'] = 'Inpatient request received. Upload admission proof today, or call the office for guidance.';
+        $this->redirect('/claim-documents/inpatient/' . (int)$requestId);
     }
     
     public function profile()
@@ -1640,18 +1653,11 @@ class MemberController extends BaseController
             // Submit claim
             error_log('All eligibility checks passed. Submitting claim to database...');
             $claimId = $this->claimModel->submitClaim($claimData);
-            try {
-                $name = trim(($member['first_name'] ?? '') . ' ' . ($member['last_name'] ?? '')) ?: 'Member';
-                (new SmsService())->sendSms($member['phone'] ?? null, "Dear {$name}, SHENA received claim CLM-{$claimId}. We will confirm the next step after review. - Shena Companion");
-            } catch (Throwable $exception) {
-                error_log('Member claim acknowledgement SMS failed: ' . $exception->getMessage());
-            }
+            (new ClaimReceiptService())->notify('funeral', (int)$claimId);
             error_log('Claim submitted successfully with ID: ' . $claimId);
 
-            // Supporting documents may be supplied during filing or added later by staff.
+            // Supporting documents may be supplied now or later through the shared portal.
             error_log('Processing file uploads for claim ID: ' . $claimId);
-            $claimDocumentModel = new ClaimDocument();
-
             $documentFields = [
                 'id_copy' => 'ID/Birth Certificate Copy',
                 'chief_letter' => 'Chief Letter',
@@ -1668,36 +1674,13 @@ class MemberController extends BaseController
                 
                 error_log('Processing file upload: ' . $inputName . ' (size: ' . $_FILES[$inputName]['size'] . ' bytes)');
 
-                // Include the helper functions
-                require_once 'app/helpers/functions.php';
-
-                $uploadResult = uploadFile($_FILES[$inputName], 'claims/' . $claimId);
-                if ($uploadResult === false) {
-                    error_log('FILE UPLOAD FAILED: ' . $inputName . ' - uploadFile() returned false');
-                    $_SESSION['error'] = "Claim filed, but {$label} could not be uploaded. Staff can add it later.";
-                    error_log('Claim document upload deferred for claim ID: ' . $claimId);
-                    continue;
+                try {
+                    (new ClaimEvidenceService())->upload('funeral', (int)$claimId, $inputName, $_FILES[$inputName], (int)$_SESSION['user_id']);
+                } catch (Throwable $e) {
+                    $_SESSION['error'] = "Claim saved; {$label}: " . $e->getMessage() . ' Open Documents and next steps to retry.';
                 }
-                
-                /** @var string $uploadFileName */
-                $uploadFileName = $uploadResult['file_name'];
-                /** @var string $uploadFilePath */
-                $uploadFilePath = $uploadResult['file_path'];
-                /** @var string $uploadMimeType */
-                $uploadMimeType = $uploadResult['mime_type'];
-                error_log('File uploaded successfully: ' . $uploadFilePath);
-                $claimDocumentModel->addDocument([
-                    'claim_id' => $claimId,
-                    'document_type' => $inputName,
-                    'file_name' => $uploadFileName,
-                    'file_path' => $uploadFilePath,
-                    'file_size' => $uploadResult['file_size'],
-                    'mime_type' => $uploadMimeType,
-                    'uploaded_by' => $_SESSION['user_id'] ?? null
-                ]);
-                error_log('Document record saved: claim_id=' . $claimId . ', type=' . $inputName);
             }
-            
+
             error_log('All file uploads completed successfully for claim ID: ' . $claimId);
             
             // Send notification email to admin
@@ -1727,7 +1710,7 @@ class MemberController extends BaseController
                     $_SESSION['user_id'] ?? null
                 ], [
                     'subject' => 'Claim submitted successfully',
-                    'message' => "Your claim #{$claimId} has been received and is under review.",
+                    'message' => "Your claim #{$claimId} has been received. Upload required documents within 7 days of filing through Documents and next steps.",
                     'action_url' => '/claims',
                     'action_text' => 'View Claims'
                 ], $_SESSION['user_id'] ?? null);
@@ -1750,12 +1733,13 @@ class MemberController extends BaseController
                 }
             }
             
-            $successMessage = 'Claim submitted successfully. SHENA Companion will review your claim and contact you within 1-3 business days.';
+            $successMessage = 'Claim received. Open Documents and next steps to upload ID/birth certificate, chief letter and mortuary invoice within 7 days of filing. Initial verification does not restart this deadline.';
             if ($requestCashAlternative) {
                 $successMessage .= ' Your cash alternative request has been noted and will be reviewed by administration.';
             }
             $_SESSION['success'] = $successMessage;
             error_log('=== Claim Submission Completed Successfully ===');
+            $this->redirect('/claim-documents/funeral/' . (int)$claimId);
             
         } catch (Exception $e) {
             error_log('=== Submit claim error ===');

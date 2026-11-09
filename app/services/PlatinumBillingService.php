@@ -128,7 +128,7 @@ class PlatinumBillingService
     {
         return $this->db->fetchAll(
             "SELECT * FROM platinum_coverages WHERE member_id = :member_id
-             AND status = 'active' ORDER BY id ASC",
+             AND (status = 'active' OR (status = 'pending_approval' AND registration_selected = 1)) ORDER BY id ASC",
             ['member_id' => $memberId]
         );
     }

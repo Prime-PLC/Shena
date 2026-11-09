@@ -96,22 +96,21 @@ class PlatinumCoverage extends BaseModel
      * Member IDs holding Platinum, keyed by member id, for cheap tier tagging of
      * member/payment listings without an N+1 query per row.
      *
-     * @return array<int, string> member_id => highest-precedence coverage status
+     * Pending requests are approval work, not active Platinum membership.
+     * @return array<int, string> member_id => active coverage status
      */
     public function tierMapByMember(): array
     {
         $rows = $this->db->fetchAll(
-            'SELECT member_id,
-                    MAX(status = "active") AS has_active,
-                    COUNT(*) AS coverage_count
+            'SELECT member_id
              FROM platinum_coverages
-             WHERE status IN ("pending_approval", "active")
+             WHERE status = "active"
              GROUP BY member_id'
         );
 
         $map = [];
         foreach ($rows as $row) {
-            $map[(int) $row['member_id']] = !empty($row['has_active']) ? 'active' : 'pending';
+            $map[(int) $row['member_id']] = 'active';
         }
 
         return $map;
