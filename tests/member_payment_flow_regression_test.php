@@ -51,6 +51,7 @@ $checks = [
             '196.201.213.0/24',
             '196.201.214.0/24',
             '196.201.215.0/24',
+            'verifySuccessfulCallback($callbackData, $payment)',
         ],
     ],
     [
@@ -71,6 +72,13 @@ $checks = [
             'checkout_request_id = :checkout_id_alt',
             'merchant_request_id',
             'result_code',
+            'verifySuccessfulCallback',
+        ],
+    ],
+    [
+        'file' => 'app/core/Router.php',
+        'mustNotContain' => [
+            "'/api/mpesa/callback'",
         ],
     ],
     [
@@ -105,9 +113,16 @@ foreach ($checks as $check) {
     $path = $root . '/' . $check['file'];
     $contents = file_get_contents($path);
 
-    foreach ($check['mustContain'] as $needle) {
+    foreach ($check['mustContain'] ?? [] as $needle) {
         if (strpos($contents, $needle) === false) {
             fwrite(STDERR, $check['file'] . " is missing expected marker: {$needle}\n");
+            $failed = true;
+        }
+    }
+
+    foreach ($check['mustNotContain'] ?? [] as $needle) {
+        if (strpos($contents, $needle) !== false) {
+            fwrite(STDERR, $check['file'] . " contains unexpected marker: {$needle}\n");
             $failed = true;
         }
     }

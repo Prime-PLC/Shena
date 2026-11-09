@@ -2,7 +2,7 @@
 /**
  * Payment Controller - Handles payment processing and M-Pesa callbacks
  */
-class PaymentController extends BaseController 
+class PaymentController extends BaseController
 {
     private $paymentService;
     private $memberModel;
@@ -87,6 +87,12 @@ class PaymentController extends BaseController
                 $amount = $this->resolveMemberPaymentAmount($paymentType, $member, $amount);
             }
 
+            $amount = (int) $amount;
+            if ($amount <= 0) {
+                $this->json(['error' => 'Payment amount must be greater than zero'], 400);
+                return;
+            }
+
             // Format phone number
             $phoneNumber = $this->formatPhoneNumber($phoneNumber);
             if (!$phoneNumber) {
@@ -131,34 +137,7 @@ class PaymentController extends BaseController
     
     public function mpesaCallback()
     {
-        try {
-            // Get the callback data
-            $callbackData = json_decode(file_get_contents('php://input'), true);
-            
-            if (!$callbackData) {
-                http_response_code(400);
-                echo json_encode(['error' => 'Invalid callback data']);
-                return;
-            }
-            
-            // Log the callback for debugging
-            error_log('M-Pesa Callback: ' . json_encode($callbackData));
-            
-            // Process the callback
-            $result = $this->paymentService->processCallback($callbackData);
-            
-            // Return appropriate response
-            if ($result['status'] === 'success') {
-                echo json_encode(['ResultCode' => 0, 'ResultDesc' => 'Success']);
-            } else {
-                echo json_encode(['ResultCode' => 1, 'ResultDesc' => $result['message']]);
-            }
-            
-        } catch (Exception $e) {
-            error_log('M-Pesa callback error: ' . $e->getMessage());
-            http_response_code(500);
-            echo json_encode(['ResultCode' => 1, 'ResultDesc' => 'Callback processing failed']);
-        }
+        $this->json(['error' => 'This callback endpoint is retired'], 410);
     }
     
     public function queryPaymentStatus()

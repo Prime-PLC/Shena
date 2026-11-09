@@ -320,7 +320,6 @@ class Router
         $this->addRoute('POST', '/admin/settings/test-fallback', 'SettingsController@testFallback');
         
         // API Routes
-        $this->addRoute('POST', '/api/mpesa/callback', 'PaymentController@mpesaCallback');
         $this->addRoute('POST', '/api/payment/initiate', 'PaymentController@initiatePayment');
         // QR image route
         $this->addRoute('GET', '/qr/paybill', 'PaymentController@qrPaybill');

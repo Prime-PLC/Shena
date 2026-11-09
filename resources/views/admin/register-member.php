@@ -234,6 +234,12 @@ $platinumPriceData = $GLOBALS['platinum_config']['prices'] ?? [];
                     <label class="form-label">National ID <span class="required">*</span></label>
                     <input type="text" name="id_number" class="form-input" value="<?php echo $oldValue('id_number'); ?>" required>
                 </div>
+                <?php if (!empty($supports_file_number)): ?>
+                    <div class="form-group">
+                        <label class="form-label">File Number <small class="text-muted">(optional)</small></label>
+                        <input type="text" name="file_number" class="form-input" value="<?php echo $oldValue('file_number'); ?>" placeholder="Physical office file reference">
+                    </div>
+                <?php endif; ?>
                 <div class="form-group">
                     <label class="form-label">Date of Birth <span class="required">*</span></label>
                     <input type="date" name="date_of_birth" class="form-input" value="<?php echo $oldValue('date_of_birth'); ?>" required>

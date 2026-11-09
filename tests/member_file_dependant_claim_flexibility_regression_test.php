@@ -18,6 +18,7 @@ $assertNotContains = static function (string $content, string $needle, string $m
 $memberModel = $read('app/models/Member.php');
 $adminController = $read('app/controllers/AdminController.php');
 $memberController = $read('app/controllers/MemberController.php');
+$registrationView = $read('resources/views/admin/register-member.php');
 $adminClaims = $read('resources/views/admin/claims.php');
 $memberClaims = $read('resources/views/member/claims.php');
 $memberBeneficiaries = $read('resources/views/member/beneficiaries.php');
@@ -33,6 +34,9 @@ $assertNotContains($memberBeneficiaries, 'name="id_number" class="form-control" 
 
 $assertContains($adminMember, 'name="file_number"', 'Admin member panel must expose file number.');
 $assertContains($adminController, "['file_number']", 'Admin update must persist file number.');
+$assertContains($registrationView, 'name="file_number"', 'Admin registration form must expose file number.');
+$assertContains($adminController, "\$_POST['file_number'] ?? ''", 'Admin registration must read the submitted file number.');
+$assertContains($adminController, "\$memberData['file_number'] = \$fileNumber;", 'Admin registration must persist the file number when supported.');
 $assertContains($memberModel, 'm.file_number LIKE :search_file_number', 'Member search must support file number.');
 
 foreach ([$adminClaims, $memberClaims] as $claimsView) {

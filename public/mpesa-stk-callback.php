@@ -16,6 +16,7 @@ require_once ROOT_PATH . '/app/models/Member.php';
 require_once ROOT_PATH . '/app/models/User.php';
 require_once ROOT_PATH . '/app/services/EmailService.php';
 require_once ROOT_PATH . '/app/services/SmsService.php';
+require_once ROOT_PATH . '/app/services/PaymentService.php';
 require_once ROOT_PATH . '/app/models/PlatinumCoverage.php';
 require_once ROOT_PATH . '/app/services/PlatinumBillingService.php';
 
@@ -27,12 +28,11 @@ if (!is_dir($logDir)) {
 
 // Log all incoming requests
 $logFile = $logDir . '/mpesa_stk_' . date('Y-m-d') . '.log';
+$rawInput = file_get_contents('php://input');
 $requestLog = str_repeat('=', 80) . "\n";
 $requestLog .= date('Y-m-d H:i:s') . " - STK Push Callback Received\n";
 $requestLog .= "Method: " . $_SERVER['REQUEST_METHOD'] . "\n";
 $requestLog .= "IP Address: " . ($_SERVER['REMOTE_ADDR'] ?? 'Unknown') . "\n";
-$requestLog .= "Raw Input: " . file_get_contents('php://input') . "\n";
-$requestLog .= "Headers: " . json_encode(getallheaders()) . "\n";
 $requestLog .= str_repeat('-', 80) . "\n";
 file_put_contents($logFile, $requestLog, FILE_APPEND);
 
@@ -40,8 +40,8 @@ file_put_contents($logFile, $requestLog, FILE_APPEND);
 // Production: 196.201.212.0/24, 196.201.213.0/24, 196.201.214.0/24, 196.201.215.0/24
 // Sandbox:    196.201.214.200
 function safaricom_ip_allowed(string $ip): bool {
-    // Allow localhost / private ranges during local development only
-    if (defined('DEBUG_MODE') && DEBUG_MODE) {
+    if (defined('DEBUG_MODE') && DEBUG_MODE
+        && defined('MPESA_ENVIRONMENT') && MPESA_ENVIRONMENT !== 'production') {
         return true;
     }
     $allowedCidrs = [
@@ -78,15 +78,12 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 // Get raw callback data
-$rawInput = file_get_contents('php://input');
 $callbackData = json_decode($rawInput, true);
 
-// Log parsed data
-$parsedLog = "Parsed Data: " . json_encode($callbackData, JSON_PRETTY_PRINT) . "\n";
-file_put_contents($logFile, $parsedLog, FILE_APPEND);
-
 // Validate callback data structure
-if (empty($callbackData) || !isset($callbackData['Body'])) {
+if (!is_array($callbackData)
+    || !is_array($callbackData['Body'] ?? null)
+    || !is_array($callbackData['Body']['stkCallback'] ?? null)) {
     http_response_code(400);
     $error = ['ResultCode' => 1, 'ResultDesc' => 'Invalid callback data structure'];
     file_put_contents($logFile, "Error: Invalid data structure\n\n", FILE_APPEND);
@@ -153,11 +150,6 @@ try {
             }
         }
         
-        $processLog .= "  Amount: KES {$amount}\n";
-        $processLog .= "  Receipt: {$mpesaReceiptNumber}\n";
-        $processLog .= "  Phone: {$phoneNumber}\n";
-        $processLog .= "  Date: {$transactionDate}\n";
-        
         // Find the payment record by checkout request ID
         $payment = $db->fetch(
             "SELECT * FROM payments
@@ -172,8 +164,23 @@ try {
         );
         
         if ($payment) {
+            if (($payment['status'] ?? '') === 'completed'
+                && !empty($payment['mpesa_receipt_number'])) {
+                http_response_code(200);
+                echo json_encode(['ResultCode' => 0, 'ResultDesc' => 'Already processed']);
+                exit;
+            }
+
+            if (!(new PaymentService())->verifySuccessfulCallback($callbackData, $payment)) {
+                http_response_code(502);
+                file_put_contents($logFile, "Error: STK callback verification failed\n\n", FILE_APPEND);
+                echo json_encode(['ResultCode' => 1, 'ResultDesc' => 'Payment verification failed']);
+                exit;
+            }
+
             $processLog .= "  Payment Record Found: ID {$payment['id']}\n";
             
+            $paymentModel->update($payment['id'], ['amount' => (int) $amount]);
             $paymentModel->confirmPayment($payment['id'], $mpesaReceiptNumber);
             $updated = $db->execute(
                 "UPDATE payments SET

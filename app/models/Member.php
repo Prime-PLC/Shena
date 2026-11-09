@@ -30,6 +30,11 @@ class Member extends BaseModel
         return in_array($column, $this->getTableColumns(), true);
     }
 
+    public function supportsFileNumber(): bool
+    {
+        return $this->hasColumn('file_number');
+    }
+
     private function activeArchiveCondition($alias = 'm')
     {
         return $this->hasColumn('archived_at') ? " AND {$alias}.archived_at IS NULL" : "";
