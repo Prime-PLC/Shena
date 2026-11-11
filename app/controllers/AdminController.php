@@ -705,6 +705,7 @@ class AdminController extends BaseController
                 'title' => 'Register New Member - Admin',
                 'packages' => $membership_packages,
                 'tier_definitions' => MembershipPricingService::getTierDefinitions(),
+                'supports_file_number' => $this->memberModel->supportsFileNumber(),
                 'csrf_token' => $this->generateCsrfToken()
             ];
 
@@ -723,6 +724,7 @@ class AdminController extends BaseController
             $email = $this->sanitizeInput($_POST['email'] ?? '');
             $phoneRaw = $this->sanitizeInput($_POST['phone'] ?? '');
             $idNumber = $this->sanitizeInput($_POST['id_number'] ?? '');
+            $fileNumber = $this->sanitizeInput($_POST['file_number'] ?? '');
             $dateOfBirth = $this->sanitizeInput($_POST['date_of_birth'] ?? '');
             $gender = $this->sanitizeInput($_POST['gender'] ?? 'male');
             $address = $this->sanitizeInput($_POST['address'] ?? '');
@@ -821,7 +823,7 @@ class AdminController extends BaseController
             $maturityEnds = date('Y-m-d', strtotime("+{$maturityMonths} months"));
 
             // Create member record
-            $memberId = $this->memberModel->create([
+            $memberData = [
                 'user_id' => $userId,
                 'member_number' => $memberNumber,
                 'id_number' => $idNumber,
@@ -838,7 +840,11 @@ class AdminController extends BaseController
                 'maturity_ends' => $maturityEnds,
                 'status' => 'inactive',
                 'created_at' => date('Y-m-d H:i:s')
-            ]);
+            ];
+            if ($this->memberModel->supportsFileNumber()) {
+                $memberData['file_number'] = $fileNumber;
+            }
+            $memberId = $this->memberModel->create($memberData);
 
             $this->corporateMemberModel->replaceForMember((int)$memberId, $corporateMembers);
 

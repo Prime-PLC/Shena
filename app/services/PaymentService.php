@@ -2,7 +2,7 @@
 /**
  * Payment Service - Handles M-Pesa and other payment integrations
  */
-class PaymentService 
+class PaymentService
 {
     private $config;
     
@@ -40,6 +40,8 @@ class PaymentService
             ]);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, MPESA_ENVIRONMENT === 'production');
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 15);
             
             $response = curl_exec($ch);
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -173,19 +175,105 @@ class PaymentService
         return false;
     }
     
+    public function verifySuccessfulCallback($callbackData, array $payment)
+    {
+        if (!is_array($callbackData)) {
+            return false;
+        }
+
+        $body = $callbackData['Body'] ?? null;
+        $stkCallback = is_array($body) ? ($body['stkCallback'] ?? null) : null;
+        if (!is_array($stkCallback) || (string) ($stkCallback['ResultCode'] ?? '') !== '0') {
+            return false;
+        }
+
+        $checkoutRequestId = trim((string) ($stkCallback['CheckoutRequestID'] ?? ''));
+        $merchantRequestId = trim((string) ($stkCallback['MerchantRequestID'] ?? ''));
+        if ($checkoutRequestId === '' || $merchantRequestId === '') {
+            return false;
+        }
+
+        if (!empty($payment['checkout_request_id'])
+            && !hash_equals((string) $payment['checkout_request_id'], $checkoutRequestId)) {
+            return false;
+        }
+        if (!empty($payment['merchant_request_id'])
+            && !hash_equals((string) $payment['merchant_request_id'], $merchantRequestId)) {
+            return false;
+        }
+
+        $items = $stkCallback['CallbackMetadata']['Item'] ?? null;
+        if (!is_array($items)) {
+            return false;
+        }
+
+        $metadata = [];
+        foreach ($items as $item) {
+            if (is_array($item) && isset($item['Name'], $item['Value'])) {
+                $metadata[$item['Name']] = $item['Value'];
+            }
+        }
+
+        $callbackAmount = $metadata['Amount'] ?? null;
+        $receiptNumber = trim((string) ($metadata['MpesaReceiptNumber'] ?? ''));
+        $callbackPhone = $this->formatPhoneNumber((string) ($metadata['PhoneNumber'] ?? ''));
+        if (!is_numeric($callbackAmount)
+            || !is_numeric($payment['amount'] ?? null)
+            || (int) $callbackAmount !== (int) $payment['amount']
+            || $receiptNumber === ''
+            || !$callbackPhone) {
+            return false;
+        }
+
+        if (!empty($payment['phone_number'])) {
+            $paymentPhone = $this->formatPhoneNumber((string) $payment['phone_number']);
+            if (!$paymentPhone || !hash_equals($paymentPhone, $callbackPhone)) {
+                return false;
+            }
+        }
+
+        $providerStatus = $this->queryTransactionStatus($checkoutRequestId);
+        if (is_array($providerStatus) && array_key_exists('ResultCode', $providerStatus)) {
+            return (string) $providerStatus['ResultCode'] === '0';
+        }
+
+        error_log('M-Pesa transaction status query was unavailable or inconclusive; accepting the validated STK callback.');
+        return true;
+    }
+
     public function processCallback($callbackData)
     {
         try {
             $paymentModel = new Payment();
             
             // Parse the callback data
-            $body = $callbackData['Body'] ?? [];
-            $stkCallback = $body['stkCallback'] ?? [];
+            $body = is_array($callbackData) ? ($callbackData['Body'] ?? null) : null;
+            $stkCallback = is_array($body) ? ($body['stkCallback'] ?? null) : null;
+            if (!is_array($stkCallback)) {
+                return ['status' => 'failed', 'message' => 'Invalid callback data'];
+            }
             
             $merchantRequestId = $stkCallback['MerchantRequestID'] ?? '';
             $checkoutRequestId = $stkCallback['CheckoutRequestID'] ?? '';
             $resultCode = $stkCallback['ResultCode'] ?? '';
             $resultDesc = $stkCallback['ResultDesc'] ?? '';
+
+            if ((string) $resultCode !== '0') {
+                return ['status' => 'failed', 'message' => 'Unverified callback status'];
+            }
+
+            $payment = $this->findPaymentByCheckoutRequestId($checkoutRequestId);
+            if (empty($payment)) {
+                return ['status' => 'failed', 'message' => 'Payment not found'];
+            }
+
+            if (($payment['status'] ?? '') === 'completed' && !empty($payment['mpesa_receipt_number'])) {
+                return ['status' => 'success', 'message' => 'Payment already processed'];
+            }
+
+            if (!$this->verifySuccessfulCallback($callbackData, $payment)) {
+                return ['status' => 'error', 'message' => 'Payment callback verification failed'];
+            }
             
             if ($resultCode == 0) {
                 // Payment successful
@@ -214,9 +302,6 @@ class PaymentService
                     }
                 }
 
-                // Find the payment record by checkout request ID
-                $payment = $this->findPaymentByCheckoutRequestId($checkoutRequestId);
-
                 if (!empty($payment)) {
                     $paymentId = $payment['id'];
 
@@ -224,7 +309,7 @@ class PaymentService
                         return ['status' => 'success', 'message' => 'Payment already processed'];
                     }
                     
-                    // Update payment status
+                    $paymentModel->update($paymentId, ['amount' => (int) $amount]);
                     $paymentModel->confirmPayment($paymentId, $mpesaReceiptNumber);
                     $paymentModel->update($paymentId, [
                         'merchant_request_id' => $merchantRequestId,
@@ -358,21 +443,7 @@ class PaymentService
                     return ['status' => 'success', 'message' => 'Payment processed successfully'];
                 }
             } else {
-                // Payment failed
-                $payment = $this->findPaymentByCheckoutRequestId($checkoutRequestId);
-
-                if (!empty($payment)) {
-                    $paymentId = $payment['id'];
-                    $paymentModel->failPayment($paymentId, $resultDesc);
-                    $paymentModel->update($paymentId, [
-                        'merchant_request_id' => $merchantRequestId,
-                        'checkout_request_id' => $checkoutRequestId,
-                        'result_code' => $resultCode,
-                        'result_desc' => $resultDesc,
-                    ]);
-                }
-
-                return ['status' => 'failed', 'message' => $resultDesc];
+                return ['status' => 'failed', 'message' => 'Unverified callback status'];
             }
             
         } catch (Exception $e) {
@@ -447,6 +518,8 @@ class PaymentService
             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, MPESA_ENVIRONMENT === 'production');
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 15);
             curl_setopt($ch, CURLOPT_HTTPHEADER, [
                 'Authorization: Bearer ' . $accessToken,
                 'Content-Type: application/json'

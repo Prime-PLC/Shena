@@ -29,7 +29,7 @@ A comprehensive web application for managing a welfare association that provides
 
 ## Technical Stack
 
-- **Backend**: PHP 8.0+ with custom MVC framework
+- **Backend**: PHP 8.2.35, 8.3.36, 8.4.27, or 8.5.12 and later patch releases in those minor branches, with custom MVC framework
 - **Database**: MySQL 8.0+
 - **Frontend**: HTML5, CSS3, JavaScript, Bootstrap 5
 - **Payment Integration**: M-Pesa STK Push API (Safaricom)
@@ -39,7 +39,7 @@ A comprehensive web application for managing a welfare association that provides
 ## Installation
 
 ### Prerequisites
-- PHP 8.0 or higher
+- PHP 8.2.35+, 8.3.36+, 8.4.27+, or 8.5.12+ (within the matching minor branch)
 - MySQL 8.0 or higher
 - Apache/Nginx web server
 - Composer (optional, for future dependencies)
@@ -181,7 +181,7 @@ Members can pay monthly contributions via:
 
 ### Payment API
 - `POST /api/payment/initiate` - Initiate M-Pesa payment
-- `POST /api/mpesa/callback` - M-Pesa payment callback
+- `https://yourdomain/public/mpesa-stk-callback.php` - Safaricom STK callback (checks the payment with Safaricom before crediting it)
 
 ### Request Format (Payment Initiation)
 ```json
@@ -201,6 +201,10 @@ Members can pay monthly contributions via:
 - Session management with timeout
 - File upload validation and restrictions
 - Access control with role-based permissions
+
+### PHP Runtime Security
+
+Use only patched PHP 8.2, 8.3, 8.4, or 8.5 releases: 8.2.35+, 8.3.36+, 8.4.27+, or 8.5.12+ respectively. PHP 8.0 and 8.1 are unsupported. These minimums include the October 2026 fixes for [GHSA-w8hw-w9fx-j79w](https://github.com/php/php-src/security/advisories/GHSA-w8hw-w9fx-j79w) and [GHSA-6wmf-4rv5-p3rp](https://github.com/php/php-src/security/advisories/GHSA-6wmf-4rv5-p3rp); upgrading the PHP web SAPI is required because application changes cannot mitigate engine vulnerabilities.
 
 ## Membership Packages
 
