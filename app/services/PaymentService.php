@@ -40,6 +40,8 @@ class PaymentService
             ]);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, MPESA_ENVIRONMENT === 'production');
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 15);
             
             $response = curl_exec($ch);
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -231,8 +233,12 @@ class PaymentService
         }
 
         $providerStatus = $this->queryTransactionStatus($checkoutRequestId);
-        return is_array($providerStatus)
-            && (string) ($providerStatus['ResultCode'] ?? '') === '0';
+        if (is_array($providerStatus) && array_key_exists('ResultCode', $providerStatus)) {
+            return (string) $providerStatus['ResultCode'] === '0';
+        }
+
+        error_log('M-Pesa transaction status query was unavailable or inconclusive; accepting the validated STK callback.');
+        return true;
     }
 
     public function processCallback($callbackData)
@@ -512,6 +518,8 @@ class PaymentService
             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, MPESA_ENVIRONMENT === 'production');
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 15);
             curl_setopt($ch, CURLOPT_HTTPHEADER, [
                 'Authorization: Bearer ' . $accessToken,
                 'Content-Type: application/json'
