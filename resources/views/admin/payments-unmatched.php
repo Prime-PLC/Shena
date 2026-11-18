@@ -435,6 +435,7 @@ function recon_filter_value($key, $filters) {
                                     <td>
                                         <div class="row-actions">
                                             <button class="unmatched-btn primary" type="button" onclick="loadMatches(<?= $paymentId ?>)">Find matches</button>
+                                            <button class="unmatched-btn" type="button" onclick="loadAiSuggestion(<?= $paymentId ?>)">AI suggest</button>
                                             <button class="unmatched-btn" type="button" onclick="openManualSearch(<?= $paymentId ?>, <?= htmlspecialchars(json_encode($receipt), ENT_QUOTES, 'UTF-8') ?>)">Search member manually</button>
                                         </div>
                                     </td>
@@ -623,7 +624,66 @@ document.getElementById('manual-reconciliation-notes')?.addEventListener('keydow
     }
 });
 
-async function manualReconcile(paymentId, memberId, notes) {
+async function loadAiSuggestion(paymentId) {
+    const panel = document.getElementById(`matches-${paymentId}`);
+    if (!panel) return;
+
+    panel.classList.add('active');
+    panel.innerHTML = '<div class="muted">Asking the AI assistant... this can take a few seconds.</div>';
+
+    try {
+        const response = await fetch(`/admin/payments/${paymentId}/ai-suggest`, {
+            method: 'POST',
+            headers: {'Accept': 'application/json'}
+        });
+        const data = await response.json();
+
+        if (!data.success) {
+            panel.innerHTML = `<div class="muted">${escapeHtml(data.message || data.error || 'AI suggestion unavailable.')}</div>`;
+            return;
+        }
+
+        const s = data.suggestion;
+        if (!s.member) {
+            panel.innerHTML = `
+                <div class="muted">${escapeHtml(s.rationale || 'The assistant found no credible candidate.')}</div>
+                <div style="margin-top:8px;">
+                    <button class="unmatched-btn" type="button" onclick="openManualSearch(${paymentId}, 'Payment #${paymentId}')">Search member manually</button>
+                </div>`;
+            return;
+        }
+
+        const confidence = Math.round(s.confidence);
+        panel.innerHTML = `
+            <div class="muted" style="margin-bottom:6px;">AI suggestion (advisory only - you decide). Confidence ${confidence}%.</div>
+            <strong>${escapeHtml(s.member.name)}</strong> - ${escapeHtml(s.member.member_number)} (${escapeHtml(s.member.status)})
+            <div class="muted" style="margin:6px 0;">${escapeHtml(s.rationale)}</div>
+            <textarea class="notes-input" id="notes-${paymentId}" placeholder="reconciliation_notes: confirm why this match is correct"></textarea>
+            <div class="row-actions">
+                <button class="unmatched-btn primary" type="button" onclick="useAiSuggestion(${paymentId}, ${s.member.id}, ${s.id})">Use suggestion</button>
+                <button class="unmatched-btn" type="button" onclick="dismissAiSuggestion(${paymentId}, ${s.id})">Dismiss</button>
+            </div>`;
+    } catch (error) {
+        panel.innerHTML = '<div class="muted">Could not reach the AI assistant. Use "Find matches" instead.</div>';
+    }
+}
+
+function useAiSuggestion(paymentId, memberId, suggestionId) {
+    const notesEl = document.getElementById(`notes-${paymentId}`);
+    const notes = ((notesEl && notesEl.value) || '').trim() || 'AI-assisted match confirmed by admin';
+    return manualReconcile(paymentId, memberId, notes, suggestionId);
+}
+
+async function dismissAiSuggestion(paymentId, suggestionId) {
+    await fetch(`/admin/payments/ai-suggestions/${suggestionId}/dismiss`, {
+        method: 'POST',
+        headers: {'Accept': 'application/json'}
+    });
+    const panel = document.getElementById(`matches-${paymentId}`);
+    if (panel) panel.innerHTML = '<div class="muted">Suggestion dismissed.</div>';
+}
+
+async function manualReconcile(paymentId, memberId, notes, aiSuggestionId) {
     const finalNotes = (notes || '').trim() || 'Manual reconciliation from unmatched payments page';
     if (!confirm('Reconcile this payment with the selected member?')) return;
 
@@ -636,7 +696,8 @@ async function manualReconcile(paymentId, memberId, notes) {
         body: JSON.stringify({
             payment_id: paymentId,
             member_id: memberId,
-            notes: finalNotes
+            notes: finalNotes,
+            ai_suggestion_id: aiSuggestionId || 0
         })
     });
 

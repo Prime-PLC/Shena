@@ -418,19 +418,37 @@ class PaymentController extends BaseController
         
         $input = json_decode(file_get_contents('php://input'), true);
         
-        $paymentId = $input['payment_id'] ?? 0;
-        $memberId = $input['member_id'] ?? 0;
+        $paymentId = (int)($input['payment_id'] ?? 0);
+        $memberId = (int)($input['member_id'] ?? 0);
         $notes = $input['notes'] ?? '';
         $userId = $_SESSION['user_id'] ?? 0;
+        $aiSuggestionId = (int)($input['ai_suggestion_id'] ?? 0);
         
         if (!$paymentId || !$memberId) {
             $this->json(['error' => 'Payment ID and Member ID required'], 400);
             return;
         }
+
+        // An AI suggestion only counts as "ai_assisted" if it really belongs to
+        // this payment; the admin still made the decision.
+        $aiService = null;
+        $matchMethod = 'manual';
+        if ($aiSuggestionId > 0) {
+            require_once __DIR__ . '/../services/AiMatchingService.php';
+            $aiService = new AiMatchingService();
+            if ($aiService->suggestionBelongsToPayment($aiSuggestionId, $paymentId)) {
+                $matchMethod = 'ai_assisted';
+            } else {
+                $aiSuggestionId = 0;
+            }
+        }
         
-        $success = $this->reconciliationService->manualReconciliation($paymentId, $memberId, $userId, $notes);
+        $success = $this->reconciliationService->manualReconciliation($paymentId, $memberId, $userId, $notes, $matchMethod);
 
         if ($success) {
+            if ($aiService && $aiSuggestionId > 0) {
+                $aiService->resolve($aiSuggestionId, 'accepted', $userId);
+            }
             $this->refreshMemberPaymentStatus((int)$memberId);
             $this->json([
                 'success' => true,
@@ -439,9 +457,53 @@ class PaymentController extends BaseController
         } else {
             $this->json([
                 'success' => false,
-                'message' => 'Failed to reconcile payment'
-            ], 500);
+                'message' => $this->reconciliationService->getLastError() ?: 'Failed to reconcile payment'
+            ], 422);
         }
+    }
+
+    /**
+     * Ask the AI service for an advisory match suggestion (admin only).
+     * POST because it calls a paid external service. Nothing is posted here.
+     */
+    public function aiSuggest($paymentId)
+    {
+        if (!isset($_SESSION['user_role']) || !in_array($_SESSION['user_role'], ['super_admin', 'manager'])) {
+            $this->json(['error' => 'Unauthorized'], 403);
+            return;
+        }
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->json(['error' => 'Method not allowed'], 405);
+            return;
+        }
+
+        require_once __DIR__ . '/../services/AiMatchingService.php';
+        $aiService = new AiMatchingService();
+        $result = $aiService->suggest((int)$paymentId, $_SESSION['user_id'] ?? 0);
+
+        $this->json($result, !empty($result['success']) ? 200 : 422);
+    }
+
+    /**
+     * Dismiss an AI suggestion without using it (admin only).
+     */
+    public function aiDismiss($suggestionId)
+    {
+        if (!isset($_SESSION['user_role']) || !in_array($_SESSION['user_role'], ['super_admin', 'manager'])) {
+            $this->json(['error' => 'Unauthorized'], 403);
+            return;
+        }
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->json(['error' => 'Method not allowed'], 405);
+            return;
+        }
+
+        require_once __DIR__ . '/../services/AiMatchingService.php';
+        $aiService = new AiMatchingService();
+        $aiService->resolve((int)$suggestionId, 'rejected', $_SESSION['user_id'] ?? 0);
+        $this->json(['success' => true]);
     }
 
     /**
