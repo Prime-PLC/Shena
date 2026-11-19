@@ -557,14 +557,32 @@ class Member extends BaseModel
             return $result;
         }
 
+        // Reject unparseable or future dates (DateTime::diff()->y ignores direction, so a
+        // future DOB would otherwise look like a positive age). Newborns (age 0) are valid.
+        try {
+            $dobDate = new DateTimeImmutable($dateOfBirth);
+        } catch (Throwable $e) {
+            $result['message'] = 'Please enter a valid dependant date of birth.';
+            return $result;
+        }
+        if ($dobDate > new DateTimeImmutable('today')) {
+            $result['message'] = 'Date of birth cannot be in the future.';
+            return $result;
+        }
+
         $age = $this->calculateAge($dateOfBirth);
-        if ($age <= 0 || $age > 120) {
+        if ($age > 120) {
             $result['message'] = 'Please enter a valid dependant date of birth.';
             return $result;
         }
 
         if ($relationship === 'child' && $age >= 18) {
             $result['message'] = 'Children must be below 18 years for dependant coverage.';
+            return $result;
+        }
+
+        if ($relationship !== 'child' && $age < 18) {
+            $result['message'] = 'Spouse, parents and in-laws must be 18 years or older. Select Child for dependants below 18.';
             return $result;
         }
 

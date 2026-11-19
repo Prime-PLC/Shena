@@ -516,8 +516,23 @@ main {
                                 </div>
                                 <div class="beneficiary-info">
                                     <h3><?php echo htmlspecialchars($beneficiary['full_name'] ?? 'Unknown'); ?></h3>
-                                    <p><?php echo htmlspecialchars(ucfirst($beneficiary['relationship'] ?? 'Relation')); ?></p>
-                                    <p class="age-bracket">Age Bracket: <?php echo htmlspecialchars($beneficiary['age_bracket'] ?? '35-40 years'); ?></p>
+                                    <p><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', (string)($beneficiary['relationship'] ?? 'Relation')))); ?></p>
+                                    <?php
+                                    $ageLabel = '';
+                                    if (!empty($beneficiary['date_of_birth']) && $beneficiary['date_of_birth'] !== '0000-00-00') {
+                                        try {
+                                            $diff = (new DateTimeImmutable($beneficiary['date_of_birth']))->diff(new DateTimeImmutable('today'));
+                                            $ageLabel = $diff->y >= 1
+                                                ? $diff->y . ' year' . ($diff->y === 1 ? '' : 's')
+                                                : max(0, $diff->m) . ' month' . ($diff->m === 1 ? '' : 's');
+                                        } catch (Throwable $e) {
+                                            $ageLabel = '';
+                                        }
+                                    }
+                                    ?>
+                                    <?php if ($ageLabel !== ''): ?>
+                                    <p class="age-bracket">Age: <?php echo htmlspecialchars($ageLabel); ?></p>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                             <button class="edit-details-btn" onclick="editBeneficiary(<?php echo $beneficiary['id']; ?>)">
@@ -541,7 +556,7 @@ main {
                 <?php endif; ?>
                 
                 <?php if ($availableSlots > 0): ?>
-                <div class="add-member-card" data-bs-toggle="modal" data-bs-target="#addBeneficiaryModal">
+                <div class="add-member-card" role="button" tabindex="0" aria-label="Add beneficiary" data-bs-toggle="modal" data-bs-target="#addBeneficiaryModal" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
                     <div class="add-icon">
                         <i class="fas fa-plus"></i>
                     </div>
@@ -549,7 +564,7 @@ main {
                     <p>Available slots: <?php echo $availableSlots; ?> / <?php echo $maxBeneficiaries; ?></p>
                 </div>
                 <?php else: ?>
-                <div class="add-member-card" style="border-color:#F87171; cursor:default;" onclick="window.location.href='/member/upgrade'">
+                <div class="add-member-card" role="link" tabindex="0" aria-label="Upgrade plan to add more dependants" style="border-color:#F87171; cursor:pointer;" onclick="window.location.href='/member/upgrade'" onkeydown="if(event.key==='Enter'){window.location.href='/member/upgrade';}">
                     <div class="add-icon" style="background:#FEE2E2;">
                         <i class="fas fa-layer-group" style="color:#7F3D9E;"></i>
                     </div>
@@ -578,9 +593,9 @@ main {
                         <?php elseif ($planTier === 'family'): ?>
                             Principal member + spouse. Full coverage applies after a 3-month waiting period.
                         <?php elseif ($planTier === 'extended_family_1'): ?>
-                            Principal member, spouse, up to 4 children (under 21), and parents. Full coverage after a 3-month waiting period. A 6-month waiting period applies to parents for natural causes.
+                            Principal member, spouse, children below 18, and parents. Full coverage after a 3-month waiting period. A 6-month waiting period applies to parents for natural causes.
                         <?php elseif ($planTier === 'extended_family_2'): ?>
-                            Principal member, spouse, up to 4 children, parents, and in-laws. A 6-month waiting period applies to extended family members for natural causes.
+                            Principal member, spouse, children below 18, parents, and in-laws. A 6-month waiting period applies to extended family members for natural causes.
                         <?php else: ?>
                             Includes all plan-covered members. Waiting periods apply for natural causes.
                         <?php endif; ?>
@@ -590,7 +605,7 @@ main {
                 <?php if (in_array($planTier, ['family', 'extended_family_1', 'extended_family_2'])): ?>
                 <div class="policy-section">
                     <h4>NUCLEAR FAMILY</h4>
-                    <p>Includes spouse and up to 4 biological or legally adopted children under 21 years. Full coverage applies after a 3-month waiting period.</p>
+                    <p>Includes spouse and biological or legally adopted children below 18 years (see your plan limits above for how many). Full coverage applies after a 3-month waiting period.</p>
                 </div>
                 <?php endif; ?>
                 
@@ -950,6 +965,53 @@ main {
         padding: 0.8rem 2rem;
     }
 }
+
+/* Phone polish: header wraps, full-width actions, comfortable tap targets,
+   and 16px inputs so mobile browsers don't zoom the page when a field is focused. */
+@media (max-width: 576px) {
+    .section-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+
+    .add-dependent-btn {
+        width: 100%;
+        justify-content: center;
+        min-height: 48px;
+    }
+
+    .section-description {
+        margin-bottom: 20px;
+    }
+
+    .beneficiary-card {
+        padding: 18px 16px;
+    }
+
+    .edit-details-btn {
+        width: 100%;
+        min-height: 44px;
+    }
+
+    #addBeneficiaryModal .form-control,
+    #editBeneficiaryModal .form-control {
+        font-size: 16px;
+        min-height: 44px;
+    }
+
+    #addBeneficiaryModal .modal-footer,
+    #editBeneficiaryModal .modal-footer {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    #addBeneficiaryModal .modal-footer .btn,
+    #editBeneficiaryModal .modal-footer .btn {
+        flex: 1 1 100%;
+        min-height: 44px;
+    }
+}
 </style>
 
 <!-- Edit Beneficiary Modal -->
@@ -982,8 +1044,9 @@ main {
                         <input type="text" name="id_number" id="editIdNumber" class="form-control" value="<?php echo getOldValue('id_number_edit') ?: ''; ?>">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Date of Birth</label>
-                        <input type="date" name="date_of_birth" id="editDateOfBirth" class="form-control" min="1900-01-01" max="<?php echo date('Y-m-d'); ?>" value="<?php echo getOldValue('date_of_birth_edit') ?: ''; ?>">
+                        <label class="form-label">Date of Birth *</label>
+                        <input type="date" name="date_of_birth" id="editDateOfBirth" class="form-control" min="1900-01-01" max="<?php echo date('Y-m-d'); ?>" value="<?php echo getOldValue('date_of_birth_edit') ?: ''; ?>" required>
+                        <div class="form-text" id="editDobHint">Children must be below 18; other dependants must be 18 or older.</div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Phone Number (Optional for minors)</label>
@@ -1016,7 +1079,7 @@ main {
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Relationship *</label>
-                        <select name="relationship" class="form-control" required <?php echo empty($relationOptions) ? 'disabled' : ''; ?>>
+                        <select name="relationship" id="addRelationship" class="form-control" required <?php echo empty($relationOptions) ? 'disabled' : ''; ?>>
                             <option value="">Select relationship...</option>
                             <?php foreach ($relationOptions as $rel): ?>
                             <option value="<?php echo htmlspecialchars($rel['value']); ?>" <?php echo (getOldValue('relationship') === $rel['value']) ? 'selected' : ''; ?>><?php echo htmlspecialchars($rel['label']); ?></option>
@@ -1029,7 +1092,8 @@ main {
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Date of Birth *</label>
-                        <input type="date" name="date_of_birth" class="form-control" min="1900-01-01" max="<?php echo date('Y-m-d'); ?>" value="<?php echo getOldValue('date_of_birth'); ?>" required>
+                        <input type="date" name="date_of_birth" id="addDateOfBirth" class="form-control" min="1900-01-01" max="<?php echo date('Y-m-d'); ?>" value="<?php echo getOldValue('date_of_birth'); ?>" required>
+                        <div class="form-text" id="addDobHint">Choose a relationship first. Children must be below 18; other dependants must be 18 or older.</div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Phone Number (Optional for minors)</label>
@@ -1068,8 +1132,47 @@ function editBeneficiary(id) {
     document.getElementById('editDateOfBirth').value = beneficiary.date_of_birth || '';
     document.getElementById('editPhoneNumber').value = beneficiary.phone_number || '';
     
+    updateDobConstraints('edit', false);
     new bootstrap.Modal(document.getElementById('editBeneficiaryModal')).show();
 }
+
+// Keep the calendar aligned with the dependant category (children below 18,
+// everyone else 18+). Mirrors the server-side rule in Member::validateDependentAddition().
+function formatDateInput(d) {
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return d.getFullYear() + '-' + m + '-' + day;
+}
+function updateDobConstraints(mode, clearInvalid = true) {
+    const rel = document.getElementById(mode === 'edit' ? 'editRelationship' : 'addRelationship');
+    const dob = document.getElementById(mode === 'edit' ? 'editDateOfBirth' : 'addDateOfBirth');
+    const hint = document.getElementById(mode === 'edit' ? 'editDobHint' : 'addDobHint');
+    if (!rel || !dob) return;
+
+    const today = new Date();
+    const eighteenAgo = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate());
+    const childMin = new Date(eighteenAgo);
+    childMin.setDate(childMin.getDate() + 1); // 18th birthday today = no longer a child
+
+    dob.min = '1900-01-01';
+    dob.max = formatDateInput(today);
+    let message = 'Children must be below 18; other dependants must be 18 or older.';
+
+    if (rel.value === 'child') {
+        dob.min = formatDateInput(childMin);
+        message = 'Child must be below 18 years: choose a date on or after ' + dob.min + '.';
+    } else if (rel.value) {
+        dob.max = formatDateInput(eighteenAgo);
+        message = 'This dependant must be 18 years or older: choose a date on or before ' + dob.max + '.';
+    }
+    if (hint) hint.textContent = message;
+    if (clearInvalid && dob.value && (dob.value < dob.min || dob.value > dob.max)) {
+        dob.value = '';
+    }
+}
+document.getElementById('addRelationship')?.addEventListener('change', () => updateDobConstraints('add'));
+document.getElementById('editRelationship')?.addEventListener('change', () => updateDobConstraints('edit'));
+updateDobConstraints('add', false);
 </script>
 
 <?php include __DIR__ . '/../layouts/member-footer.php'; ?>
