@@ -332,10 +332,52 @@ $platinumPriceData = $GLOBALS['platinum_config']['prices'] ?? [];
                         Includes up to <strong>20 inpatient bed-cover days per year</strong>.
                     </div>
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Referred By (Agent Number)</label>
-                    <input type="text" name="agent_number" class="form-input" placeholder="Optional" value="<?php echo $oldValue('agent_number'); ?>">
+                <?php
+                $agentList = is_array($agents ?? null) ? $agents : [];
+                $selectedAttribution = strtolower(trim((string)($old['agent_attribution'] ?? 'office')));
+                $agentOptions = array_map(static function (array $a): array {
+                    $name = trim((string)($a['full_name'] ?? ''));
+                    $number = trim((string)($a['agent_number'] ?? ''));
+                    return ['id' => (string)(int)$a['id'], 'label' => ($name !== '' ? $name : 'Agent') . ($number !== '' ? ' — ' . $number : '')];
+                }, $agentList);
+                ?>
+                <div class="form-group full-width">
+                    <label class="form-label" for="agentSearch">Registered By (Agent or Office)</label>
+                    <input type="search" id="agentSearch" class="form-input" placeholder="Search agent name or number" autocomplete="off"
+                           aria-controls="agentAttribution" aria-describedby="agentSearchStatus">
+                    <select name="agent_attribution" id="agentAttribution" class="form-select" style="margin-top:8px" aria-label="Agent or Office">
+                        <option value="office"<?php echo $selectedAttribution === 'office' || $selectedAttribution === '' ? ' selected' : ''; ?>>Office (no agent)</option>
+                        <?php foreach ($agentOptions as $opt): ?>
+                            <option value="<?php echo htmlspecialchars($opt['id']); ?>"<?php echo $selectedAttribution === $opt['id'] ? ' selected' : ''; ?>><?php echo htmlspecialchars($opt['label']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <small id="agentSearchStatus" class="text-muted" role="status" aria-live="polite">Choose Office if no agent is responsible for this registration.</small>
                 </div>
+                <script>
+                (function () {
+                    const agents = <?php echo json_encode($agentOptions, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
+                    const search = document.getElementById('agentSearch');
+                    const select = document.getElementById('agentAttribution');
+                    const status = document.getElementById('agentSearchStatus');
+                    if (!search || !select) return;
+
+                    function render(term) {
+                        const needle = term.trim().toLowerCase();
+                        const current = select.value;
+                        const matches = agents.filter(a => needle === '' || a.label.toLowerCase().includes(needle) || a.id === current);
+                        select.innerHTML = '';
+                        select.add(new Option('Office (no agent)', 'office'));
+                        matches.forEach(a => select.add(new Option(a.label, a.id)));
+                        select.value = Array.from(select.options).some(o => o.value === current) ? current : 'office';
+                        status.textContent = needle === ''
+                            ? 'Choose Office if no agent is responsible for this registration.'
+                            : (matches.length ? matches.length + ' agent(s) match. Use the list below to choose one.' : 'No agents match. Office is still available.');
+                    }
+                    search.addEventListener('input', () => render(search.value));
+                    // Enter in the search box must not submit the registration form.
+                    search.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); } });
+                })();
+                </script>
             </div>
         </div>
 
