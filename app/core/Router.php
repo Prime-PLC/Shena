@@ -255,6 +255,8 @@ class Router
         $this->addRoute('GET', '/admin/payments/unmatched', 'PaymentController@viewUnmatchedPayments');
         $this->addRoute('GET', '/admin/payments/{id}/matches', 'PaymentController@getPotentialMatches');
         $this->addRoute('POST', '/admin/payments/reconcile', 'PaymentController@manualReconcile');
+        $this->addRoute('POST', '/admin/payments/{id}/ai-suggest', 'PaymentController@aiSuggest');
+        $this->addRoute('POST', '/admin/payments/ai-suggestions/{id}/dismiss', 'PaymentController@aiDismiss');
         $this->addRoute('GET', '/admin/payments/reconciliation-stats', 'PaymentController@getReconciliationStats');
         
         // Agent Management Routes (Admin Only)
