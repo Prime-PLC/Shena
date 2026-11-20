@@ -1064,7 +1064,7 @@ main {
                         <?php foreach ($payments as $payment): ?>
                         <?php
                             $txnRef = $payment['mpesa_receipt_number'] ?? $payment['transaction_reference'] ?? $payment['transaction_id'] ?? '—';
-                            $payDate = $payment['created_at'] ?? $payment['payment_date'] ?? null;
+                            $payDate = $payment['payment_date'] ?? $payment['created_at'] ?? null;
                             $period = $payment['period'] ?? ($payDate ? date('F Y', strtotime($payDate)) : '—');
                         ?>
                         <tr class="payment-row" data-payment='<?php echo htmlspecialchars(json_encode($payment), ENT_QUOTES); ?>' style="cursor: pointer;">

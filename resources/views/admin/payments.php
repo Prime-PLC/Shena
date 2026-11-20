@@ -991,7 +991,7 @@ $paymentBreakdownExportUrl = '/admin/reports/export?' . http_build_query(array_f
                     <td><strong>KSh <?php echo number_format($p['amount'], 2); ?></strong></td>
                     <?php if (($paymentFilters['payment_type'] ?? '') === 'platinum'): ?><td><?php echo htmlspecialchars($p['platinum_group'] ?? 'Exceptional payment'); ?><div style="font-size:11px;color:#6B7280"><?php echo !empty($p['allocation_month']) ? htmlspecialchars(date('M Y', strtotime($p['allocation_month']))) : 'Standalone'; ?></div></td><?php endif; ?>
                     <td><?php echo htmlspecialchars(ucfirst(str_replace('_', ' ', $p['payment_method'] ?? '—'))); ?></td>
-                    <td><?php echo date('M j, Y g:i A', strtotime($p['created_at'])); ?></td>
+                    <td><?php echo date('M j, Y g:i A', strtotime($p['payment_date'] ?? $p['created_at'])); ?></td>
                     <td><span class="status-badge <?php echo $p['status'] === 'completed' ? 'success' : ($p['status'] === 'failed' ? 'danger' : 'pending'); ?>"><?php echo ucfirst($p['status']); ?></span></td>
                     <td>
                         <strong><?php echo htmlspecialchars(ucfirst($p['reconciliation_status'] ?? 'pending')); ?></strong>
@@ -1061,7 +1061,7 @@ $paymentBreakdownExportUrl = '/admin/reports/export?' . http_build_query(array_f
                     <td><?php echo htmlspecialchars(($p['first_name'] ?? '') . ' ' . ($p['last_name'] ?? '')); ?></td>
                     <td><?php echo htmlspecialchars($p['sender_phone'] ?? '—'); ?></td>
                     <td><strong>KSh <?php echo number_format($p['amount'], 2); ?></strong></td>
-                    <td><?php echo date('M j, Y g:i A', strtotime($p['created_at'])); ?></td>
+                    <td><?php echo date('M j, Y g:i A', strtotime($p['payment_date'] ?? $p['created_at'])); ?></td>
                     <td><span class="status-badge <?php echo $p['status'] === 'completed' ? 'success' : 'pending'; ?>"><?php echo $p['status'] === 'completed' ? 'Confirmed' : ucfirst($p['status']); ?></span></td>
                 </tr>
                 <?php endforeach; ?>
