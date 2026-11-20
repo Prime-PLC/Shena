@@ -1791,6 +1791,23 @@ class MemberController extends BaseController
                 'percentage' => 0
             ];
             
+            // Re-run the same policy checks used when adding (child below 18, slot limits,
+            // valid DOB) so an edit cannot bypass them. The record itself is excluded from slot counts.
+            $otherDependents = array_values(array_filter(
+                $this->beneficiaryModel->getActiveBeneficiaries($member['id']) ?: [],
+                static fn($item) => (int)($item['id'] ?? 0) !== $beneficiaryId
+            ));
+            $policy = $this->memberModel->validateDependentAddition($member, $otherDependents, $updateData);
+            if (empty($policy['allowed'])) {
+                $_SESSION['error'] = (string)($policy['message'] ?? 'Please review the dependant details.');
+                $this->redirect('/beneficiaries');
+                return;
+            }
+            $updateData['relationship'] = (string)($policy['relationship'] ?? $updateData['relationship']);
+            $updateData['phone_number'] = $updateData['phone_number'] !== ''
+                ? formatKenyanPhone($updateData['phone_number'])
+                : null;
+
             $this->beneficiaryModel->updateBeneficiary($beneficiaryId, $updateData);
             $_SESSION['success'] = 'Beneficiary updated successfully.';
             
