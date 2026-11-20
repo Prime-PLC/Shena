@@ -706,6 +706,7 @@ class AdminController extends BaseController
                 'packages' => $membership_packages,
                 'tier_definitions' => MembershipPricingService::getTierDefinitions(),
                 'supports_file_number' => $this->memberModel->supportsFileNumber(),
+                'agents' => $this->agentModel->getAssignableAgents(),
                 'csrf_token' => $this->generateCsrfToken()
             ];
 
@@ -743,6 +744,20 @@ class AdminController extends BaseController
                 $this->redirect('/admin/members/register');
                 return;
             }
+
+            // Agent attribution: 'office' (no agent) or an active agent ID, validated server-side.
+            $attributionSelection = strtolower(trim((string)($_POST['agent_attribution'] ?? 'office')));
+            $attributionAgent = ctype_digit($attributionSelection)
+                ? ($this->agentModel->getAgentById((int)$attributionSelection) ?: null)
+                : null;
+            $attribution = Agent::resolveAttribution($attributionSelection, $attributionAgent);
+            if (!$attribution['ok']) {
+                $_SESSION['error'] = $attribution['message'];
+                $_SESSION['error_step'] = 3;
+                $this->redirect('/admin/members/register');
+                return;
+            }
+            $attributedAgentId = $attribution['agent_id'];
 
             // Normalize phone
             $phone = formatKenyanPhone($phoneRaw);
@@ -844,7 +859,18 @@ class AdminController extends BaseController
             if ($this->memberModel->supportsFileNumber()) {
                 $memberData['file_number'] = $fileNumber;
             }
+            // Office registrations keep agent_id empty, so no agent reporting or commissions apply.
+            if ($attributedAgentId !== null) {
+                $memberData['agent_id'] = $attributedAgentId;
+            }
             $memberId = $this->memberModel->create($memberData);
+            if ($attributedAgentId !== null) {
+                try {
+                    $this->agentModel->updateMemberCount($attributedAgentId);
+                } catch (Throwable $e) {
+                    error_log('Agent member count refresh failed: ' . $e->getMessage());
+                }
+            }
 
             $this->corporateMemberModel->replaceForMember((int)$memberId, $corporateMembers);
 
