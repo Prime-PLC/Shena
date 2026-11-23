@@ -573,7 +573,7 @@ class PaymentService
         }
     }
     
-    public function processManualPayment($memberId, $amount, $paymentMethod, $reference, $notes = null)
+    public function processManualPayment($memberId, $amount, $paymentMethod, $reference, $notes = null, $paymentDate = null)
     {
         $paymentModel = new Payment();
 
@@ -585,7 +585,10 @@ class PaymentService
             'status' => 'completed',
             'reference' => $reference,
             'notes' => $notes,
-            'payment_date' => date('Y-m-d H:i:s')
+            // Record the date the member actually paid when supplied (never in the future).
+            'payment_date' => ($paymentDate && Payment::validateDateCorrection($paymentDate, 'entry')['ok'])
+                ? Payment::validateDateCorrection($paymentDate, 'entry')['date']
+                : date('Y-m-d H:i:s')
         ]);
     }
 

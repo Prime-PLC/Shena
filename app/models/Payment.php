@@ -89,11 +89,82 @@ class Payment extends BaseModel
         return $this->create($data);
     }
 
+    /**
+     * The date a payment was made. Confirming, verifying or reconciling a payment must
+     * never replace it: only fill it in when it is missing (falling back to the M-Pesa
+     * transaction date, then to now). Monthly allocation reads this date to decide which
+     * month a payment covers, so overwriting it can leave the paid month looking unpaid.
+     */
+    public static function resolveConfirmationPaymentDate(array $payment, ?string $now = null): string
+    {
+        $now = $now ?: date('Y-m-d H:i:s');
+        foreach (['payment_date', 'transaction_date'] as $field) {
+            $value = trim((string)($payment[$field] ?? ''));
+            if ($value !== '' && strpos($value, '0000-00-00') !== 0 && strtotime($value) !== false) {
+                return $value;
+            }
+        }
+        return $now;
+    }
+
+    /**
+     * Validate an explicit payment date correction (a reason is mandatory, future dates are not allowed).
+     */
+    public static function validateDateCorrection($newDate, $reason, ?DateTimeImmutable $today = null): array
+    {
+        $newDate = trim((string)$newDate);
+        $reason = trim((string)$reason);
+        if ($reason === '') {
+            return ['ok' => false, 'message' => 'A reason is required to correct a payment date.'];
+        }
+        try {
+            $date = new DateTimeImmutable($newDate);
+        } catch (Throwable $e) {
+            return ['ok' => false, 'message' => 'Please enter a valid payment date.'];
+        }
+        $limit = ($today ?: new DateTimeImmutable('today'))->setTime(23, 59, 59);
+        if ($date > $limit) {
+            return ['ok' => false, 'message' => 'Payment date cannot be in the future.'];
+        }
+        return ['ok' => true, 'date' => $date->format('Y-m-d H:i:s'), 'reason' => $reason];
+    }
+
+    /**
+     * Explicit, audited payment date correction. This is the only supported way to change a
+     * payment's date after it was recorded; the old and new values are logged with the reason.
+     */
+    public function correctPaymentDate($paymentId, $newDate, $reason, $userId)
+    {
+        $check = self::validateDateCorrection($newDate, $reason);
+        if (!$check['ok']) {
+            return ['success' => false, 'message' => $check['message']];
+        }
+        $payment = $this->find($paymentId);
+        if (!$payment) {
+            return ['success' => false, 'message' => 'Payment not found.'];
+        }
+
+        $oldDate = (string)($payment['payment_date'] ?? '');
+        $this->update($paymentId, ['payment_date' => $check['date'], 'updated_at' => date('Y-m-d H:i:s')]);
+        $this->db->execute(
+            "INSERT INTO payment_reconciliation_log (payment_id, action, reconciled_by, notes)
+             VALUES (:payment_id, 'date_corrected', :user_id, :notes)",
+            [
+                'payment_id' => $paymentId,
+                'user_id' => $userId ?: null,
+                'notes' => 'Payment date changed from ' . ($oldDate !== '' ? $oldDate : '(none)') . ' to ' . $check['date'] . '. Reason: ' . $check['reason'],
+            ]
+        );
+
+        return ['success' => true, 'old_date' => $oldDate, 'new_date' => $check['date']];
+    }
+
     public function confirmPayment($paymentId, $transactionId = null)
     {
+        $existing = $this->find($paymentId) ?: [];
         $data = [
             'status' => 'completed',
-            'payment_date' => date('Y-m-d H:i:s'),
+            'payment_date' => self::resolveConfirmationPaymentDate($existing),
             'updated_at' => date('Y-m-d H:i:s')
         ];
 
