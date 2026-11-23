@@ -117,6 +117,45 @@ class Agent extends BaseModel
         $sql = "SELECT * FROM agents WHERE agent_number = ?";
         return $this->db->query($sql, [$agentNumber])->fetch();
     }
+
+    /**
+     * Active agents an admin may attribute a registration to, for the searchable selector.
+     */
+    public function getAssignableAgents($limit = 500)
+    {
+        $sql = "SELECT a.id, a.agent_number, a.phone,
+                       TRIM(CONCAT(COALESCE(a.first_name, u.first_name, ''), ' ', COALESCE(a.last_name, u.last_name, ''))) AS full_name
+                FROM agents a
+                LEFT JOIN users u ON a.user_id = u.id
+                WHERE a.status = 'active'
+                ORDER BY full_name ASC, a.agent_number ASC
+                LIMIT ?";
+
+        return $this->db->query($sql, [max(1, (int)$limit)])->fetchAll();
+    }
+
+    /**
+     * Decide the agent attribution for a registration from the submitted selector value.
+     * 'office' (or nothing) means no agent; a numeric value must be an existing ACTIVE agent.
+     * Pure function: pass the agent row looked up for a numeric selection (or null).
+     */
+    public static function resolveAttribution($selection, ?array $agent = null): array
+    {
+        $selection = strtolower(trim((string)$selection));
+        if ($selection === '' || $selection === 'office') {
+            return ['ok' => true, 'agent_id' => null, 'is_office' => true, 'message' => null];
+        }
+        if (!ctype_digit($selection)) {
+            return ['ok' => false, 'agent_id' => null, 'is_office' => false, 'message' => 'Please choose a valid agent or Office.'];
+        }
+        if (!$agent || (int)($agent['id'] ?? 0) !== (int)$selection) {
+            return ['ok' => false, 'agent_id' => null, 'is_office' => false, 'message' => 'The selected agent was not found. Please choose another agent or Office.'];
+        }
+        if (($agent['status'] ?? '') !== 'active') {
+            return ['ok' => false, 'agent_id' => null, 'is_office' => false, 'message' => 'The selected agent is not active. Please choose another agent or Office.'];
+        }
+        return ['ok' => true, 'agent_id' => (int)$agent['id'], 'is_office' => false, 'message' => null];
+    }
     
     /**
      * Get all agents with optional filtering
