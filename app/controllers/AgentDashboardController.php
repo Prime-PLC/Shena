@@ -269,7 +269,19 @@ class AgentDashboardController extends BaseController
             $statusFilter = 'all';
         }
 
-        $members = $this->memberModel->getMembersByAgent($agent['id']);
+        $loadError = null;
+        try {
+            $members = $this->memberModel->getMembersByAgent($agent['id']);
+        } catch (Throwable $e) {
+            error_log('Agent members load failed: ' . $e->getMessage());
+            $members = [];
+            $loadError = 'We could not load your members right now. Please refresh in a moment.';
+        }
+
+        // Monthly registration totals cover all of this agent's members; the month filter narrows the list.
+        $monthFilter = Agent::normalizeMonth($_GET['month'] ?? '');
+        $monthlySummary = Agent::groupRegistrationsByMonth($members);
+        $members = Agent::filterMembersByMonth($members, $monthFilter);
 
         if ($statusFilter === 'pending') {
             $members = array_filter($members, function ($member) {
@@ -306,8 +318,12 @@ class AgentDashboardController extends BaseController
             'members' => $pagedMembers,
             'filters' => [
                 'status' => $statusFilter,
-                'q' => $searchQuery
+                'q' => $searchQuery,
+                'month' => $monthFilter
             ],
+            'monthly_summary' => $monthlySummary,
+            'load_error' => $loadError,
+            'data_as_of' => date('M j, Y g:i A'),
             'pagination' => [
                 'page' => $page,
                 'per_page' => $perPage,
@@ -348,7 +364,9 @@ class AgentDashboardController extends BaseController
             'agent' => $agent,
             'commissions' => $commissions,
             'total_earned' => $totalEarned,
-            'pending_amount' => $pendingAmount
+            'pending_amount' => $pendingAmount,
+            'monthly_summary' => Agent::summarizeCommissionsByMonth($commissions),
+            'data_as_of' => date('M j, Y g:i A')
         ];
 
         $this->view('agent/commissions', $data);

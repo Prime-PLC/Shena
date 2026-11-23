@@ -54,6 +54,31 @@
     </div>
 </div>
 
+<?php if (!empty($monthly_summary)): ?>
+<div class="card mb-3">
+    <div class="card-header"><i class="fas fa-calendar-alt"></i> Commission by Payment Month</div>
+    <div class="card-body table-responsive">
+        <table class="table table-sm" aria-label="Commission by payment month">
+            <thead><tr><th>Month</th><th>Payments</th><th>Payment total</th><th>Commission</th><th>Pending</th><th>Approved</th><th>Paid</th></tr></thead>
+            <tbody>
+            <?php foreach ($monthly_summary as $row): ?>
+                <tr>
+                    <td><?php echo htmlspecialchars($row['label']); ?></td>
+                    <td><?php echo (int)$row['count']; ?></td>
+                    <td>KES <?php echo number_format($row['base_amount'], 2); ?></td>
+                    <td><strong>KES <?php echo number_format($row['commission_amount'], 2); ?></strong></td>
+                    <td>KES <?php echo number_format($row['pending'], 2); ?></td>
+                    <td>KES <?php echo number_format($row['approved'], 2); ?></td>
+                    <td>KES <?php echo number_format($row['paid'], 2); ?></td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+        <?php if (!empty($data_as_of)): ?><small class="text-muted">Figures as of <?php echo htmlspecialchars($data_as_of); ?>. Months follow the date each member's payment was made.</small><?php endif; ?>
+    </div>
+</div>
+<?php endif; ?>
+
 <!-- Commission History -->
 <div class="card">
     <div class="card-header">
@@ -74,20 +99,20 @@
                 <table class="table table-hover" id="commissionsTable">
                     <thead>
                         <tr>
-                            <th>Date</th>
+                            <th>Payment Date</th>
                             <th>Member</th>
                             <th>Member Number</th>
                             <th>Package</th>
-                            <th>Amount</th>
+                            <th>Commission</th>
                             <th>Status</th>
-                            <th>Payment Date</th>
+                            <th>Paid On</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php foreach ($commissions as $commission): ?>
                         <tr>
                             <td>
-                                <small><?php echo date('M d, Y', strtotime($commission['created_at'])); ?></small>
+                                <small><?php echo date('M d, Y', strtotime($commission['payment_date'] ?? $commission['created_at'])); ?></small>
                             </td>
                             <td>
                                 <i class="fas fa-user-circle text-muted"></i>
@@ -104,6 +129,7 @@
                             <td>
                                 <strong class="text-success">
                                     KES <?php echo number_format($commission['commission_amount'], 2); ?>
+                                <br><small class="text-muted">on KES <?php echo number_format((float)($commission['amount'] ?? 0), 2); ?> @ <?php echo rtrim(rtrim(number_format((float)($commission['commission_rate'] ?? 0), 2), '0'), '.'); ?>%</small>
                                 </strong>
                             </td>
                             <td>

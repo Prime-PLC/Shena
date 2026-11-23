@@ -516,6 +516,7 @@ if (!empty($members)) {
                 </div>
                 <form class="member-search" method="GET" action="/agent/members">
                     <input type="hidden" name="status" value="<?php echo htmlspecialchars($activeStatus); ?>">
+                    <input type="hidden" name="month" value="<?php echo htmlspecialchars($filters['month'] ?? ''); ?>">
                     <div class="search-input-wrapper">
                         <input type="text" name="q" placeholder="Search members" value="<?php echo htmlspecialchars($filters['q'] ?? ''); ?>">
                         <button type="submit" class="filter-btn" title="Search">
@@ -526,12 +527,31 @@ if (!empty($members)) {
             </div>
         </div>
 
+        <?php if (!empty($load_error)): ?>
+        <div class="alert alert-danger" role="alert"><?php echo htmlspecialchars($load_error); ?></div>
+        <?php endif; ?>
+        <?php if (!empty($monthly_summary)): ?>
+        <section aria-labelledby="monthlyRegistrationsHeading" style="margin:0 0 20px;">
+            <h2 id="monthlyRegistrationsHeading" style="font-size:1rem;margin:0 0 10px;">Registrations by month</h2>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                <?php $activeMonth = $filters['month'] ?? null; ?>
+                <a href="/agent/members" class="portfolio-tab <?php echo $activeMonth === null ? 'active' : ''; ?>" <?php echo $activeMonth === null ? 'aria-current="true"' : ''; ?>>All months</a>
+                <?php foreach ($monthly_summary as $monthRow): ?>
+                    <a href="/agent/members?month=<?php echo urlencode($monthRow['month']); ?>" class="portfolio-tab <?php echo $activeMonth === $monthRow['month'] ? 'active' : ''; ?>" <?php echo $activeMonth === $monthRow['month'] ? 'aria-current="true"' : ''; ?>>
+                        <?php echo htmlspecialchars($monthRow['label']); ?>: <strong><?php echo (int)$monthRow['count']; ?></strong>
+                        <small>(<?php echo (int)$monthRow['active']; ?> active<?php echo $monthRow['pending'] ? ', ' . (int)$monthRow['pending'] . ' pending' : ''; ?>)</small>
+                    </a>
+                <?php endforeach; ?>
+            </div>
+            <?php if (!empty($data_as_of)): ?><small style="opacity:.7;">Figures as of <?php echo htmlspecialchars($data_as_of); ?></small><?php endif; ?>
+        </section>
+        <?php endif; ?>
         <?php if (empty($members)): ?>
         <div class="empty-state">
             <div class="empty-state-icon">
                 <i class="fas fa-users"></i>
             </div>
-            <h3>No members yet</h3>
+            <h3><?php echo !empty($filters['month']) ? 'No members registered in this month' : 'No members yet'; ?></h3>
             <p>Start building your portfolio by registering your first member</p>
             <a href="/agent/register-member" class="btn-register-member" style="display: inline-flex;">
                 <i class="fas fa-user-plus"></i>
@@ -592,6 +612,9 @@ if (!empty($members)) {
                 $currentPage = (int)($pagination['page'] ?? 1);
                 $totalPages = (int)($pagination['total_pages'] ?? 1);
                 $queryBase = 'status=' . urlencode($activeStatus);
+                if (!empty($filters['month'])) {
+                    $queryBase .= '&month=' . urlencode($filters['month']);
+                }
                 if (!empty($filters['q'])) {
                     $queryBase .= '&q=' . urlencode($filters['q']);
                 }

@@ -607,6 +607,9 @@ class PaymentService
 
             // Get agent details for commission rate
             $agentModel = new Agent();
+            if ($agentModel->commissionExistsForPayment($paymentId, 'monthly_contribution')) {
+                return; // Commission for this payment already recorded
+            }
             $agent = $agentModel->getAgentById($agentId);
 
             if (!$agent || empty($agent['commission_rate'])) {
