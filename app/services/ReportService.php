@@ -601,11 +601,11 @@ class ReportService
 
     private function getMonthlyRevenueData(): array
     {
-        $rows = $this->db->fetchAll("SELECT MONTH(created_at) AS month_no,
+        $rows = $this->db->fetchAll("SELECT MONTH(COALESCE(payment_date, created_at)) AS month_no,
                    SUM(CASE WHEN status = 'completed' THEN amount ELSE 0 END) AS amount
             FROM payments
-            WHERE YEAR(created_at) = YEAR(CURDATE())
-            GROUP BY MONTH(created_at)");
+            WHERE YEAR(COALESCE(payment_date, created_at)) = YEAR(CURDATE())
+            GROUP BY MONTH(COALESCE(payment_date, created_at))");
         $data = array_fill(0, 12, 0.0);
         foreach ($rows as $row) {
             $index = max(0, min(11, (int)$row['month_no'] - 1));

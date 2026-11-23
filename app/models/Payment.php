@@ -273,8 +273,8 @@ class Payment extends BaseModel
                     SUM(CASE WHEN status = 'completed' THEN amount ELSE 0 END) as paid_amount
                 FROM {$this->table}
                 WHERE member_id = :member_id
-                AND YEAR(created_at) = :year
-                AND MONTH(created_at) = :month";
+                AND YEAR(COALESCE(payment_date, created_at)) = :year
+                AND MONTH(COALESCE(payment_date, created_at)) = :month";
 
         return $this->db->fetch($sql, [
             'member_id' => $memberId,
@@ -350,8 +350,8 @@ class Payment extends BaseModel
         $sql = "SELECT COALESCE(SUM(amount), 0) as revenue
                 FROM {$this->table}
                 WHERE status = 'completed'
-                AND YEAR(created_at) = YEAR(CURDATE())
-                AND MONTH(created_at) = MONTH(CURDATE())";
+                AND YEAR(COALESCE(payment_date, created_at)) = YEAR(CURDATE())
+                AND MONTH(COALESCE(payment_date, created_at)) = MONTH(CURDATE())";
 
         $result = $this->db->fetch($sql);
         return $result['revenue'] ?? 0;
