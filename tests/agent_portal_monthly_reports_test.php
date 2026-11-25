@@ -103,7 +103,7 @@ $comm_view = file_get_contents($root . '/resources/views/agent/commissions.php')
 foreach (['Registrations by month', 'No members registered in this month', 'Figures as of', 'name="month"'] as $needle) {
     $expect(strpos($members_view, $needle) !== false, 'Members view must include: ' . $needle);
 }
-foreach (['Commission by Payment Month', 'Figures as of'] as $needle) {
+foreach (['Commission by Month', 'Figures as of'] as $needle) {
     $expect(strpos($comm_view, $needle) !== false, 'Commissions view must include: ' . $needle);
 }
 

@@ -36,7 +36,7 @@ class SettingsService
     /**
      * Update or Create a setting
      */
-    public function set($key, $value, $description = null)
+    public function set($key, $value, $description = null, $updatedBy = null)
     {
         // Invalidate cache
         unset(self::$cache[$key]);
@@ -47,7 +47,7 @@ class SettingsService
 
         if ($exists) {
             return $this->db->update('system_settings', 
-                ['setting_value' => $value], 
+                ['setting_value' => $value] + ($updatedBy ? ['updated_by' => (int)$updatedBy] : []), 
                 "setting_key = :key", 
                 ['key' => $key]
             );
@@ -56,7 +56,7 @@ class SettingsService
                 'setting_key' => $key,
                 'setting_value' => $value,
                 'description' => $description
-            ]);
+            ] + ($updatedBy ? ['updated_by' => (int)$updatedBy] : []));
         }
     }
     

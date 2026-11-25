@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/CommissionPolicy.php';
 /**
  * Payment Service - Handles M-Pesa and other payment integrations
  */
@@ -369,18 +370,19 @@ class PaymentService
                             $agentModel = new Agent();
                             // Check if commission already exists for this member registration
                             $existing = $agentModel->getAgentCommissions($member['agent_id'], ['status' => '', 'member_id' => $memberId, 'commission_type' => 'registration']);
-                            if (empty($existing)) {
+                            $registrationCommission = CommissionPolicy::registrationCommissionAmount();
+                            if (empty($existing) && $registrationCommission > 0) {
                                 $agentModel->recordCommission([
                                     'agent_id' => $member['agent_id'],
                                     'member_id' => $memberId,
                                     'payment_id' => null,
                                     'commission_type' => 'registration',
-                                    'amount' => 200,
+                                    'amount' => $registrationCommission,
                                     'commission_rate' => 100,
-                                    'commission_amount' => 200,
+                                    'commission_amount' => $registrationCommission,
                                     'status' => 'pending'
                                 ]);
-                                error_log("Agent {$member['agent_id']} awarded KES 200 commission for member registration #{$memberId}.");
+                                error_log("Agent {$member['agent_id']} awarded KES {$registrationCommission} commission for member registration #{$memberId}.");
                             }
                         }
                     }
@@ -432,10 +434,11 @@ class PaymentService
                          }
                     }
                     
-                    // No commission for monthly payments anymore
-                    // if ($paymentType === 'monthly') {
-                    //     $this->recordCommissionForPayment($memberId, $paymentId, $amount);
-                    // }
+                    // Commission on monthly contributions is OFF unless an administrator enables it
+                    // (Settings > Agent Commission); recordCommissionForPayment() re-checks the switch.
+                    if ($paymentType === 'monthly') {
+                        $this->recordCommissionForPayment($memberId, $paymentId, $amount);
+                    }
 
                     // Send confirmation SMS and email
                     $this->sendPaymentConfirmation($payment, $amount, $mpesaReceiptNumber);
@@ -597,6 +600,11 @@ class PaymentService
      */
     private function recordCommissionForPayment($memberId, $paymentId, $amount)
     {
+        // Standing rule: no commission on member contributions unless an administrator has switched it on.
+        if (!CommissionPolicy::isContributionCommissionEnabled()) {
+            return;
+        }
+
         try {
             // Get member details to find agent
             $memberModel = new Member();

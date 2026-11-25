@@ -537,6 +537,11 @@
             <i class="fas fa-shield-alt"></i> Security
         </button>
     </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="commission-tab" data-bs-toggle="tab" data-bs-target="#commission" type="button" role="tab">
+            <i class="fas fa-hand-holding-usd"></i> Agent Commission
+        </button>
+    </li>
 </ul>
 
 <!-- Settings Form -->
@@ -545,6 +550,38 @@
     
     <!-- Tab Content -->
     <div class="tab-content" id="settingsTabContent">
+        <!-- Agent Commission Tab -->
+        <div class="tab-pane" id="commission" role="tabpanel">
+            <div class="settings-card">
+                <div class="settings-card-header">
+                    <div class="settings-card-icon"><i class="fas fa-hand-holding-usd"></i></div>
+                    <div class="settings-card-title">Agent Commission</div>
+                </div>
+                <p style="margin:0 0 16px;opacity:.8;">Agents earn one commission per member they register. Commission on member contributions is OFF unless you switch it on here.</p>
+
+                <div class="form-group">
+                    <label class="form-label" for="agent_registration_commission_amount">Registration commission per member (KES)</label>
+                    <input type="number" class="form-input" id="agent_registration_commission_amount" name="agent_registration_commission_amount"
+                           min="0" max="100000" step="0.01"
+                           value="<?php echo htmlspecialchars((string)($settings['agent_registration_commission_amount'] ?? 200)); ?>">
+                    <small>Paid once per member, as "pending" until approved. Set 0 to stop registration commissions. Applies to registrations confirmed from now on.</small>
+                </div>
+
+                <div class="toggle-group" style="margin-top:20px;">
+                    <div>
+                        <div class="toggle-label">Pay commission on member contributions</div>
+                        <div class="toggle-description" style="color:#F59E0B;">&#9888; OFF by default. When ON, agents earn their configured commission rate on each new monthly contribution of the members they registered. Only affects payments confirmed after you switch it on.</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="hidden" name="agent_contribution_commission_enabled" value="0">
+                        <input type="checkbox" id="agent_contribution_commission_enabled" name="agent_contribution_commission_enabled" value="1"
+                               <?php echo !empty($settings['agent_contribution_commission_enabled']) && (string)$settings['agent_contribution_commission_enabled'] !== '0' ? 'checked' : ''; ?>>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
         <!-- General Tab -->
         <div class="tab-pane active" id="general" role="tabpanel">
             <!-- General Settings -->

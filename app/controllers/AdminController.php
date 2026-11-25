@@ -3493,6 +3493,8 @@ class AdminController extends BaseController
             'grace_period_80_and_above' => 5,
             'maturation_period_under_80' => 4, // Align logic naming
             'maturation_period_80_and_above' => 5,
+            'agent_contribution_commission_enabled' => 0, // OFF unless an administrator enables it
+            'agent_registration_commission_amount' => 200,
         ], $dbSettings);
 
         // Ensure values are present via lookup if keys differ
@@ -3528,6 +3530,22 @@ class AdminController extends BaseController
                 }
 
                 $settingsService = new SettingsService();
+                // Agent commission controls (validated; only submitted fields are changed)
+                require_once __DIR__ . '/../services/CommissionPolicy.php';
+                $commissionInput = CommissionPolicy::validateSettingsInput($_POST);
+                if (!$commissionInput['ok']) {
+                    $_SESSION['error'] = $commissionInput['error'];
+                    $this->redirect('/admin/settings');
+                    return;
+                }
+                $adminId = $_SESSION['user_id'] ?? null;
+                foreach ($commissionInput['values'] as $commissionKey => $commissionValue) {
+                    $before = $settingsService->get($commissionKey, null);
+                    if ((string)$before !== (string)$commissionValue) {
+                        $settingsService->set($commissionKey, $commissionValue, 'Agent commission control', $adminId);
+                        error_log("Admin #{$adminId} changed {$commissionKey}: " . var_export($before, true) . ' -> ' . var_export($commissionValue, true));
+                    }
+                }
                 $editableSettings = [
                     'registration_fee',
                     'reactivation_fee',
