@@ -843,7 +843,7 @@ $formatRelation = static function ($value) {
                             <?php if (!empty($member['agent_id'])): ?>
                                 <a href="/admin/agents/view/<?= $member['agent_id'] ?>" style="color: #7F3D9E;">Agent #<?= $agentNumber ?></a>
                             <?php else: ?>
-                                Agent #<?= $agentNumber ?>
+                                Office (no agent)
                             <?php endif; ?>
                         </div>
                     </div>

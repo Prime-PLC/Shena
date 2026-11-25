@@ -117,6 +117,45 @@ class Agent extends BaseModel
         $sql = "SELECT * FROM agents WHERE agent_number = ?";
         return $this->db->query($sql, [$agentNumber])->fetch();
     }
+
+    /**
+     * Active agents an admin may attribute a registration to, for the searchable selector.
+     */
+    public function getAssignableAgents($limit = 500)
+    {
+        $sql = "SELECT a.id, a.agent_number, a.phone,
+                       TRIM(CONCAT(COALESCE(a.first_name, u.first_name, ''), ' ', COALESCE(a.last_name, u.last_name, ''))) AS full_name
+                FROM agents a
+                LEFT JOIN users u ON a.user_id = u.id
+                WHERE a.status = 'active'
+                ORDER BY full_name ASC, a.agent_number ASC
+                LIMIT ?";
+
+        return $this->db->query($sql, [max(1, (int)$limit)])->fetchAll();
+    }
+
+    /**
+     * Decide the agent attribution for a registration from the submitted selector value.
+     * 'office' (or nothing) means no agent; a numeric value must be an existing ACTIVE agent.
+     * Pure function: pass the agent row looked up for a numeric selection (or null).
+     */
+    public static function resolveAttribution($selection, ?array $agent = null): array
+    {
+        $selection = strtolower(trim((string)$selection));
+        if ($selection === '' || $selection === 'office') {
+            return ['ok' => true, 'agent_id' => null, 'is_office' => true, 'message' => null];
+        }
+        if (!ctype_digit($selection)) {
+            return ['ok' => false, 'agent_id' => null, 'is_office' => false, 'message' => 'Please choose a valid agent or Office.'];
+        }
+        if (!$agent || (int)($agent['id'] ?? 0) !== (int)$selection) {
+            return ['ok' => false, 'agent_id' => null, 'is_office' => false, 'message' => 'The selected agent was not found. Please choose another agent or Office.'];
+        }
+        if (($agent['status'] ?? '') !== 'active') {
+            return ['ok' => false, 'agent_id' => null, 'is_office' => false, 'message' => 'The selected agent is not active. Please choose another agent or Office.'];
+        }
+        return ['ok' => true, 'agent_id' => (int)$agent['id'], 'is_office' => false, 'message' => null];
+    }
     
     /**
      * Get all agents with optional filtering
@@ -220,6 +259,18 @@ class Agent extends BaseModel
      */
     public function recordCommission($data)
     {
+        // Idempotent per payment and type: re-confirming or re-reconciling a payment must
+        // never create a second commission for it (that would inflate the agent's totals).
+        if (!empty($data['payment_id'])) {
+            $existing = $this->db->query(
+                "SELECT id FROM agent_commissions WHERE payment_id = ? AND commission_type = ? LIMIT 1",
+                [$data['payment_id'], $data['commission_type']]
+            )->fetch();
+            if ($existing) {
+                return $existing['id'];
+            }
+        }
+
         $sql = "INSERT INTO agent_commissions (
                     agent_id, member_id, payment_id, commission_type,
                     amount, commission_rate, commission_amount, status
@@ -600,5 +651,93 @@ class Agent extends BaseModel
         } catch (Exception $e) {
             error_log('Commission notification error: ' . $e->getMessage());
         }
+    }
+
+    public function commissionExistsForPayment($paymentId, $commissionType = 'monthly_contribution')
+    {
+        $row = $this->db->query(
+            "SELECT id FROM agent_commissions WHERE payment_id = ? AND commission_type = ? LIMIT 1",
+            [$paymentId, $commissionType]
+        )->fetch();
+        return !empty($row);
+    }
+
+    /** Accept only a YYYY-MM month filter; anything else means "all months". */
+    public static function normalizeMonth($value): ?string
+    {
+        $value = trim((string)$value);
+        return preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $value) ? $value : null;
+    }
+
+    private static function monthKey($datetime): ?string
+    {
+        $ts = $datetime ? strtotime((string)$datetime) : false;
+        return $ts === false ? null : date('Y-m', $ts);
+    }
+
+    /** Registered members per month (by registration date), newest month first; a member is counted once. */
+    public static function groupRegistrationsByMonth(array $members): array
+    {
+        $seen = [];
+        $months = [];
+        foreach ($members as $member) {
+            $id = $member['id'] ?? null;
+            if ($id !== null && isset($seen[$id])) {
+                continue;
+            }
+            $seen[$id ?? uniqid('m', true)] = true;
+            $key = self::monthKey($member['created_at'] ?? null);
+            if ($key === null) {
+                continue;
+            }
+            $months[$key] = $months[$key] ?? ['month' => $key, 'label' => date('F Y', strtotime($key . '-01')), 'count' => 0, 'active' => 0, 'pending' => 0];
+            $months[$key]['count']++;
+            $status = strtolower((string)($member['status'] ?? ''));
+            if ($status === 'active') {
+                $months[$key]['active']++;
+            } elseif (strpos($status, 'pending') !== false) {
+                $months[$key]['pending']++;
+            }
+        }
+        krsort($months);
+        return array_values($months);
+    }
+
+    public static function filterMembersByMonth(array $members, ?string $month): array
+    {
+        if ($month === null) {
+            return $members;
+        }
+        return array_values(array_filter($members, static fn($m) => self::monthKey($m['created_at'] ?? null) === $month));
+    }
+
+    /**
+     * Commission totals per month of the underlying payment (payment_date, falling back to the record date),
+     * so every figure can be traced to its payments. Cancelled/rejected records are excluded.
+     */
+    public static function summarizeCommissionsByMonth(array $commissions): array
+    {
+        $months = [];
+        foreach ($commissions as $c) {
+            $status = strtolower((string)($c['status'] ?? 'pending'));
+            if (in_array($status, ['cancelled', 'rejected'], true)) {
+                continue;
+            }
+            $key = self::monthKey($c['payment_date'] ?? null) ?? self::monthKey($c['created_at'] ?? null);
+            if ($key === null) {
+                continue;
+            }
+            $months[$key] = $months[$key] ?? ['month' => $key, 'label' => date('F Y', strtotime($key . '-01')),
+                'count' => 0, 'base_amount' => 0.0, 'commission_amount' => 0.0, 'pending' => 0.0, 'approved' => 0.0, 'paid' => 0.0];
+            $amount = (float)($c['commission_amount'] ?? 0);
+            $months[$key]['count']++;
+            $months[$key]['base_amount'] += (float)($c['amount'] ?? 0);
+            $months[$key]['commission_amount'] += $amount;
+            if (isset($months[$key][$status])) {
+                $months[$key][$status] += $amount;
+            }
+        }
+        krsort($months);
+        return array_values($months);
     }
 }

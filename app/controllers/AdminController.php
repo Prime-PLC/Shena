@@ -706,6 +706,7 @@ class AdminController extends BaseController
                 'packages' => $membership_packages,
                 'tier_definitions' => MembershipPricingService::getTierDefinitions(),
                 'supports_file_number' => $this->memberModel->supportsFileNumber(),
+                'agents' => $this->agentModel->getAssignableAgents(),
                 'csrf_token' => $this->generateCsrfToken()
             ];
 
@@ -743,6 +744,20 @@ class AdminController extends BaseController
                 $this->redirect('/admin/members/register');
                 return;
             }
+
+            // Agent attribution: 'office' (no agent) or an active agent ID, validated server-side.
+            $attributionSelection = strtolower(trim((string)($_POST['agent_attribution'] ?? 'office')));
+            $attributionAgent = ctype_digit($attributionSelection)
+                ? ($this->agentModel->getAgentById((int)$attributionSelection) ?: null)
+                : null;
+            $attribution = Agent::resolveAttribution($attributionSelection, $attributionAgent);
+            if (!$attribution['ok']) {
+                $_SESSION['error'] = $attribution['message'];
+                $_SESSION['error_step'] = 3;
+                $this->redirect('/admin/members/register');
+                return;
+            }
+            $attributedAgentId = $attribution['agent_id'];
 
             // Normalize phone
             $phone = formatKenyanPhone($phoneRaw);
@@ -844,7 +859,18 @@ class AdminController extends BaseController
             if ($this->memberModel->supportsFileNumber()) {
                 $memberData['file_number'] = $fileNumber;
             }
+            // Office registrations keep agent_id empty, so no agent reporting or commissions apply.
+            if ($attributedAgentId !== null) {
+                $memberData['agent_id'] = $attributedAgentId;
+            }
             $memberId = $this->memberModel->create($memberData);
+            if ($attributedAgentId !== null) {
+                try {
+                    $this->agentModel->updateMemberCount($attributedAgentId);
+                } catch (Throwable $e) {
+                    error_log('Agent member count refresh failed: ' . $e->getMessage());
+                }
+            }
 
             $this->corporateMemberModel->replaceForMember((int)$memberId, $corporateMembers);
 
@@ -3467,6 +3493,8 @@ class AdminController extends BaseController
             'grace_period_80_and_above' => 5,
             'maturation_period_under_80' => 4, // Align logic naming
             'maturation_period_80_and_above' => 5,
+            'agent_contribution_commission_enabled' => 0, // OFF unless an administrator enables it
+            'agent_registration_commission_amount' => 200,
         ], $dbSettings);
 
         // Ensure values are present via lookup if keys differ
@@ -3502,6 +3530,22 @@ class AdminController extends BaseController
                 }
 
                 $settingsService = new SettingsService();
+                // Agent commission controls (validated; only submitted fields are changed)
+                require_once __DIR__ . '/../services/CommissionPolicy.php';
+                $commissionInput = CommissionPolicy::validateSettingsInput($_POST);
+                if (!$commissionInput['ok']) {
+                    $_SESSION['error'] = $commissionInput['error'];
+                    $this->redirect('/admin/settings');
+                    return;
+                }
+                $adminId = $_SESSION['user_id'] ?? null;
+                foreach ($commissionInput['values'] as $commissionKey => $commissionValue) {
+                    $before = $settingsService->get($commissionKey, null);
+                    if ((string)$before !== (string)$commissionValue) {
+                        $settingsService->set($commissionKey, $commissionValue, 'Agent commission control', $adminId);
+                        error_log("Admin #{$adminId} changed {$commissionKey}: " . var_export($before, true) . ' -> ' . var_export($commissionValue, true));
+                    }
+                }
                 $editableSettings = [
                     'registration_fee',
                     'reactivation_fee',
