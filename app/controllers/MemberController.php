@@ -849,6 +849,7 @@ class MemberController extends BaseController
                             'covered_person_type' => 'principal',
                             'covered_person_id' => null,
                             'status' => 'pending_approval',
+                            'registration_selected' => 1,
                             'monthly_contribution' => $quote['amount'],
                             'maturity_months' => $quote['maturity_months'],
                             'package_key' => $quote['package_key'],
