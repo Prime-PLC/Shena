@@ -97,6 +97,7 @@ class Router
         $this->addRoute('POST', '/beneficiaries/update', 'MemberController@updateBeneficiary');
         $this->addRoute('GET', '/claim-documents/{type}/{id}', 'ClaimEvidenceController@show');
         $this->addRoute('POST', '/claim-documents/{type}/{id}', 'ClaimEvidenceController@save');
+        $this->addRoute('GET', '/claim-documents/{type}/{id}/preview/{documentId}', 'ClaimEvidenceController@preview');
         $this->addRoute('GET', '/claim-documents/{type}/{id}/download/{documentId}', 'ClaimEvidenceController@download');
         $this->addRoute('GET', '/claims', 'MemberController@claims');
         $this->addRoute('GET', '/claims/view/{id}', 'MemberController@viewClaim');
