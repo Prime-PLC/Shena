@@ -59,4 +59,34 @@ class ClaimEvidenceController extends BaseController
         header('Content-Disposition: attachment; filename="document.' . ['application/pdf'=>'pdf','image/jpeg'=>'jpg','image/png'=>'png'][$doc['mime_type']] . '"');
         readfile($path); exit;
     }
+
+    public function preview($type, $id, $documentId)
+    {
+        $this->authorize($type, (int)$id);
+        $doc = $this->db->fetch(
+            'SELECT * FROM claim_evidence WHERE id = :doc AND case_type = :type AND case_id = :id',
+            ['doc'=>(int)$documentId, 'type'=>$type, 'id'=>(int)$id]
+        );
+        $allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+        if (!$doc || !in_array($doc['mime_type'] ?? '', $allowedTypes, true)
+            || !preg_match('/^[a-f0-9]{48}\\.bin$/D', $doc['storage_name'] ?? '')) {
+            http_response_code(404);
+            exit;
+        }
+        $path = ClaimEvidenceService::directory() . '/' . $doc['storage_name'];
+        if (!is_file($path) || !is_readable($path)) {
+            http_response_code(404);
+            exit;
+        }
+        header('Content-Type: ' . $doc['mime_type']);
+        header('Content-Length: ' . filesize($path));
+        header('X-Content-Type-Options: nosniff');
+        header('X-Frame-Options: SAMEORIGIN');
+        header('Cache-Control: private, no-store, max-age=0');
+        header('Pragma: no-cache');
+        header('Content-Disposition: inline; filename="claim-document.' . ['application/pdf'=>'pdf','image/jpeg'=>'jpg','image/png'=>'png'][$doc['mime_type']] . '"');
+        readfile($path);
+        exit;
+    }
+
 }
