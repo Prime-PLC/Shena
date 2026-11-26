@@ -129,7 +129,7 @@ $checks = [
     ],
     'resources/views/member/platinum.php' => [
         'File hospital cover request',
-        'requestable_principal',
+        'Platinum enrolment and conversion are managed by SHENA administrators.',
         'If your cover is still maturing',
     ],
 ];

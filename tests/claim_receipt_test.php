@@ -27,8 +27,12 @@ class BulkSmsService {
 }
 putenv('CLAIM_ADMIN_PHONES=0748585067,0748585071');
 (new ClaimReceiptService())->notify('funeral',23);
-if (count(BulkSmsService::$queued)!==3 || BulkSmsService::$processed!==[1,2,3]) throw new Exception('Must queue member and both admins');
+if (count(BulkSmsService::$queued)!==3 || BulkSmsService::$processed!==[1,2,3]) throw new Exception('Member-created claims must notify the member and both admins');
 if (BulkSmsService::$queued[1]['phone']===BulkSmsService::$queued[2]['phone']) throw new Exception('Distinct admins required');
+BulkSmsService::$queued = [];
+BulkSmsService::$processed = [];
+(new ClaimReceiptService())->notify('funeral', 24, false);
+if (count(BulkSmsService::$queued)!==1 || BulkSmsService::$processed!==[1]) throw new Exception('Admin-created claims must notify only the member');
 if (!str_contains(BulkSmsService::$queued[0]['message'],'we are sorry for your loss and stand with you during this difficult time')) throw new Exception('Funeral receipt is not compassionate');
 if (!str_contains(BulkSmsService::$queued[0]['message'],"chief's letter") || !str_contains(BulkSmsService::$queued[0]['message'],'Claim Documents')) throw new Exception('Receipt missing next steps');
 if (str_contains(BulkSmsService::$queued[0]['message'],'Application incomplete pending verification')) throw new Exception('Receipt contains system-heavy language');

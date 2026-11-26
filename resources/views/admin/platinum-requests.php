@@ -1,6 +1,5 @@
 <?php
 include __DIR__ . '/../layouts/admin-header.php';
-$coverages = $coverages ?? [];
 $inpatientRequests = $inpatientRequests ?? [];
 $recentDecisions = $recentDecisions ?? [];
 $platinumMembers = $platinumMembers ?? [];
@@ -104,7 +103,7 @@ $decisionStyles = [
     <div class="page-header">
         <div>
             <h1 class="page-title"><span class="title-gem"><i class="fas fa-gem"></i></span> SHENA Platinum Desk</h1>
-            <p class="page-subtitle">Approve Platinum package-group cover and allocate shared inpatient bed-cover days. Each selected Basic package group has 20 days per calendar year.</p>
+            <p class="page-subtitle">Review and process member requests for inpatient bed cover. Platinum enrolment and conversion are managed from member records. Each selected Basic package group has 20 days per calendar year.</p>
         </div>
         <div class="action-group">
             <a class="btn btn-secondary" href="/admin/service-providers"><i class="fas fa-address-book"></i> Service providers</a>
@@ -141,56 +140,6 @@ $decisionStyles = [
                 <div class="stat-label">Active Platinum cover</div>
                 <div class="stat-value"><?php echo $activePlatinumCount; ?></div>
             </div>
-        </div>
-    </div>
-
-    <!-- Platinum coverage approvals -->
-    <div class="data-table-card" id="coverage-requests">
-        <div class="card-header">
-            <span class="card-title"><i class="fas fa-shield-alt"></i> Platinum Coverage Requests</span>
-            <span class="card-hint">Approval activates cover and starts the maturity clock</span>
-        </div>
-        <div class="table-container">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Member</th>
-                        <th>Covered person</th>
-                        <th>Monthly</th>
-                        <th>Requested</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if (empty($coverages)): ?>
-                        <tr><td colspan="5"><div class="empty-state"><i class="fas fa-inbox"></i><p>No Platinum coverage requests awaiting approval.</p></div></td></tr>
-                    <?php else: ?>
-                        <?php foreach ($coverages as $c): ?>
-                        <tr>
-                            <td class="member-cell">
-                                <strong><?php echo htmlspecialchars($c['first_name'] . ' ' . $c['last_name']); ?></strong>
-                                <small><?php echo htmlspecialchars($c['member_number']); ?></small>
-                            </td>
-                            <td><?php echo htmlspecialchars($c['covered_person_name']); ?></td>
-                            <td><strong>KES <?php echo number_format((float) $c['monthly_contribution'], 2); ?></strong></td>
-                            <td><?php echo htmlspecialchars($c['requested_at'] ? date('d M Y', strtotime($c['requested_at'])) : '—'); ?></td>
-                            <td>
-                                <div class="action-group">
-                                    <button type="button" class="btn btn-success"
-                                            onclick="PlatinumAdmin.confirmCoverage(<?php echo (int) $c['id']; ?>, 'approve', <?php echo htmlspecialchars(json_encode($c['covered_person_name']), ENT_QUOTES); ?>)">
-                                        <i class="fas fa-check"></i> Approve
-                                    </button>
-                                    <button type="button" class="btn btn-danger"
-                                            onclick="PlatinumAdmin.confirmCoverage(<?php echo (int) $c['id']; ?>, 'reject', <?php echo htmlspecialchars(json_encode($c['covered_person_name']), ENT_QUOTES); ?>)">
-                                        <i class="fas fa-times"></i> Reject
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </tbody>
-            </table>
         </div>
     </div>
 

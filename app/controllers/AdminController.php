@@ -2190,7 +2190,7 @@ class AdminController extends BaseController
             if (!$beneficiary) throw new InvalidArgumentException('Select an active beneficiary belonging to this member.');
             $claimId = $this->claimModel->submitClaim($claimData);
             unset($_SESSION['claim_form'], $_SESSION['claim_form_error']);
-            (new ClaimReceiptService())->notify('funeral', (int)$claimId);
+            (new ClaimReceiptService())->notify('funeral', (int)$claimId, false);
 
             $_SESSION['success'] = 'Claim CLM-' . date('Y') . '-' . str_pad((string)$claimId, 4, '0', STR_PAD_LEFT) . ' saved. It is now awaiting review.';
         } catch (Throwable $e) {
@@ -4118,7 +4118,6 @@ class AdminController extends BaseController
     public function platinumRequests()
     {
         $this->requireAdmin();
-        $coverages = (new PlatinumCoverage())->pending();
         $eligibilityService = new PlatinumEligibilityService();
 
         $inpatientRequests = $this->db->fetchAll("SELECT ir.*, m.member_number, u.first_name, u.last_name FROM inpatient_requests ir JOIN members m ON m.id = ir.member_id JOIN users u ON u.id = m.user_id WHERE ir.status IN ('submitted', 'under_review') ORDER BY ir.created_at ASC");
@@ -4139,7 +4138,6 @@ class AdminController extends BaseController
         );
 
         $this->view('admin.platinum-requests', [
-            'coverages' => $coverages,
             'inpatientRequests' => $inpatientRequests,
             'recentDecisions' => $recentDecisions,
             // Dynamic member picker restricted to members who actually hold Platinum.

@@ -11,7 +11,7 @@ class ClaimReceiptService
         foreach ($phones as $phone) if (!$sms->validatePhoneNumber($phone)) throw new RuntimeException('Invalid claim admin phone.');
         return $phones;
     }
-    public function notify(string $type, int $id): void
+    public function notify(string $type, int $id, bool $notifyAdmins = true): void
     {
         try {
             $db = Database::getInstance();
@@ -28,8 +28,10 @@ class ClaimReceiptService
             $connection->beginTransaction();
             try {
                 $ids = $queue->queueQuickSms([['phone'=>$member['phone'] ?? '']], $memberMessage);
-                $recipients = array_map(function ($phone) { return ['phone'=>$phone]; }, self::adminPhones());
-                $ids = array_merge($ids, $queue->queueQuickSms($recipients, "SHENA: New {$type} claim #{$id} received. Review the application and required documents in the admin portal. Deadline: {$due} EAT."));
+                if ($notifyAdmins) {
+                    $recipients = array_map(function ($phone) { return ['phone'=>$phone]; }, self::adminPhones());
+                    $ids = array_merge($ids, $queue->queueQuickSms($recipients, "SHENA: New {$type} claim #{$id} received. Review the application and required documents in the admin portal. Deadline: {$due} EAT."));
+                }
                 $connection->commit();
             } catch (Throwable $e) { if ($connection->inTransaction()) $connection->rollBack(); throw $e; }
             // Immediate attempt; pending messages remain available to the existing queue worker.

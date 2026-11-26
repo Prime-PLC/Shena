@@ -183,36 +183,9 @@ main { padding: 0 !important; margin: 0 !important; }
         </div>
     <?php endif; ?>
 
-    <?php if ($requestablePrincipal || !empty($requestableCorporateMembers)): ?>
-    <div class="request-card">
-        <h3><?= $hasActiveCoverage ? 'Add Platinum for another coverage group' : 'Request Platinum Cover' ?></h3>
-        <p class="hint">Select the package group to cover.</p>
-        <form method="post" action="/platinum/request">
-            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="coveredPersonType">Basic coverage group</label>
-                    <select name="coverage_owner_type" id="coveredPersonType" required onchange="Platinum.togglePersonSelect(this.value)">
-                        <?php if ($requestablePrincipal): ?><option value="principal">Principal package and its covered dependants</option><?php endif; ?>
-                        <?php if (!empty($requestableCorporateMembers)): ?><option value="corporate_member">Corporate member package and its covered dependants</option><?php endif; ?>
-                    </select>
-                </div>
-                <div class="form-group" id="personSelectGroup" style="display:none">
-                    <label for="coveredPersonId">Select corporate package</label>
-                    <select name="coverage_owner_id" id="coveredPersonId">
-                        <option value="">-- choose --</option>
-                        <optgroup label="Corporate members" class="opt-corporate_member">
-                            <?php foreach ($requestableCorporateMembers as $c): ?>
-                                <option value="<?php echo (int) $c['id']; ?>" data-type="corporate_member"><?php echo htmlspecialchars($c['label'] ?? 'Corporate member'); ?> — <?php echo htmlspecialchars($c['package_name'] ?? $c['package_key'] ?? 'Package'); ?></option>
-                            <?php endforeach; ?>
-                        </optgroup>
-                    </select>
-                </div>
-            </div>
-            <button type="submit" class="submit-btn"><i class="fas fa-paper-plane"></i> Submit for admin approval</button>
-        </form>
+    <div class="alert-banner alert-success">
+        Platinum enrolment and conversion are managed by SHENA administrators. Contact the office if you would like to change your coverage.
     </div>
-    <?php endif; ?>
 
     <div class="coverage-section-heading">
         <h3 class="section-title">Your Platinum coverage</h3>
@@ -224,7 +197,7 @@ main { padding: 0 !important; margin: 0 !important; }
     <?php if (empty($coverages)): ?>
         <div class="empty-state">
             <i class="fas fa-shield-alt" style="font-size:32px;color:#D1D5DB;margin-bottom:12px;display:block"></i>
-            <p style="margin:0">You have no Platinum coverage yet. Submit a request above to get started.</p>
+            <p style="margin:0">You do not currently have Platinum coverage. Contact SHENA to discuss enrolment.</p>
         </div>
     <?php else: ?>
         <?php foreach ($coverages as $coverage):
@@ -233,7 +206,7 @@ main { padding: 0 !important; margin: 0 !important; }
         <div class="coverage-card">
             <div class="coverage-info">
                 <h4><?php echo htmlspecialchars($coverage['covered_person_name'] ?? ucfirst(str_replace('_', ' ', $coverage['covered_person_type']))); ?></h4>
-                <p><?php echo htmlspecialchars($coverage['package_name'] ?? ucfirst(str_replace('_', ' ', $coverage['covered_person_type']))); ?> package group<?php echo $coverage['status'] === 'rejected' ? ' — you may submit a new request above.' : ''; ?></p>
+                <p><?php echo htmlspecialchars($coverage['package_name'] ?? ucfirst(str_replace('_', ' ', $coverage['covered_person_type']))); ?> package group<?php echo $coverage['status'] === 'rejected' ? '' : ''; ?></p>
             </div>
             <div class="coverage-meta">
                 <div class="meta-block">
