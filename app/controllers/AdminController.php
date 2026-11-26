@@ -2190,7 +2190,7 @@ class AdminController extends BaseController
             if (!$beneficiary) throw new InvalidArgumentException('Select an active beneficiary belonging to this member.');
             $claimId = $this->claimModel->submitClaim($claimData);
             unset($_SESSION['claim_form'], $_SESSION['claim_form_error']);
-            (new ClaimReceiptService())->notify('funeral', (int)$claimId);
+            (new ClaimReceiptService())->notify('funeral', (int)$claimId, false);
 
             $_SESSION['success'] = 'Claim CLM-' . date('Y') . '-' . str_pad((string)$claimId, 4, '0', STR_PAD_LEFT) . ' saved. It is now awaiting review.';
         } catch (Throwable $e) {
