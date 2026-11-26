@@ -47,6 +47,12 @@ $backUrl = $admin
 .evidence-button:hover { background: #642d7d; }
 .evidence-download { flex: 0 0 auto; padding: 8px 12px; color: #7f3d9e; }
 .evidence-empty { margin: 0; color: #6b7280; }
+.evidence-file-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.evidence-preview { margin-top: 12px; padding: 12px; border: 1px solid #e5e7eb; border-radius: 10px; background: #f9fafb; }
+.evidence-preview summary { color: #4b235f; cursor: pointer; font-weight: 700; }
+.evidence-preview img { display: block; max-width: 100%; max-height: 680px; width: auto; height: auto; margin: 12px auto 0; object-fit: contain; }
+.evidence-preview iframe { display: block; width: 100%; height: min(75vh, 850px); min-height: 420px; margin-top: 12px; border: 0; background: #fff; }
+.evidence-preview-note { margin: 10px 0 0; color: #6b7280; font-size: .85rem; }
 @media (max-width: 640px) {
     .evidence-page { padding: 16px; }
     .evidence-status, .evidence-form-grid { grid-template-columns: 1fr; }
@@ -111,8 +117,31 @@ $backUrl = $admin
         <?php if (!$docs): ?><p class="evidence-empty">No documents uploaded yet.</p><?php else: ?>
         <ul class="evidence-files">
             <?php foreach ($docs as $doc): ?>
-                <li><span class="evidence-file-meta"><strong><?= $escape(ucwords(str_replace('_', ' ', $doc['document_type']))) ?></strong><small><?= $escape($doc['file_name']) ?> · <?= $escape($doc['created_at']) ?></small></span>
-                <?php if (isset($doc['storage_name'])): ?><a class="evidence-download" href="/claim-documents/<?= $escape($type) ?>/<?= (int)$id ?>/download/<?= (int)$doc['id'] ?>"><i class="fas fa-download" aria-hidden="true"></i> Download</a><?php endif ?></li>
+                <li>
+                    <div class="evidence-file-meta">
+                        <strong><?= $escape(ucwords(str_replace('_', ' ', $doc['document_type']))) ?></strong>
+                        <small><?= $escape($doc['file_name']) ?> · <?= $escape($doc['created_at']) ?></small>
+                        <?php if (isset($doc['storage_name'])): ?>
+                            <?php $previewUrl = '/claim-documents/' . rawurlencode($type) . '/' . (int)$id . '/preview/' . (int)$doc['id']; ?>
+                            <details class="evidence-preview">
+                                <summary><i class="fas fa-eye" aria-hidden="true"></i> Preview document</summary>
+                                <?php if (($doc['mime_type'] ?? '') === 'application/pdf'): ?>
+                                    <iframe src="<?= $escape($previewUrl) ?>" title="Preview: <?= $escape($doc['file_name']) ?>" loading="lazy"></iframe>
+                                <?php elseif (in_array($doc['mime_type'] ?? '', ['image/jpeg', 'image/png'], true)): ?>
+                                    <img src="<?= $escape($previewUrl) ?>" alt="Preview: <?= $escape($doc['file_name']) ?>" loading="lazy">
+                                <?php else: ?>
+                                    <p class="evidence-preview-note">Preview is unavailable for this file type.</p>
+                                <?php endif ?>
+                                <p class="evidence-preview-note">If the preview does not display in your browser, use Download.</p>
+                            </details>
+                        <?php endif ?>
+                    </div>
+                    <?php if (isset($doc['storage_name'])): ?>
+                        <div class="evidence-file-actions">
+                            <a class="evidence-download" href="/claim-documents/<?= $escape($type) ?>/<?= (int)$id ?>/download/<?= (int)$doc['id'] ?>"><i class="fas fa-download" aria-hidden="true"></i> Download</a>
+                        </div>
+                    <?php endif ?>
+                </li>
             <?php endforeach ?>
         </ul>
         <?php endif ?>
