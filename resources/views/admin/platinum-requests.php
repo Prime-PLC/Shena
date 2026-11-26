@@ -103,7 +103,7 @@ $decisionStyles = [
     <div class="page-header">
         <div>
             <h1 class="page-title"><span class="title-gem"><i class="fas fa-gem"></i></span> SHENA Platinum Desk</h1>
-            <p class="page-subtitle">Approve Platinum package-group cover and allocate shared inpatient bed-cover days. Each selected Basic package group has 20 days per calendar year.</p>
+            <p class="page-subtitle">Review and process member requests for inpatient bed cover. Platinum enrolment and conversion are managed from member records. Each selected Basic package group has 20 days per calendar year.</p>
         </div>
         <div class="action-group">
             <a class="btn btn-secondary" href="/admin/service-providers"><i class="fas fa-address-book"></i> Service providers</a>
